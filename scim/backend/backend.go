@@ -1,9 +1,11 @@
 package backend
 
 import (
-	"strings"
-	//"encoding/json"
+	"bytes"
+	"encoding/gob"
 	"github.com/boltdb/bolt"
+	"strings"
+	"sparrow/scim/schema"
 )
 
 var (
@@ -72,7 +74,17 @@ func Open(path string) (*Backend, error) {
 func (bc *Backend) CreateResourceBucket(name string) error {
 	name = strings.ToLower(name)
 	data := []byte(name)
-	err := bc.createBucket(data)
+
+	err := bc.db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists(data)
+		
+		if err == nil {
+			bucket := tx.Bucket(BUC_RESOURCES)
+			err = bucket.Put(data, []byte(nil))
+		}
+		
+		return err
+	})
 
 	if err == nil {
 		bc.resources[name] = data
@@ -84,26 +96,36 @@ func (bc *Backend) CreateResourceBucket(name string) error {
 func (bc *Backend) CreateIndexBucket(resourceName, attrName string, allowDupKey bool) error {
 	name := resourceName + "_" + attrName
 	name = strings.ToLower(name)
-	data := []byte(name)
+	nameBytes := []byte(name)
 
-	err := bc.createBucket(data)
+	idx := &Index{}
+	idx.name = name
+	idx.nameBytes = nameBytes
+	idx.allowDupKey = allowDupKey
 
-	if err == nil {
-		idx := &Index{}
-		idx.name = name
-		idx.nameBytes = data
-		idx.allowDupKey = allowDupKey
-		bc.indices[name] = idx
-	}
-
-	return err
-}
-
-func (bc *Backend) createBucket(name []byte) error {
 	err := bc.db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(name)
+		_, err := tx.CreateBucketIfNotExists(nameBytes)
+		if err != nil {
+			return err
+		}
+
+		bucket := tx.Bucket(BUC_RESOURCES)
+
+		// now store the index
+		var buf bytes.Buffer
+
+		enc := gob.NewEncoder(&buf)
+		err = enc.Encode(idx)
+		if err == nil {
+			bucket.Put(nameBytes, buf.Bytes())
+		}
+
 		return err
 	})
+
+	if err == nil {
+		bc.indices[name] = idx
+	}
 
 	return err
 }
@@ -126,17 +148,20 @@ func fillIndexMap(bucket *bolt.Bucket, m map[string]*Index) error {
 		nameBytes := make([]byte, len(k))
 		copy(nameBytes, k)
 
-		idx := &Index{}
-		idx.name = name
-		idx.nameBytes = nameBytes
-
-		if v[0] == 1 {
-			idx.allowDupKey = true
+		buf := bytes.NewBuffer(v)
+		dec := gob.NewDecoder(buf)
+		var idx Index
+		err := dec.Decode(&idx)
+		if err == nil {
+			m[name] = &idx
 		}
 
-		m[name] = idx
 		return nil
 	})
 
 	return err
+}
+
+func (bc *Backend) insert(id string, sc schema.Schema, resource map[string]interface{}) (map[string]interface{}, error) {
+	return nil, nil
 }

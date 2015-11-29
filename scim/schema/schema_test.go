@@ -14,7 +14,7 @@ var (
 )
 
 func TestGenerateSchema(t *testing.T) {
-	sc, err := Load(resDir + "group.json")
+	sc, err := LoadSchema(resDir + "group.json")
 	if err != nil {
 		t.Errorf(err.Error())
 	}

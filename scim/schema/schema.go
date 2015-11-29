@@ -1,11 +1,12 @@
 package schema
 
 import (
-	"fmt"
-	"strings"
-	"regexp"
+	"log"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"regexp"
+	"strings"
 )
 
 var (
@@ -16,11 +17,17 @@ var (
 	validReturned = []string{"always", "never", "default", "request"}
 
 	validUniqueness = []string{"none", "server", "global"}
-	
+
 	validNameRegex = regexp.MustCompile(`^[0-9A-Za-z_$-]+$`)
+	
+	//SchemasAttr = &AttrType{Name: "schemas", Required: true, CaseExact: true, Mutability: "readWrite", Returned: "always", Uniqueness: "none", Type: "string", MultiValued: true}
+	
+	//CORE_SCHEMA_PREFIX = "urn:ietf:params:scim:schemas:core:2.0:"
+	
+	//EXT_SCHEMA_PREFIX = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:"
 )
 
-type Attribute struct {
+type AttrType struct {
 	Name            string      // name
 	Type            string      // type
 	Description     string      // description
@@ -30,16 +37,18 @@ type Attribute struct {
 	Required        bool        // required
 	Returned        string      // returned
 	Uniqueness      string      // uniqueness
-	SubAttributes   []Attribute // subAttributes
+	SubAttributes   []*AttrType // subAttributes
 	ReferenceTypes  []string    // referenceTypes
 	CanonicalValues []string    // canonicalValues
+	SubAttrMap      map[string]*AttrType
 }
 
 type Schema struct {
 	Id          string // id
 	Name        string // name
 	Description string // description
-	Attributes  []Attribute
+	Attributes  []*AttrType
+	AttrMap     map[string]*AttrType
 	Meta        struct {
 		Location     string // location
 		ResourceType string // resourceType
@@ -47,20 +56,22 @@ type Schema struct {
 }
 
 // see section https://tools.ietf.org/html/rfc7643#section-2.2 for the defaults
-func newAttribute() Attribute {
-	return Attribute{Required: false, CaseExact: false, Mutability: "readWrite", Returned: "default", Uniqueness: "none", Type: "string"}
+func newAttrType() *AttrType {
+	return &AttrType{Required: false, CaseExact: false, Mutability: "readWrite", Returned: "default", Uniqueness: "none", Type: "string"}
 }
 
-func Load(name string) (*Schema, error) {
+func LoadSchema(name string) (*Schema, error) {
 	data, err := ioutil.ReadFile(name)
 	if err != nil {
 		return nil, err
 	}
-
-	return New(data)
+	
+	log.Println("Loading schema from file " + name)
+	
+	return NewSchema(data)
 }
 
-func New(data []byte) (*Schema, error) {
+func NewSchema(data []byte) (*Schema, error) {
 	sc := &Schema{}
 
 	err := json.Unmarshal(data, sc)
@@ -73,20 +84,45 @@ func New(data []byte) (*Schema, error) {
 
 	if attrLen != 0 {
 		for i := 0; i < attrLen; i++ {
-			setAttrDefaults(&sc.Attributes[i])
+			setAttrDefaults(sc.Attributes[i])
 		}
 	}
 
-    err = validate(sc)
-    
-    if err != nil {
-    	return nil, err
-    }
-    
+	err = validate(sc)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// common attributes
+	schemasAttr := newAttrType()
+	schemasAttr.Name = "schemas"
+	schemasAttr.Required = true
+	schemasAttr.Returned = "always"
+	schemasAttr.MultiValued = true
+	sc.Attributes = append(sc.Attributes, schemasAttr)
+	sc.AttrMap[schemasAttr.Name] = schemasAttr
+	
+	// id
+	idAttr := newAttrType()
+	idAttr.Name = "id"
+	idAttr.Returned = "always"
+	idAttr.CaseExact = true
+	idAttr.MultiValued = false
+	sc.Attributes = append(sc.Attributes, idAttr)
+	sc.AttrMap[idAttr.Name] = idAttr
+
+	// externalId
+	externalIdAttr := newAttrType()
+	externalIdAttr.Name = "externalid"
+	externalIdAttr.CaseExact = true
+	sc.Attributes = append(sc.Attributes, externalIdAttr)
+	sc.AttrMap[externalIdAttr.Name] = externalIdAttr
+
 	return sc, nil
 }
 
-func setAttrDefaults(attr *Attribute) {
+func setAttrDefaults(attr *AttrType) {
 	if len(attr.Mutability) == 0 {
 		attr.Mutability = "readWrite"
 	}
@@ -107,7 +143,7 @@ func setAttrDefaults(attr *Attribute) {
 
 	if attrLen != 0 {
 		for i := 0; i < attrLen; i++ {
-			setAttrDefaults(&attr.SubAttributes[i])
+			setAttrDefaults(attr.SubAttributes[i])
 		}
 	}
 }
@@ -139,10 +175,10 @@ func parse(data []byte) (*Schema, error){
 	dataAtArr, err := json.Marshal(atArr)
 
 	attArrLen := len(atArr)
-	attrs := make([]Attribute, attArrLen)
+	attrs := make([]AttrType, attArrLen)
 
 	for i := 0; i < attArrLen; i++ {
-		attrs[i] = newAttribute()
+		attrs[i] = newAttrType()
 	}
 
 	err = json.Unmarshal(dataAtArr, &attrs)
@@ -169,15 +205,23 @@ func (ve *ValidationErrors) add(e string) {
 	ve.Msgs = append(ve.Msgs, e)
 }
 
-func (attr *Attribute) IsComplex() bool {
+func (attr *AttrType) IsComplex() bool {
 	return strings.ToLower(attr.Type) == "complex"
 }
 
-func (attr *Attribute) IsReadOnly() bool {
+func (attr *AttrType) IsRef() bool {
+	return strings.ToLower(attr.Type) == "reference"
+}
+
+func (attr *AttrType) IsSimple() bool {
+	return !attr.IsComplex() && !attr.IsRef()
+}
+
+func (attr *AttrType) IsReadOnly() bool {
 	return strings.ToLower(attr.Mutability) == "readonly"
 }
 
-func (attr *Attribute) IsReference() bool {
+func (attr *AttrType) IsReference() bool {
 	return strings.ToLower(attr.Type) == "reference"
 }
 
@@ -187,30 +231,33 @@ func validate(sc *Schema) error {
 	if len(sc.Id) == 0 {
 		ve.add("Schema id is required")
 	}
-
+	
 	if len(sc.Attributes) == 0 {
 		ve.add("A schema should contain atleast one attribute")
 		return ve
 	}
-	
+
+	sc.AttrMap = make(map[string]*AttrType)
+
 	for _, attr := range sc.Attributes {
-		validateAttribute(&attr, ve)
+		validateAttrType(attr, ve)
+		sc.AttrMap[strings.ToLower(attr.Name)] = attr
 	}
-	
+
 	if ve.Count == 0 {
 		return nil
 	}
-	
+
 	return ve
 }
 
-func validateAttribute(attr *Attribute, ve *ValidationErrors) {
+func validateAttrType(attr *AttrType, ve *ValidationErrors) {
 
 	// ATTRNAME   = ALPHA *(nameChar)
 	// nameChar   = "$" / "-" / "_" / DIGIT / ALPHA
 	// ALPHA      =  %x41-5A / %x61-7A   ; A-Z / a-z
 	// DIGIT      =  %x30-39            ; 0-9
-	
+
 	if !validNameRegex.MatchString(attr.Name) {
 		ve.add("Invalid attribute name '" + attr.Name + "'")
 	}
@@ -235,22 +282,28 @@ func validateAttribute(attr *Attribute, ve *ValidationErrors) {
 		ve.add("Invalid uniqueness '" + attr.Uniqueness + "' for attribute " + attr.Name)
 	}
 
+	refTypeLen := len(attr.ReferenceTypes)
+
+	if attr.IsReference() && (refTypeLen == 0) {
+		ve.add("No referenceTypes set for attribute " + attr.Name)
+	}
+
 	subAttrLen := len(attr.SubAttributes)
 
 	if attr.IsComplex() && (subAttrLen == 0) {
 		ve.add("No subattributes set for attribute " + attr.Name)
 	}
 
+    attr.Name = strings.ToLower(attr.Name)
+    
 	if subAttrLen != 0 {
-		for _, sa := range attr.SubAttributes {
-			validateAttribute(&sa, ve)
+		if attr.SubAttrMap == nil {
+			attr.SubAttrMap = make(map[string]*AttrType)
 		}
-	}
-
-	refTypeLen := len(attr.ReferenceTypes)
-
-	if attr.IsReference() && (refTypeLen == 0) {
-		ve.add("No referenceTypes set for attribute " + attr.Name)
+		for _, sa := range attr.SubAttributes {
+			validateAttrType(sa, ve)
+			attr.SubAttrMap[strings.ToLower(sa.Name)] = sa
+		}
 	}
 }
 
