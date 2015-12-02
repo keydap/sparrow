@@ -27,6 +27,9 @@ var (
 	//EXT_SCHEMA_PREFIX = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:"
 )
 
+// The definition of an attribute's type
+// All the fields are named identical to those defined in the schema definition
+// in rfc7643 so that schema JSON files can be parsed using Go's default unmarshaller
 type AttrType struct {
 	Name            string      // name
 	Type            string      // type
@@ -45,6 +48,7 @@ type AttrType struct {
 	Parent			*AttrType // parent Attribute
 }
 
+// Definition of the schema
 type Schema struct {
 	Id          string // id
 	Name        string // name
@@ -62,6 +66,7 @@ func newAttrType() *AttrType {
 	return &AttrType{Required: false, CaseExact: false, Mutability: "readWrite", Returned: "default", Uniqueness: "none", Type: "string"}
 }
 
+// Parses the given schema file and returns a schema instance after successfuly parsing
 func LoadSchema(name string) (*Schema, error) {
 	data, err := ioutil.ReadFile(name)
 	if err != nil {
@@ -73,6 +78,7 @@ func LoadSchema(name string) (*Schema, error) {
 	return NewSchema(data)
 }
 
+// Parses the given schema data and returns a schema instance after successfuly parsing
 func NewSchema(data []byte) (*Schema, error) {
 	sc := &Schema{}
 
@@ -137,6 +143,7 @@ func NewSchema(data []byte) (*Schema, error) {
 	return sc, nil
 }
 
+// sets the default values on the missing common fields of schema's attribute type definitions
 func setAttrDefaults(attr *AttrType) {
 	if len(attr.Mutability) == 0 {
 		attr.Mutability = "readWrite"
@@ -163,49 +170,6 @@ func setAttrDefaults(attr *AttrType) {
 	}
 }
 
-/*
-func parse(data []byte) (*Schema, error){
-	var i interface{}
-
-	err := json.Unmarshal(data, &i)
-
-	if(err != nil) {
-		return nil, err
-	}
-
-	msg := i.(map[string]interface{})
-
-	sc := &Schema{}
-
-	sc.Id = msg["id"].(string)
-	sc.Name = msg["name"].(string)
-	sc.Description = msg["description"].(string)
-
-	atArr := msg["attributes"].([]interface{})
-
-	if(atArr == nil) {
-		return sc, nil
-	}
-
-	dataAtArr, err := json.Marshal(atArr)
-
-	attArrLen := len(atArr)
-	attrs := make([]AttrType, attArrLen)
-
-	for i := 0; i < attArrLen; i++ {
-		attrs[i] = newAttrType()
-	}
-
-	err = json.Unmarshal(dataAtArr, &attrs)
-	if(err != nil) {
-		return nil, err
-	}
-
-	sc.Attributes = attrs
-
-	return sc, nil
-}
-*/
 type ValidationErrors struct {
 	Count int
 	Msgs  []string
