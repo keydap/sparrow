@@ -41,6 +41,8 @@ type AttrType struct {
 	ReferenceTypes  []string    // referenceTypes
 	CanonicalValues []string    // canonicalValues
 	SubAttrMap      map[string]*AttrType
+	SchemaId		string // schema's ID
+	Parent			*AttrType // parent Attribute
 }
 
 type Schema struct {
@@ -100,6 +102,7 @@ func NewSchema(data []byte) (*Schema, error) {
 	schemasAttr.Required = true
 	schemasAttr.Returned = "always"
 	schemasAttr.MultiValued = true
+	schemasAttr.SchemaId = sc.Id
 	sc.Attributes = append(sc.Attributes, schemasAttr)
 	sc.AttrMap[schemasAttr.Name] = schemasAttr
 	
@@ -109,6 +112,7 @@ func NewSchema(data []byte) (*Schema, error) {
 	idAttr.Returned = "always"
 	idAttr.CaseExact = true
 	idAttr.MultiValued = false
+	idAttr.SchemaId = sc.Id
 	sc.Attributes = append(sc.Attributes, idAttr)
 	sc.AttrMap[idAttr.Name] = idAttr
 
@@ -116,8 +120,19 @@ func NewSchema(data []byte) (*Schema, error) {
 	externalIdAttr := newAttrType()
 	externalIdAttr.Name = "externalid"
 	externalIdAttr.CaseExact = true
+	externalIdAttr.SchemaId = sc.Id
 	sc.Attributes = append(sc.Attributes, externalIdAttr)
 	sc.AttrMap[externalIdAttr.Name] = externalIdAttr
+
+	// id
+	metaAttr := newAttrType()
+	metaAttr.Name = "meta"
+	metaAttr.Returned = "default"
+	metaAttr.CaseExact = false
+	metaAttr.MultiValued = false
+	metaAttr.SchemaId = sc.Id
+	sc.Attributes = append(sc.Attributes, metaAttr)
+	sc.AttrMap[metaAttr.Name] = metaAttr
 
 	return sc, nil
 }
@@ -240,7 +255,7 @@ func validate(sc *Schema) error {
 	sc.AttrMap = make(map[string]*AttrType)
 
 	for _, attr := range sc.Attributes {
-		validateAttrType(attr, ve)
+		validateAttrType(attr, sc, ve)
 		sc.AttrMap[strings.ToLower(attr.Name)] = attr
 	}
 
@@ -251,7 +266,7 @@ func validate(sc *Schema) error {
 	return ve
 }
 
-func validateAttrType(attr *AttrType, ve *ValidationErrors) {
+func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 
 	// ATTRNAME   = ALPHA *(nameChar)
 	// nameChar   = "$" / "-" / "_" / DIGIT / ALPHA
@@ -295,13 +310,15 @@ func validateAttrType(attr *AttrType, ve *ValidationErrors) {
 	}
 
     attr.Name = strings.ToLower(attr.Name)
+    attr.SchemaId = sc.Id
     
 	if subAttrLen != 0 {
 		if attr.SubAttrMap == nil {
 			attr.SubAttrMap = make(map[string]*AttrType)
 		}
 		for _, sa := range attr.SubAttributes {
-			validateAttrType(sa, ve)
+			validateAttrType(sa, sc, ve)
+			sa.Parent = attr
 			attr.SubAttrMap[strings.ToLower(sa.Name)] = sa
 		}
 	}

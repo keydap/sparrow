@@ -38,7 +38,7 @@ func main() {
 		return
 	}
 
-	data, err := ioutil.ReadFile(resDir + "/samples/minimal-user.json")
+	data, err := ioutil.ReadFile(resDir + "/samples/ent-user.json")
 
 	if err != nil {
 		fmt.Println(err)

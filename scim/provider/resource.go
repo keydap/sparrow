@@ -1,9 +1,9 @@
 package provider
 
 import (
-	"log"
 	"encoding/json"
 	"fmt"
+	"log"
 	"reflect"
 	"sparrow/scim/schema"
 	"strings"
@@ -13,6 +13,7 @@ type Attribute struct {
 }
 
 type SimpleAttribute struct {
+	AtType *schema.AttrType
 	Name   string
 	Value  string
 	Values []string
@@ -23,31 +24,57 @@ type MultiAttribute struct {
 }
 
 type ComplexAttribute struct {
-	Name string
-	Sa   []*SimpleAttribute // it can hold a list of single-valued attributes
-	Ma   []*MultiAttribute  // or a list of multi-valued attributes
+	AtType *schema.AttrType
+	Name   string
+	Sa     []*SimpleAttribute // it can hold a list of single-valued attributes
+	Ma     []*MultiAttribute  // or a list of multi-valued attributes
 }
 
-type Resource struct {
-	Schemas     []string
+type AtGroup struct {
 	SimpleAtrs  map[string]*SimpleAttribute
 	ComplexAtrs map[string]*ComplexAttribute
 }
 
+type Resource struct {
+	ResType *schema.ResourceType
+	Core    *AtGroup
+	Ext     map[string]*AtGroup
+}
+
+func newAtGroup() *AtGroup {
+	return &AtGroup{SimpleAtrs: make(map[string]*SimpleAttribute), ComplexAtrs: make(map[string]*ComplexAttribute)}
+}
+
 func (rs *Resource) addSimpleAt(sa *SimpleAttribute) {
-	if rs.SimpleAtrs == nil {
-		rs.SimpleAtrs = make(map[string]*SimpleAttribute)
+	scId := sa.AtType.SchemaId
+	if scId == rs.ResType.Schema {
+		rs.Core.SimpleAtrs[sa.Name] = sa
+		return
 	}
 
-	rs.SimpleAtrs[sa.Name] = sa
+	atg := rs.Ext[scId]
+	if atg == nil {
+		atg = newAtGroup()
+		rs.Ext[scId] = atg
+	}
+
+	atg.SimpleAtrs[sa.Name] = sa
 }
 
 func (rs *Resource) addComplexAt(ca *ComplexAttribute) {
-	if rs.ComplexAtrs == nil {
-		rs.ComplexAtrs = make(map[string]*ComplexAttribute)
+	scId := ca.AtType.SchemaId
+	if scId == rs.ResType.Schema {
+		rs.Core.ComplexAtrs[ca.Name] = ca
+		return
 	}
 
-	rs.ComplexAtrs[ca.Name] = ca
+	atg := rs.Ext[scId]
+	if atg == nil {
+		atg = newAtGroup()
+		rs.Ext[scId] = atg
+	}
+
+	atg.ComplexAtrs[ca.Name] = ca
 }
 
 func ParseResource(rt *schema.ResourceType, sm map[string]*schema.Schema, jsonData string) (*Resource, error) {
@@ -81,13 +108,16 @@ func ParseResource(rt *schema.ResourceType, sm map[string]*schema.Schema, jsonDa
 
 	obj := i.(map[string]interface{})
 
-    log.Println("converting to resource")
+	log.Println("converting to resource")
 	return toResource(rt, sm, obj)
 }
 
 func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[string]interface{}) (*Resource, error) {
 
 	rs := &Resource{}
+	rs.ResType = rt
+	rs.Core = newAtGroup()
+	rs.Ext = make(map[string]*AtGroup)
 
 	defer func() (*Resource, error) {
 		err := recover()
@@ -124,13 +154,41 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 	//
 	//	}
 
-	parseJsonObject(obj, rt.MainSchema, rs)
+	parseJsonObject(obj, rt.MainSchema, rs, sm)
 	return rs, nil
 }
 
-func parseJsonObject(obj map[string]interface{}, sc *schema.Schema, rs *Resource) {
+func parseJsonObject(obj map[string]interface{}, sc *schema.Schema, rs *Resource, sm map[string]*schema.Schema) {
 	//log.Println("resource schema %#v", sc.AttrMap["username"])
 	for k, v := range obj {
+
+		// see if the key is the ID of an extended schema
+		if strings.ContainsRune(k, ':') {
+			log.Printf("Parsing data of extended schema %s\n", k)
+			extSc := sm[k]
+			if extSc == nil {
+				msg := fmt.Sprintf("No schema found with the ID %s", k)
+				panic(NewBadRequestError(msg))
+			}
+			
+			if rs.ResType.Extensions[k] == nil {
+				msg := fmt.Sprintf("Schema %s is not declared in the extension schemas of resourcetype %s", k, rs.ResType.Name)
+				panic(NewBadRequestError(msg))
+			}
+			
+			var vObj map[string]interface {}
+			switch v.(type) {
+				case map[string]interface {} :
+				vObj = v.(map[string]interface {})
+				default:
+				msg := fmt.Sprintf("Invalid value of key %s", k)
+				panic(NewBadRequestError(msg))
+			}
+			
+			parseJsonObject(vObj, extSc, rs, sm)
+			continue
+		}
+
 		atName := strings.ToLower(k)
 		atType := sc.AttrMap[atName]
 		log.Println("found atType %#v", atType)
@@ -152,6 +210,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 
 	sa := &SimpleAttribute{}
 	sa.Name = attrType.Name
+	sa.AtType = attrType
 
 	if attrType.MultiValued {
 		//fmt.Println("rv kind ", rv.Kind())
