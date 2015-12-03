@@ -1,10 +1,10 @@
 package schema
 
 import (
-	"log"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"regexp"
 	"strings"
 )
@@ -19,11 +19,11 @@ var (
 	validUniqueness = []string{"none", "server", "global"}
 
 	validNameRegex = regexp.MustCompile(`^[0-9A-Za-z_$-]+$`)
-	
+
 	//SchemasAttr = &AttrType{Name: "schemas", Required: true, CaseExact: true, Mutability: "readWrite", Returned: "always", Uniqueness: "none", Type: "string", MultiValued: true}
-	
+
 	//CORE_SCHEMA_PREFIX = "urn:ietf:params:scim:schemas:core:2.0:"
-	
+
 	//EXT_SCHEMA_PREFIX = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:"
 )
 
@@ -44,8 +44,8 @@ type AttrType struct {
 	ReferenceTypes  []string    // referenceTypes
 	CanonicalValues []string    // canonicalValues
 	SubAttrMap      map[string]*AttrType
-	SchemaId		string // schema's ID
-	Parent			*AttrType // parent Attribute
+	SchemaId        string    // schema's ID
+	Parent          *AttrType // parent Attribute
 }
 
 // Definition of the schema
@@ -72,9 +72,9 @@ func LoadSchema(name string) (*Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	log.Println("Loading schema from file " + name)
-	
+
 	return NewSchema(data)
 }
 
@@ -111,7 +111,7 @@ func NewSchema(data []byte) (*Schema, error) {
 	schemasAttr.SchemaId = sc.Id
 	sc.Attributes = append(sc.Attributes, schemasAttr)
 	sc.AttrMap[schemasAttr.Name] = schemasAttr
-	
+
 	// id
 	idAttr := newAttrType()
 	idAttr.Name = "id"
@@ -124,13 +124,13 @@ func NewSchema(data []byte) (*Schema, error) {
 
 	// externalId
 	externalIdAttr := newAttrType()
-	externalIdAttr.Name = "externalid"
+	externalIdAttr.Name = "externalId"
 	externalIdAttr.CaseExact = true
 	externalIdAttr.SchemaId = sc.Id
 	sc.Attributes = append(sc.Attributes, externalIdAttr)
-	sc.AttrMap[externalIdAttr.Name] = externalIdAttr
+	sc.AttrMap[strings.ToLower(externalIdAttr.Name)] = externalIdAttr
 
-	// id
+	// meta
 	metaAttr := newAttrType()
 	metaAttr.Name = "meta"
 	metaAttr.Returned = "default"
@@ -210,7 +210,7 @@ func validate(sc *Schema) error {
 	if len(sc.Id) == 0 {
 		ve.add("Schema id is required")
 	}
-	
+
 	if len(sc.Attributes) == 0 {
 		ve.add("A schema should contain atleast one attribute")
 		return ve
@@ -273,17 +273,59 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 		ve.add("No subattributes set for attribute " + attr.Name)
 	}
 
-    attr.Name = strings.ToLower(attr.Name)
-    attr.SchemaId = sc.Id
-    
-	if subAttrLen != 0 {
+	attr.SchemaId = sc.Id
+
+	if attr.IsComplex() {
+		log.Printf("validating sub-attributes of attributetype %s\n", attr.Name)
 		if attr.SubAttrMap == nil {
 			attr.SubAttrMap = make(map[string]*AttrType)
 		}
-		for _, sa := range attr.SubAttributes {
-			validateAttrType(sa, sc, ve)
-			sa.Parent = attr
-			attr.SubAttrMap[strings.ToLower(sa.Name)] = sa
+
+		if subAttrLen != 0 {
+			for _, sa := range attr.SubAttributes {
+				validateAttrType(sa, sc, ve)
+				sa.Parent = attr
+				attr.SubAttrMap[strings.ToLower(sa.Name)] = sa
+			}
+		}
+
+		// add missing default sub-attributes https://tools.ietf.org/html/rfc7643#section-2.4
+		if attr.MultiValued {
+			addDefSubAttrs(attr)
+		}
+	}
+}
+
+func addDefSubAttrs(attr *AttrType) {
+	defArr := [5]*AttrType{}
+
+	typeAttr := newAttrType()
+	typeAttr.Name = "type"
+	defArr[0] = typeAttr
+
+	primaryAttr := newAttrType()
+	primaryAttr.Name = "primary"
+	defArr[1] = primaryAttr
+
+	displayAttr := newAttrType()
+	displayAttr.Name = "display"
+	displayAttr.Mutability = "immutable"
+	defArr[2] = displayAttr
+
+	valueAttr := newAttrType()
+	valueAttr.Name = "value"
+	defArr[3] = valueAttr
+
+	refAttr := newAttrType()
+	refAttr.Name = "$ref"
+	defArr[4] = refAttr
+
+	for _, a := range defArr {
+		key := strings.ToLower(a.Name)
+		if attr.SubAttrMap[key] == nil {
+			a.SchemaId = attr.SchemaId
+			a.Parent = attr
+			attr.SubAttrMap[key] = a
 		}
 	}
 }

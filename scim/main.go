@@ -19,7 +19,10 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-
+	
+	fmt.Printf("%#v", sc.AttrMap["addresses"].SubAttrMap)
+	//return
+	
 	sm := make(map[string]*schema.Schema)
 	sm[sc.Id] = sc
 	fmt.Printf("%#v\n", sc.AttrMap)
