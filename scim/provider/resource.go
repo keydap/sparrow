@@ -6,8 +6,8 @@ import (
 	"log"
 	"reflect"
 	"sparrow/scim/schema"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 type Attribute struct {
@@ -192,7 +192,6 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 	sa.Name = attrType.Name
 	sa.AtType = attrType
 
-	
 	if attrType.MultiValued {
 		//fmt.Println("rv kind ", rv.Kind())
 		if (rv.Kind() != reflect.Slice) && (rv.Kind() != reflect.Array) {
@@ -200,15 +199,12 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 			panic(NewBadRequestError(msg))
 		}
 
-     	arr := make([]string, rv.Len())
+		arr := make([]string, rv.Len())
 		for i := 0; i < rv.Len(); i++ {
 			// make sure the values are all primitives
 			v := rv.Index(i)
-			//fmt.Println("v kind ", v.Kind())
-			if !isPrimitive(v.Kind()) {
-				msg := fmt.Sprintf("Invalid value '%#v' in attribute %s", v, attrType.Name)
-				panic(NewBadRequestError(msg))
-			}
+
+			checkValueType(v, attrType)
 
 			strVal := fmt.Sprint(v)
 			arr[i] = strVal
@@ -219,9 +215,41 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 		return sa
 	}
 
+	checkValueType(rv, attrType)
 	sa.Values = []string{fmt.Sprint(rv)}
 
 	return sa
+}
+
+func checkValueType(v reflect.Value, attrType *schema.AttrType) {
+	msg := fmt.Sprintf("Invalid value '%#v' in attribute %s", v, attrType.Name)
+	err := NewBadRequestError(msg)
+
+	kind := v.Kind()
+
+	switch attrType.Type {
+	case "boolean":
+		if kind != reflect.Bool {
+			panic(err)
+		}
+	case "integer":
+		if kind != reflect.Int {
+			panic(err)
+		}
+	case "decimal":
+		if kind != reflect.Float64 {
+			panic(err)
+		}
+	case "string":
+	case "datetime":
+	case "binary":
+	case "reference":
+		if kind != reflect.String {
+			panic(err)
+		}
+	default:
+		panic(err)
+	}
 }
 
 func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttribute {
@@ -334,32 +362,104 @@ func (sa *SimpleAttribute) toJsonKV() string {
 		json += "["
 	}
 
+	count := len(sa.Values) - 1
+
 	for _, v := range sa.Values {
 		fmt.Printf("reading value %s of AT %s\n", v, sa.Name)
 		switch sa.AtType.Type {
 		case "boolean":
-		    cv, _ := strconv.ParseBool(v)
+			cv, _ := strconv.ParseBool(v)
 			json += strconv.FormatBool(cv)
-			
-			case "decimal":
+
+		case "decimal":
 			json += fmt.Sprint(strconv.ParseFloat(v, 64))
-			
-			case "integer":
+
+		case "integer":
 			json += fmt.Sprint(strconv.ParseInt(v, 10, 64))
-			
-			default:
+
+		default:
 			json += "\"" + v + "\""
 		}
-		json += ","
+
+		if count > 0 {
+			json += ","
+			count--
+		}
 	}
-	
+
 	//strings.TrimLeft(json, ",")
 	if sa.AtType.MultiValued {
 		json += "]"
 	}
-	
+
 	return json
 }
+
+func (sa *SimpleAttribute) toInterface() interface{} {
+	
+	if sa.Values == nil {
+		return nil
+	}
+	
+	if sa.AtType.MultiValued {
+		count := len(sa.Values)
+		var arr []interface{}
+		arr = make([]interface{}, count)
+		for i, v := range sa.Values {
+			fmt.Printf("reading value %s of AT %s\n", v, sa.Name)
+			arr[i] = getConvertedVal(v, sa)
+		}
+		
+		return arr
+	}
+
+	return getConvertedVal(sa.Values[0], sa)
+}
+
+func getConvertedVal(v string, sa *SimpleAttribute) interface{} {
+	switch sa.AtType.Type {
+	case "boolean":
+		cv, _ := strconv.ParseBool(v)
+		return cv
+	case "decimal":
+		cv, _ := strconv.ParseFloat(v, 64)
+		return cv
+	case "integer":
+		cv, _ := strconv.ParseInt(v, 10, 64)
+		return cv
+	default:
+		return v
+	}
+}
+
+func (rs *Resource) ToIJSON() string {
+	if rs == nil {
+		return "nil-resource"
+	}
+
+	if rs.Core == nil {
+		return "invalid-resource-no-attributes"
+	}
+
+	sAts := rs.Core.SimpleAts
+	
+	obj := make(map[string]interface{})
+
+	for _, v := range sAts {
+		i := v.toInterface()
+		if i != nil {
+			obj[v.Name] = i
+		}
+	}
+	
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return err.Error()
+	}
+	
+	return string(data) 
+}
+
 
 func (rs *Resource) ToJSON() string {
 	if rs == nil {
@@ -372,13 +472,18 @@ func (rs *Resource) ToJSON() string {
 
 	sAts := rs.Core.SimpleAts
 	json := "{"
-	
+
+	count := len(sAts) - 1
 	for _, v := range sAts {
 		json += v.toJsonKV()
-		json += ","
+
+		if count > 0 {
+			json += ","
+			count--
+		}
 	}
-	
+
 	json += "}"
-	
+
 	return json
 }

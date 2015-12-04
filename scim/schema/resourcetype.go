@@ -176,6 +176,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	// meta.version
 	metaVerAttr := newAttrType()
 	metaVerAttr.Name = "version"
+	metaVerAttr.CaseExact = true
 	metaVerAttr.Mutability = "readonly"
 	metaVerAttr.SchemaId = mainSchema.Id
 	metaVerAttr.Parent = metaAttr
