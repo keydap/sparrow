@@ -112,21 +112,19 @@ func ParseResource(rt *schema.ResourceType, sm map[string]*schema.Schema, jsonDa
 	return toResource(rt, sm, obj)
 }
 
-func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[string]interface{}) (*Resource, error) {
+func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[string]interface{}) (rs *Resource, err error) {
 
-	rs := &Resource{}
+	rs = &Resource{}
 	rs.ResType = rt
 	rs.Core = newAtGroup()
 	rs.Ext = make(map[string]*AtGroup)
 
-	defer func() (*Resource, error) {
+	defer func() {
 		err := recover()
 		if err != nil {
 			fmt.Printf("panicking %#v\n", err)
-			return nil, err.(error)
+			rs = nil
 		}
-
-		return nil, nil
 	}()
 
 	sc := rt.GetMainSchema()
