@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sparrow/scim/schema"
 	"strings"
+	"strconv"
 )
 
 type Attribute struct {
@@ -25,7 +26,7 @@ type MultiSubAttribute struct {
 type ComplexAttribute struct {
 	AtType *schema.AttrType
 	Name   string
-	SubAts     [][]*SimpleAttribute // it can hold a list of simple sub attributes
+	SubAts [][]*SimpleAttribute // it can hold a list of simple sub attributes
 	//	Ma     []*MultiSubAttribute  // or a list of multi-valued simple sub attributes
 }
 
@@ -128,54 +129,32 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 		return nil, nil
 	}()
 
-	/*
-		rs.Id = extrString("id", obj, false)
-		delete(obj, "id")
-
-		rs.ExternalId = extrString("externalId", obj, false)
-		delete(obj, "id")
-
-		rs.Schemas = extrStringArr("schemas", obj, true)
-		delete(obj, "schemas")
-
-		iSchemas := obj["schemas"]
-		rs.Schemas = parseSimpleAttr("schemas", schema.SchemasAttr, iSchemas).Values
-		delete(obj, "schemas")
-
-		for _, val := range rs.Schemas {
-
-		}
-	*/
-	//mainSchema :=
-	//resSc := obj["schemas"]
-
-	//	if len(resSc) == 0 {
-	//
-	//	}
-
-	parseJsonObject(obj, rt.MainSchema, rs, sm)
+	sc := rt.GetMainSchema()
+	parseJsonObject(obj, rt, sc, rs)
 	return rs, nil
 }
 
-func parseJsonObject(obj map[string]interface{}, sc *schema.Schema, rs *Resource, sm map[string]*schema.Schema) {
+func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *schema.Schema, rs *Resource) {
 	//log.Println("resource schema %#v", sc.AttrMap["username"])
+	if sc == nil {
+		msg := fmt.Sprintf("Schema of resourcetype %s cannot be null", rs.ResType.Name)
+		panic(NewBadRequestError(msg))
+	}
+
 	for k, v := range obj {
 
 		// see if the key is the ID of an extended schema
 		if strings.ContainsRune(k, ':') {
 			log.Printf("Parsing data of extended schema %s\n", k)
-			extSc := sm[k]
-			if extSc == nil {
-				msg := fmt.Sprintf("No schema found with the ID %s", k)
-				panic(NewBadRequestError(msg))
-			}
 
-			if rs.ResType.Extensions[k] == nil {
+			extSc := rs.ResType.GetSchema(k)
+			if extSc == nil {
 				msg := fmt.Sprintf("Schema %s is not declared in the extension schemas of resourcetype %s", k, rs.ResType.Name)
 				panic(NewBadRequestError(msg))
 			}
 
 			var vObj map[string]interface{}
+
 			switch v.(type) {
 			case map[string]interface{}:
 				vObj = v.(map[string]interface{})
@@ -184,7 +163,7 @@ func parseJsonObject(obj map[string]interface{}, sc *schema.Schema, rs *Resource
 				panic(NewBadRequestError(msg))
 			}
 
-			parseJsonObject(vObj, extSc, rs, sm)
+			parseJsonObject(vObj, rt, extSc, rs)
 			continue
 		}
 
@@ -215,6 +194,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 	sa.Name = attrType.Name
 	sa.AtType = attrType
 
+	
 	if attrType.MultiValued {
 		//fmt.Println("rv kind ", rv.Kind())
 		if (rv.Kind() != reflect.Slice) && (rv.Kind() != reflect.Array) {
@@ -222,7 +202,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 			panic(NewBadRequestError(msg))
 		}
 
-		arr := make([]string, rv.Len())
+     	arr := make([]string, rv.Len())
 		for i := 0; i < rv.Len(); i++ {
 			// make sure the values are all primitives
 			v := rv.Index(i)
@@ -233,17 +213,15 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 			}
 
 			strVal := fmt.Sprint(v)
-			arr = append(arr, strVal)
+			arr[i] = strVal
 		}
 
 		sa.Values = arr
 
 		return sa
 	}
-	
-	arr := make([]string, 1)
-	arr = append(arr, fmt.Sprint(rv))
-	sa.Values = arr
+
+	sa.Values = []string{fmt.Sprint(rv)}
 
 	return sa
 }
@@ -265,7 +243,7 @@ func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 		for i := 0; i < rv.Len(); i++ {
 			v := rv.Index(i)
 			simpleAtArr := parseSubAtList(v.Interface(), attrType)
-			subAtArr = append(subAtArr, simpleAtArr)
+			subAtArr[i] = simpleAtArr
 		}
 
 		ca.SubAts = subAtArr
@@ -273,10 +251,8 @@ func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 		return ca
 	}
 
-	subAtArr := make([][]*SimpleAttribute, 1)
 	simpleAtArr := parseSubAtList(iVal, attrType)
-	subAtArr = append(subAtArr, simpleAtArr)
-	ca.SubAts = subAtArr
+	ca.SubAts = [][]*SimpleAttribute{simpleAtArr}
 
 	return ca
 }
@@ -288,12 +264,12 @@ func parseSubAtList(v interface{}, attrType *schema.AttrType) []*SimpleAttribute
 	case map[string]interface{}:
 		vObj = v.(map[string]interface{})
 	default:
-		msg := fmt.Sprintf("Invalid value %#v , expected a JSON object", v)
+		msg := fmt.Sprintf("Invalid sub-attribute value %#v , expected a JSON object", v)
 		panic(NewBadRequestError(msg))
 	}
 
 	arr := make([]*SimpleAttribute, len(vObj))
-
+	count := 0
 	for k, v := range vObj {
 		subAtName := strings.ToLower(k)
 		subAtType := attrType.SubAttrMap[subAtName]
@@ -306,7 +282,8 @@ func parseSubAtList(v interface{}, attrType *schema.AttrType) []*SimpleAttribute
 		}
 
 		subAt := parseSimpleAttr(subAtType, v)
-		arr = append(arr, subAt)
+		arr[count] = subAt
+		count++
 	}
 
 	return arr
@@ -346,12 +323,64 @@ func extrStringArr(name string, obj map[string]interface{}, mandatory bool) []st
 			panic(NewBadRequestError("Invalid schema URI given in attribute 'schemas'"))
 		}
 
-		arr = append(arr, v.String())
+		arr[i] = v.String()
 	}
 
 	return arr
 }
 
-func normalizeKeys() {
+func (sa *SimpleAttribute) toJsonKV() string {
+	json := "\"" + sa.Name + "\":"
 
+	if sa.AtType.MultiValued {
+		json += "["
+	}
+
+	for _, v := range sa.Values {
+		fmt.Printf("reading value %s of AT %s\n", v, sa.Name)
+		switch sa.AtType.Type {
+		case "boolean":
+		    cv, _ := strconv.ParseBool(v)
+			json += strconv.FormatBool(cv)
+			
+			case "decimal":
+			json += fmt.Sprint(strconv.ParseFloat(v, 64))
+			
+			case "integer":
+			json += fmt.Sprint(strconv.ParseInt(v, 10, 64))
+			
+			default:
+			json += "\"" + v + "\""
+		}
+		json += ","
+	}
+	
+	//strings.TrimLeft(json, ",")
+	if sa.AtType.MultiValued {
+		json += "]"
+	}
+	
+	return json
+}
+
+func (rs *Resource) ToJSON() string {
+	if rs == nil {
+		return "nil-resource"
+	}
+
+	if rs.Core == nil {
+		return "invalid-resource-no-attributes"
+	}
+
+	sAts := rs.Core.SimpleAts
+	json := "{"
+	
+	for _, v := range sAts {
+		json += v.toJsonKV()
+		json += ","
+	}
+	
+	json += "}"
+	
+	return json
 }

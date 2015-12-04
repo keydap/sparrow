@@ -54,5 +54,6 @@ func main() {
 		fmt.Println(err)
 	}
 
-	fmt.Printf("%#v", rs)
+	fmt.Printf("%#v\n", rs)
+	fmt.Printf("%s", rs.ToJSON())
 }

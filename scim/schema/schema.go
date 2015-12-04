@@ -102,44 +102,6 @@ func NewSchema(data []byte) (*Schema, error) {
 		return nil, err
 	}
 
-	// common attributes
-	schemasAttr := newAttrType()
-	schemasAttr.Name = "schemas"
-	schemasAttr.Required = true
-	schemasAttr.Returned = "always"
-	schemasAttr.MultiValued = true
-	schemasAttr.SchemaId = sc.Id
-	sc.Attributes = append(sc.Attributes, schemasAttr)
-	sc.AttrMap[schemasAttr.Name] = schemasAttr
-
-	// id
-	idAttr := newAttrType()
-	idAttr.Name = "id"
-	idAttr.Returned = "always"
-	idAttr.CaseExact = true
-	idAttr.MultiValued = false
-	idAttr.SchemaId = sc.Id
-	sc.Attributes = append(sc.Attributes, idAttr)
-	sc.AttrMap[idAttr.Name] = idAttr
-
-	// externalId
-	externalIdAttr := newAttrType()
-	externalIdAttr.Name = "externalId"
-	externalIdAttr.CaseExact = true
-	externalIdAttr.SchemaId = sc.Id
-	sc.Attributes = append(sc.Attributes, externalIdAttr)
-	sc.AttrMap[strings.ToLower(externalIdAttr.Name)] = externalIdAttr
-
-	// meta
-	metaAttr := newAttrType()
-	metaAttr.Name = "meta"
-	metaAttr.Returned = "default"
-	metaAttr.CaseExact = false
-	metaAttr.MultiValued = false
-	metaAttr.SchemaId = sc.Id
-	sc.Attributes = append(sc.Attributes, metaAttr)
-	sc.AttrMap[metaAttr.Name] = metaAttr
-
 	return sc, nil
 }
 
