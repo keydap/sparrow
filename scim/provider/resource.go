@@ -355,52 +355,12 @@ func extrStringArr(name string, obj map[string]interface{}, mandatory bool) []st
 	return arr
 }
 
-func (sa *SimpleAttribute) toJsonKV() string {
-	json := "\"" + sa.Name + "\":"
+func (sa *SimpleAttribute) valToInterface() interface{} {
 
-	if sa.AtType.MultiValued {
-		json += "["
-	}
-
-	count := len(sa.Values) - 1
-
-	for _, v := range sa.Values {
-		fmt.Printf("reading value %s of AT %s\n", v, sa.Name)
-		switch sa.AtType.Type {
-		case "boolean":
-			cv, _ := strconv.ParseBool(v)
-			json += strconv.FormatBool(cv)
-
-		case "decimal":
-			json += fmt.Sprint(strconv.ParseFloat(v, 64))
-
-		case "integer":
-			json += fmt.Sprint(strconv.ParseInt(v, 10, 64))
-
-		default:
-			json += "\"" + v + "\""
-		}
-
-		if count > 0 {
-			json += ","
-			count--
-		}
-	}
-
-	//strings.TrimLeft(json, ",")
-	if sa.AtType.MultiValued {
-		json += "]"
-	}
-
-	return json
-}
-
-func (sa *SimpleAttribute) toInterface() interface{} {
-	
 	if sa.Values == nil {
 		return nil
 	}
-	
+
 	if sa.AtType.MultiValued {
 		count := len(sa.Values)
 		var arr []interface{}
@@ -409,11 +369,63 @@ func (sa *SimpleAttribute) toInterface() interface{} {
 			fmt.Printf("reading value %s of AT %s\n", v, sa.Name)
 			arr[i] = getConvertedVal(v, sa)
 		}
-		
+
 		return arr
 	}
 
 	return getConvertedVal(sa.Values[0], sa)
+}
+
+func (ca *ComplexAttribute) valToInterface() interface{} {
+	if ca.SubAts == nil {
+		return nil
+	}
+	
+	arr := make([]map[string]interface{}, len(ca.SubAts))
+	if ca.AtType.MultiValued {
+		for i, v := range ca.SubAts {
+			fmt.Printf("reading sub attributes of AT %s\n", ca.Name)
+			arr[i] = simpleATArrayToMap(v)
+		}
+
+		return arr
+	}
+	
+	arr[0] = simpleATArrayToMap(ca.SubAts[0])
+	return arr
+}
+
+func simpleATArrayToMap(sas []*SimpleAttribute) map[string]interface{} {
+	obj := make(map[string]interface{})
+	for _, v := range sas {
+		obj[v.Name] = v.valToInterface()
+	}
+	
+	return obj
+}
+
+func (atg *AtGroup) ToMap() map[string]interface{} {
+	obj := make(map[string]interface{})
+
+	if len(atg.SimpleAts) > 0 {
+		for _, v := range atg.SimpleAts {
+			i := v.valToInterface()
+			if i != nil {
+				obj[v.Name] = i
+			}
+		}
+	}
+
+	if len(atg.ComplexAts) > 0 {
+		for _, v := range atg.ComplexAts {
+			i := v.valToInterface()
+			if i != nil {
+				obj[v.Name] = i
+			}
+		}
+	}
+	
+	return obj
 }
 
 func getConvertedVal(v string, sa *SimpleAttribute) interface{} {
@@ -432,35 +444,6 @@ func getConvertedVal(v string, sa *SimpleAttribute) interface{} {
 	}
 }
 
-func (rs *Resource) ToIJSON() string {
-	if rs == nil {
-		return "nil-resource"
-	}
-
-	if rs.Core == nil {
-		return "invalid-resource-no-attributes"
-	}
-
-	sAts := rs.Core.SimpleAts
-	
-	obj := make(map[string]interface{})
-
-	for _, v := range sAts {
-		i := v.toInterface()
-		if i != nil {
-			obj[v.Name] = i
-		}
-	}
-	
-	data, err := json.Marshal(obj)
-	if err != nil {
-		return err.Error()
-	}
-	
-	return string(data) 
-}
-
-
 func (rs *Resource) ToJSON() string {
 	if rs == nil {
 		return "nil-resource"
@@ -469,21 +452,20 @@ func (rs *Resource) ToJSON() string {
 	if rs.Core == nil {
 		return "invalid-resource-no-attributes"
 	}
-
-	sAts := rs.Core.SimpleAts
-	json := "{"
-
-	count := len(sAts) - 1
-	for _, v := range sAts {
-		json += v.toJsonKV()
-
-		if count > 0 {
-			json += ","
-			count--
+	
+	obj := rs.Core.ToMap();
+	
+	if len(rs.Ext) > 0 {
+		for k, v := range rs.Ext {
+			extObj := v.ToMap()
+			obj[k] = extObj
 		}
 	}
+	
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return err.Error()
+	}
 
-	json += "}"
-
-	return json
+	return string(data)
 }
