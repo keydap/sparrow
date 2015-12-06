@@ -14,7 +14,7 @@ type Attribute struct {
 }
 
 type SimpleAttribute struct {
-	AtType *schema.AttrType
+	atType *schema.AttrType
 	Name   string
 	Values []string
 }
@@ -24,10 +24,9 @@ type MultiSubAttribute struct {
 }
 
 type ComplexAttribute struct {
-	AtType *schema.AttrType
+	atType *schema.AttrType
 	Name   string
 	SubAts [][]*SimpleAttribute // it can hold a list of simple sub attributes
-	//	Ma     []*MultiSubAttribute  // or a list of multi-valued simple sub attributes
 }
 
 type AtGroup struct {
@@ -36,7 +35,8 @@ type AtGroup struct {
 }
 
 type Resource struct {
-	ResType *schema.ResourceType
+	resType *schema.ResourceType
+	TypeName string // resourcetype's name
 	Core    *AtGroup
 	Ext     map[string]*AtGroup
 }
@@ -46,8 +46,8 @@ func newAtGroup() *AtGroup {
 }
 
 func (rs *Resource) addSimpleAt(sa *SimpleAttribute) {
-	scId := sa.AtType.SchemaId
-	if scId == rs.ResType.Schema {
+	scId := sa.atType.SchemaId
+	if scId == rs.resType.Schema {
 		rs.Core.SimpleAts[sa.Name] = sa
 		return
 	}
@@ -62,8 +62,8 @@ func (rs *Resource) addSimpleAt(sa *SimpleAttribute) {
 }
 
 func (rs *Resource) addComplexAt(ca *ComplexAttribute) {
-	scId := ca.AtType.SchemaId
-	if scId == rs.ResType.Schema {
+	scId := ca.atType.SchemaId
+	if scId == rs.resType.Schema {
 		rs.Core.ComplexAts[ca.Name] = ca
 		return
 	}
@@ -115,7 +115,8 @@ func ParseResource(rt *schema.ResourceType, sm map[string]*schema.Schema, jsonDa
 func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[string]interface{}) (rs *Resource, err error) {
 
 	rs = &Resource{}
-	rs.ResType = rt
+	rs.resType = rt
+	rs.TypeName = rt.Name
 	rs.Core = newAtGroup()
 	rs.Ext = make(map[string]*AtGroup)
 
@@ -135,7 +136,7 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *schema.Schema, rs *Resource) {
 	//log.Println("resource schema %#v", sc.AttrMap["username"])
 	if sc == nil {
-		msg := fmt.Sprintf("Schema of resourcetype %s cannot be null", rs.ResType.Name)
+		msg := fmt.Sprintf("Schema of resourcetype %s cannot be null", rs.TypeName)
 		panic(NewBadRequestError(msg))
 	}
 
@@ -145,9 +146,9 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 		if strings.ContainsRune(k, ':') {
 			log.Printf("Parsing data of extended schema %s\n", k)
 
-			extSc := rs.ResType.GetSchema(k)
+			extSc := rs.resType.GetSchema(k)
 			if extSc == nil {
-				msg := fmt.Sprintf("Schema %s is not declared in the extension schemas of resourcetype %s", k, rs.ResType.Name)
+				msg := fmt.Sprintf("Schema %s is not declared in the extension schemas of resourcetype %s", k, rs.TypeName)
 				panic(NewBadRequestError(msg))
 			}
 
@@ -190,7 +191,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 
 	sa := &SimpleAttribute{}
 	sa.Name = attrType.Name
-	sa.AtType = attrType
+	sa.atType = attrType
 
 	if attrType.MultiValued {
 		//fmt.Println("rv kind ", rv.Kind())
@@ -257,7 +258,7 @@ func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 
 	ca := &ComplexAttribute{}
 	ca.Name = attrType.Name
-	ca.AtType = attrType
+	ca.atType = attrType
 
 	if attrType.MultiValued {
 		if (rv.Kind() != reflect.Slice) && (rv.Kind() != reflect.Array) {
@@ -361,7 +362,7 @@ func (sa *SimpleAttribute) valToInterface() interface{} {
 		return nil
 	}
 
-	if sa.AtType.MultiValued {
+	if sa.atType.MultiValued {
 		count := len(sa.Values)
 		var arr []interface{}
 		arr = make([]interface{}, count)
@@ -382,7 +383,7 @@ func (ca *ComplexAttribute) valToInterface() interface{} {
 	}
 	
 	arr := make([]map[string]interface{}, len(ca.SubAts))
-	if ca.AtType.MultiValued {
+	if ca.atType.MultiValued {
 		for i, v := range ca.SubAts {
 			fmt.Printf("reading sub attributes of AT %s\n", ca.Name)
 			arr[i] = simpleATArrayToMap(v)
@@ -429,7 +430,7 @@ func (atg *AtGroup) ToMap() map[string]interface{} {
 }
 
 func getConvertedVal(v string, sa *SimpleAttribute) interface{} {
-	switch sa.AtType.Type {
+	switch sa.atType.Type {
 	case "boolean":
 		cv, _ := strconv.ParseBool(v)
 		return cv

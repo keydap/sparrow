@@ -6,6 +6,8 @@ import (
 	"os"
 	"sparrow/scim/provider"
 	"sparrow/scim/schema"
+	"encoding/gob"
+	"bytes"
 )
 
 var (
@@ -55,5 +57,23 @@ func main() {
 	}
 
 	fmt.Printf("%#v\n", rs)
-	fmt.Printf("%s", rs.ToJSON())
+	fmt.Printf("%s\n", rs.ToJSON())
+	
+	var rdata bytes.Buffer
+	enc := gob.NewEncoder(&rdata)
+	dec := gob.NewDecoder(&rdata)
+	
+	err = enc.Encode(rs)
+	if err != nil {
+		fmt.Printf("Error while encoding the resource %s\n", rs.TypeName)
+	}
+	
+	var r provider.Resource
+	err = dec.Decode(&r)
+	if err != nil {
+		fmt.Printf("Error while decoding the resource %s\n", rs.TypeName)
+	}
+	
+	fmt.Printf("decoded value %#v", r)
+	//fmt.Printf("%s", r.ToJSON())
 }
