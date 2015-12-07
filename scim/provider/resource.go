@@ -35,10 +35,10 @@ type AtGroup struct {
 }
 
 type Resource struct {
-	resType *schema.ResourceType
+	resType  *schema.ResourceType
 	TypeName string // resourcetype's name
-	Core    *AtGroup
-	Ext     map[string]*AtGroup
+	Core     *AtGroup
+	Ext      map[string]*AtGroup
 }
 
 func newAtGroup() *AtGroup {
@@ -75,6 +75,50 @@ func (rs *Resource) addComplexAt(ca *ComplexAttribute) {
 	}
 
 	atg.ComplexAts[ca.Name] = ca
+}
+
+func (rs *Resource) SetSchema(rt *schema.ResourceType) {
+	if rt == nil {
+		panic("ResourceType cannot be null")
+	}
+
+	if rt.Name != rs.TypeName {
+		panic("Name of ResourceType and Resource are not same")
+	}
+
+	rs.resType = rt
+	if rs.Core != nil {
+		rs.Core.setSchema(rt.GetMainSchema())
+	}
+
+	if len(rs.Ext) > 0 {
+		for k, v := range rs.Ext {
+			extSc := rt.GetSchema(k)
+			v.setSchema(extSc)
+		}
+	}
+}
+
+func (atg *AtGroup) setSchema(sc *schema.Schema) {
+	if len(atg.SimpleAts) > 0 {
+		for k, v := range atg.SimpleAts {
+			atType := sc.AttrMap[strings.ToLower(k)]
+			v.atType = atType
+		}
+	}
+
+	if len(atg.ComplexAts) > 0 {
+		for k, v := range atg.ComplexAts {
+			parentType := sc.AttrMap[strings.ToLower(k)]
+			v.atType = parentType
+			for _, saArr := range v.SubAts {
+				for _, sa := range saArr {
+					subType := parentType.SubAttrMap[strings.ToLower(sa.Name)]
+					sa.atType = subType
+				}
+			}
+		}
+	}
 }
 
 func ParseResource(rt *schema.ResourceType, sm map[string]*schema.Schema, jsonData string) (*Resource, error) {
@@ -193,6 +237,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 	sa.Name = attrType.Name
 	sa.atType = attrType
 
+	fmt.Printf("Parsing simple attribute %s\n", sa.Name)
 	if attrType.MultiValued {
 		//fmt.Println("rv kind ", rv.Kind())
 		if (rv.Kind() != reflect.Slice) && (rv.Kind() != reflect.Array) {
@@ -205,9 +250,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 			// make sure the values are all primitives
 			v := rv.Index(i)
 
-			checkValueType(v, attrType)
-
-			strVal := fmt.Sprint(v)
+			strVal := checkValueTypeAndConvert(v, attrType)
 			arr[i] = strVal
 		}
 
@@ -216,13 +259,12 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 		return sa
 	}
 
-	checkValueType(rv, attrType)
-	sa.Values = []string{fmt.Sprint(rv)}
-
+	strVal := checkValueTypeAndConvert(rv, attrType)
+	sa.Values = []string{strVal}
 	return sa
 }
 
-func checkValueType(v reflect.Value, attrType *schema.AttrType) {
+func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) string {
 	msg := fmt.Sprintf("Invalid value '%#v' in attribute %s", v, attrType.Name)
 	err := NewBadRequestError(msg)
 
@@ -233,24 +275,32 @@ func checkValueType(v reflect.Value, attrType *schema.AttrType) {
 		if kind != reflect.Bool {
 			panic(err)
 		}
+		return strconv.FormatBool(v.Bool())
 	case "integer":
 		if kind != reflect.Int {
 			panic(err)
 		}
+		return string(v.Int())
 	case "decimal":
 		if kind != reflect.Float64 {
 			panic(err)
 		}
-	case "string":
-	case "datetime":
-	case "binary":
-	case "reference":
-		if kind != reflect.String {
+		return strconv.FormatFloat(v.Float(), 'E', -1, 64)
+	case "string", "datetime", "binary", "reference":
+		if kind != reflect.String && kind != reflect.Interface {
 			panic(err)
 		}
+
+		if kind == reflect.Interface {
+			return fmt.Sprint(v.Interface())
+		}
+
+		return v.String()
 	default:
 		panic(err)
 	}
+
+	panic(err)
 }
 
 func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttribute {
@@ -320,42 +370,6 @@ func isPrimitive(knd reflect.Kind) bool {
 	return (knd != reflect.Array && knd != reflect.Map && knd != reflect.Slice)
 }
 
-func extrString(name string, obj map[string]interface{}, mandatory bool) string {
-	val := obj[name]
-
-	if reflect.TypeOf(val).Kind() != reflect.String {
-		panic(NewBadRequestError("Invalid value given for attribute '" + name + "'"))
-	}
-
-	str := val.(string)
-	if (len(str) == 0) && mandatory {
-		panic(NewBadRequestError("Missing value for mandatory attribute '" + name + "'"))
-	}
-
-	return str
-}
-
-func extrStringArr(name string, obj map[string]interface{}, mandatory bool) []string {
-	iStrArr := obj[name]
-	rv := reflect.ValueOf(iStrArr)
-
-	if (rv.Kind() != reflect.Slice) || (rv.Kind() != reflect.Array) {
-		panic(NewBadRequestError("Invalid value given for attribute 'schemas' it must be an array"))
-	}
-
-	arr := make([]string, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		v := rv.Index(i)
-		if v.Kind() != reflect.String {
-			panic(NewBadRequestError("Invalid schema URI given in attribute 'schemas'"))
-		}
-
-		arr[i] = v.String()
-	}
-
-	return arr
-}
-
 func (sa *SimpleAttribute) valToInterface() interface{} {
 
 	if sa.Values == nil {
@@ -367,7 +381,7 @@ func (sa *SimpleAttribute) valToInterface() interface{} {
 		var arr []interface{}
 		arr = make([]interface{}, count)
 		for i, v := range sa.Values {
-			fmt.Printf("reading value %s of AT %s\n", v, sa.Name)
+			fmt.Printf("reading value %#v of AT %s\n", v, sa.Name)
 			arr[i] = getConvertedVal(v, sa)
 		}
 
@@ -381,7 +395,7 @@ func (ca *ComplexAttribute) valToInterface() interface{} {
 	if ca.SubAts == nil {
 		return nil
 	}
-	
+
 	arr := make([]map[string]interface{}, len(ca.SubAts))
 	if ca.atType.MultiValued {
 		for i, v := range ca.SubAts {
@@ -391,7 +405,7 @@ func (ca *ComplexAttribute) valToInterface() interface{} {
 
 		return arr
 	}
-	
+
 	arr[0] = simpleATArrayToMap(ca.SubAts[0])
 	return arr
 }
@@ -401,7 +415,7 @@ func simpleATArrayToMap(sas []*SimpleAttribute) map[string]interface{} {
 	for _, v := range sas {
 		obj[v.Name] = v.valToInterface()
 	}
-	
+
 	return obj
 }
 
@@ -425,7 +439,7 @@ func (atg *AtGroup) ToMap() map[string]interface{} {
 			}
 		}
 	}
-	
+
 	return obj
 }
 
@@ -453,16 +467,16 @@ func (rs *Resource) ToJSON() string {
 	if rs.Core == nil {
 		return "invalid-resource-no-attributes"
 	}
-	
-	obj := rs.Core.ToMap();
-	
+
+	obj := rs.Core.ToMap()
+
 	if len(rs.Ext) > 0 {
 		for k, v := range rs.Ext {
 			extObj := v.ToMap()
 			obj[k] = extObj
 		}
 	}
-	
+
 	data, err := json.Marshal(obj)
 	if err != nil {
 		return err.Error()

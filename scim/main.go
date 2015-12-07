@@ -8,6 +8,7 @@ import (
 	"sparrow/scim/schema"
 	"encoding/gob"
 	"bytes"
+	"time"
 )
 
 var (
@@ -63,6 +64,8 @@ func main() {
 	enc := gob.NewEncoder(&rdata)
 	dec := gob.NewDecoder(&rdata)
 	
+	start := time.Now()
+	
 	err = enc.Encode(rs)
 	if err != nil {
 		fmt.Printf("Error while encoding the resource %s\n", rs.TypeName)
@@ -74,6 +77,8 @@ func main() {
 		fmt.Printf("Error while decoding the resource %s\n", rs.TypeName)
 	}
 	
-	fmt.Printf("decoded value %#v", r)
-	//fmt.Printf("%s", r.ToJSON())
+	fmt.Printf("\nTime took to encode a resource %#v sec\n", time.Since(start).Seconds())
+	fmt.Printf("decoded value %#v\n", r)
+	r.SetSchema(rt)
+	fmt.Printf("decoded JSON\n %s", r.ToJSON())
 }

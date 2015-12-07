@@ -267,6 +267,7 @@ func addDefSubAttrs(attr *AttrType) {
 
 	primaryAttr := newAttrType()
 	primaryAttr.Name = "primary"
+	primaryAttr.Type = "boolean"
 	defArr[1] = primaryAttr
 
 	displayAttr := newAttrType()
@@ -300,4 +301,37 @@ func exists(val string, list []string) bool {
 	}
 
 	return false
+}
+
+func (sc *Schema) GetAtType(name string) *AttrType {
+	normName := strings.ToLower(name)
+
+	var atType *AttrType
+
+	if strings.ContainsRune(normName, '.') {
+		arr := strings.SplitN(normName, ".", 2)
+		parent := sc.AttrMap[arr[0]]
+
+		if parent == nil {
+			panic("Parent attribute type " + arr[0] + " not found")
+		}
+
+		if !parent.IsComplex() {
+			panic("Parent attribute type " + arr[0] + " is not a complex attribute")
+		}
+
+		atType = parent.SubAttrMap[arr[1]]
+
+		if atType == nil {
+			panic("Sub-attribute type " + arr[1] + " not found")
+		}
+	} else {
+		atType = sc.AttrMap[normName]
+	}
+
+	if atType == nil {
+		panic("Attribute type " + normName + " not found")
+	}
+
+	return atType
 }
