@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"bytes"
 	"time"
+	logger "github.com/juju/loggo"
 )
 
 var (
@@ -16,15 +17,16 @@ var (
 )
 
 func main() {
+	logger.ConfigureLoggers("<root>=debug;scim.main=debug")
+	log := logger.GetLogger("scim.main")
 	resDir = resDir + "/resources/"
 	sc, err := schema.LoadSchema(resDir + "/schemas/user.json")
 	if err != nil {
-		fmt.Println(err)
+		log.Debugf("%s", err)
 		return
 	}
 	
-	fmt.Printf("%#v", sc.AttrMap["addresses"].SubAttrMap)
-	//return
+	log.Debugf("loggo %#v", sc.AttrMap["addresses"].SubAttrMap)
 	
 	sm := make(map[string]*schema.Schema)
 	sm[sc.Id] = sc

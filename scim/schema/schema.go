@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"regexp"
 	"strings"
+	logger "github.com/juju/loggo"
 )
 
 var (
@@ -61,6 +61,12 @@ type Schema struct {
 	} // meta
 }
 
+var log logger.Logger
+
+func init() {
+	log = logger.GetLogger("scim.schema")
+}
+
 // see section https://tools.ietf.org/html/rfc7643#section-2.2 for the defaults
 func newAttrType() *AttrType {
 	return &AttrType{Required: false, CaseExact: false, Mutability: "readWrite", Returned: "default", Uniqueness: "none", Type: "string"}
@@ -73,7 +79,7 @@ func LoadSchema(name string) (*Schema, error) {
 		return nil, err
 	}
 
-	log.Println("Loading schema from file " + name)
+	log.Infof("Loading schema from file %s", name)
 
 	return NewSchema(data)
 }
@@ -238,7 +244,7 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 	attr.SchemaId = sc.Id
 
 	if attr.IsComplex() {
-		log.Printf("validating sub-attributes of attributetype %s\n", attr.Name)
+		log.Debugf("validating sub-attributes of attributetype %s\n", attr.Name)
 		if attr.SubAttrMap == nil {
 			attr.SubAttrMap = make(map[string]*AttrType)
 		}

@@ -3,7 +3,6 @@ package provider
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
 	"sparrow/scim/schema"
 	"strconv"
@@ -142,7 +141,7 @@ func ParseResource(rt *schema.ResourceType, sm map[string]*schema.Schema, jsonDa
 	err := json.Unmarshal([]byte(jsonData), &i)
 
 	if err != nil {
-		fmt.Printf("%#v", err)
+		log.Debugf("%#v", err)
 		return nil, NewBadRequestError(err.Error())
 	}
 
@@ -152,7 +151,7 @@ func ParseResource(rt *schema.ResourceType, sm map[string]*schema.Schema, jsonDa
 
 	obj := i.(map[string]interface{})
 
-	log.Println("converting to resource")
+	log.Debugf("converting to resource")
 	return toResource(rt, sm, obj)
 }
 
@@ -167,7 +166,7 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 	defer func() {
 		err := recover()
 		if err != nil {
-			fmt.Printf("panicking %#v\n", err)
+			log.Debugf("panicking %#v\n", err)
 			rs = nil
 		}
 	}()
@@ -178,7 +177,7 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 }
 
 func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *schema.Schema, rs *Resource) {
-	//log.Println("resource schema %#v", sc.AttrMap["username"])
+	//log.Debugf("resource schema %#v", sc.AttrMap["username"])
 	if sc == nil {
 		msg := fmt.Sprintf("Schema of resourcetype %s cannot be null", rs.TypeName)
 		panic(NewBadRequestError(msg))
@@ -188,7 +187,7 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 
 		// see if the key is the ID of an extended schema
 		if strings.ContainsRune(k, ':') {
-			log.Printf("Parsing data of extended schema %s\n", k)
+			log.Debugf("Parsing data of extended schema %s\n", k)
 
 			extSc := rs.resType.GetSchema(k)
 			if extSc == nil {
@@ -217,7 +216,7 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 			msg := fmt.Sprintf("Attribute %s doesn't exist in the schema %s", atName, sc.Id)
 			panic(NewBadRequestError(msg))
 		} else {
-			log.Printf("found atType %s\n", atType.Name)
+			log.Debugf("found atType %s\n", atType.Name)
 		}
 
 		if atType.IsSimple() {
@@ -237,7 +236,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 	sa.Name = attrType.Name
 	sa.atType = attrType
 
-	fmt.Printf("Parsing simple attribute %s\n", sa.Name)
+	log.Debugf("Parsing simple attribute %s\n", sa.Name)
 	if attrType.MultiValued {
 		//fmt.Println("rv kind ", rv.Kind())
 		if (rv.Kind() != reflect.Slice) && (rv.Kind() != reflect.Array) {
@@ -355,7 +354,7 @@ func parseSubAtList(v interface{}, attrType *schema.AttrType) []*SimpleAttribute
 			msg := fmt.Sprintf("sub-Attribute %s.%s doesn't exist in the schema %s", attrType.Name, subAtName, attrType.SchemaId)
 			panic(NewBadRequestError(msg))
 		} else {
-			log.Printf("found sub-atType %s.%s\n", attrType.Name, subAtName)
+			log.Debugf("found sub-atType %s.%s\n", attrType.Name, subAtName)
 		}
 
 		subAt := parseSimpleAttr(subAtType, v)
@@ -381,7 +380,7 @@ func (sa *SimpleAttribute) valToInterface() interface{} {
 		var arr []interface{}
 		arr = make([]interface{}, count)
 		for i, v := range sa.Values {
-			fmt.Printf("reading value %#v of AT %s\n", v, sa.Name)
+			log.Debugf("reading value %#v of AT %s\n", v, sa.Name)
 			arr[i] = getConvertedVal(v, sa)
 		}
 
@@ -399,7 +398,7 @@ func (ca *ComplexAttribute) valToInterface() interface{} {
 	arr := make([]map[string]interface{}, len(ca.SubAts))
 	if ca.atType.MultiValued {
 		for i, v := range ca.SubAts {
-			fmt.Printf("reading sub attributes of AT %s\n", ca.Name)
+			log.Debugf("reading sub attributes of AT %s\n", ca.Name)
 			arr[i] = simpleATArrayToMap(v)
 		}
 

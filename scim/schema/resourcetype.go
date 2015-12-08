@@ -3,7 +3,6 @@ package schema
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"strings"
 )
 
@@ -33,7 +32,7 @@ func LoadResourceType(name string, sm map[string]*Schema) (*ResourceType, error)
 		return nil, err
 	}
 
-	log.Println("Loading resourcetype from file " + name)
+	log.Debugf("Loading resourcetype from file " + name)
 	return NewResourceType(data, sm)
 }
 
@@ -67,7 +66,7 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 		ve.add("No Schema found associated with the URN " + rt.Schema)
 	} else {
 		rt.schemas[rt.Schema] = sm[rt.Schema]
-		log.Println("setting main schema %s on resourcetype %s", rt.Schema, rt.Name)
+		log.Debugf("setting main schema %s on resourcetype %s", rt.Schema, rt.Name)
 	}
 
 	if len(rt.SchemaExtensions) != 0 {
