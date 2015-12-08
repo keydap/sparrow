@@ -1,15 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
+	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"os"
 	"sparrow/scim/provider"
 	"sparrow/scim/schema"
-	"encoding/gob"
-	"bytes"
 	"time"
-	logger "github.com/juju/loggo"
 )
 
 var (
@@ -25,13 +25,13 @@ func main() {
 		log.Debugf("%s", err)
 		return
 	}
-	
+
 	log.Debugf("loggo %#v", sc.AttrMap["addresses"].SubAttrMap)
-	
+
 	sm := make(map[string]*schema.Schema)
 	sm[sc.Id] = sc
 	fmt.Printf("%#v\n", sc.AttrMap)
-	
+
 	sc, err = schema.LoadSchema(resDir + "/schemas/enterprise-user.json")
 	if err != nil {
 		fmt.Println(err)
@@ -60,27 +60,39 @@ func main() {
 	}
 
 	fmt.Printf("%#v\n", rs)
-	fmt.Printf("%s\n", rs.ToJSON())
-	
+	v, err := rs.ToJSON()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("%s\n", v)
+	log.Debugf("length of the JSON data %d", len(v))
+
 	var rdata bytes.Buffer
 	enc := gob.NewEncoder(&rdata)
 	dec := gob.NewDecoder(&rdata)
-	
+
 	start := time.Now()
-	
+
 	err = enc.Encode(rs)
 	if err != nil {
 		fmt.Printf("Error while encoding the resource %s\n", rs.TypeName)
 	}
 	
+	log.Debugf("size of the encoded buffer %d", rdata.Len())
 	var r provider.Resource
 	err = dec.Decode(&r)
 	if err != nil {
 		fmt.Printf("Error while decoding the resource %s\n", rs.TypeName)
 	}
-	
+
 	fmt.Printf("\nTime took to encode a resource %#v sec\n", time.Since(start).Seconds())
 	fmt.Printf("decoded value %#v\n", r)
 	r.SetSchema(rt)
-	fmt.Printf("decoded JSON\n %s", r.ToJSON())
+	v, err = rs.ToJSON()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("decoded JSON\n %s", v)
 }

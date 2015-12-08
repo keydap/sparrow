@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sparrow/scim/schema"
@@ -395,8 +396,8 @@ func (ca *ComplexAttribute) valToInterface() interface{} {
 		return nil
 	}
 
-	arr := make([]map[string]interface{}, len(ca.SubAts))
 	if ca.atType.MultiValued {
+		arr := make([]map[string]interface{}, len(ca.SubAts))
 		for i, v := range ca.SubAts {
 			log.Debugf("reading sub attributes of AT %s\n", ca.Name)
 			arr[i] = simpleATArrayToMap(v)
@@ -405,8 +406,7 @@ func (ca *ComplexAttribute) valToInterface() interface{} {
 		return arr
 	}
 
-	arr[0] = simpleATArrayToMap(ca.SubAts[0])
-	return arr
+	return simpleATArrayToMap(ca.SubAts[0])
 }
 
 func simpleATArrayToMap(sas []*SimpleAttribute) map[string]interface{} {
@@ -458,13 +458,13 @@ func getConvertedVal(v string, sa *SimpleAttribute) interface{} {
 	}
 }
 
-func (rs *Resource) ToJSON() string {
+func (rs *Resource) ToJSON() (string, error) {
 	if rs == nil {
-		return "nil-resource"
+		return "", errors.New("nil-resource")
 	}
 
 	if rs.Core == nil {
-		return "invalid-resource-no-attributes"
+		return "", errors.New("invalid resource, no attributes")
 	}
 
 	obj := rs.Core.ToMap()
@@ -478,8 +478,8 @@ func (rs *Resource) ToJSON() string {
 
 	data, err := json.Marshal(obj)
 	if err != nil {
-		return err.Error()
+		return "", err
 	}
 
-	return string(data)
+	return string(data), nil
 }
