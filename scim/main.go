@@ -78,7 +78,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error while encoding the resource %s\n", rs.TypeName)
 	}
-	
+
 	log.Debugf("size of the encoded buffer %d", rdata.Len())
 	var r provider.Resource
 	err = dec.Decode(&r)

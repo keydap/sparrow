@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/gob"
 	"github.com/boltdb/bolt"
-	"strings"
 	"sparrow/scim/schema"
+	"strings"
 )
 
 var (
@@ -77,12 +77,12 @@ func (bc *Backend) CreateResourceBucket(name string) error {
 
 	err := bc.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(data)
-		
+
 		if err == nil {
 			bucket := tx.Bucket(BUC_RESOURCES)
 			err = bucket.Put(data, []byte(nil))
 		}
-		
+
 		return err
 	})
 

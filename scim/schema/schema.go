@@ -3,10 +3,10 @@ package schema
 import (
 	"encoding/json"
 	"fmt"
+	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"regexp"
 	"strings"
-	logger "github.com/juju/loggo"
 )
 
 var (
@@ -55,6 +55,7 @@ type Schema struct {
 	Description string // description
 	Attributes  []*AttrType
 	AttrMap     map[string]*AttrType
+	Text        string
 	Meta        struct {
 		Location     string // location
 		ResourceType string // resourceType
@@ -108,6 +109,7 @@ func NewSchema(data []byte) (*Schema, error) {
 		return nil, err
 	}
 
+	sc.Text = string(data)
 	return sc, nil
 }
 

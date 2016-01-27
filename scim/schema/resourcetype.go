@@ -86,12 +86,12 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 	if ve.Count > 0 {
 		return nil, ve
 	}
-	
+
 	mainSchema := rt.schemas[rt.Schema]
-	
+
 	// common attributes
 	addCommonAttrs(mainSchema)
-	
+
 	return &rt, nil
 }
 
@@ -134,9 +134,9 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaAttr.SchemaId = mainSchema.Id
 	mainSchema.Attributes = append(mainSchema.Attributes, metaAttr)
 	mainSchema.AttrMap[metaAttr.Name] = metaAttr
-	
+
 	metaAttr.SubAttrMap = make(map[string]*AttrType)
-	
+
 	// meta.resourceType
 	metaResTypeAttr := newAttrType()
 	metaResTypeAttr.Name = "resourceType"
@@ -145,7 +145,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaResTypeAttr.SchemaId = mainSchema.Id
 	metaResTypeAttr.Parent = metaAttr
 	metaAttr.SubAttrMap[strings.ToLower(metaResTypeAttr.Name)] = metaResTypeAttr
-	
+
 	// meta.created
 	metaCreatedAttr := newAttrType()
 	metaCreatedAttr.Name = "created"
@@ -187,7 +187,7 @@ func (rt *ResourceType) GetMainSchema() *Schema {
 	return rt.GetSchema(rt.Schema)
 }
 
-// Returns the schema identified by the URN associated with the given resourcetype 
+// Returns the schema identified by the URN associated with the given resourcetype
 func (rt *ResourceType) GetSchema(urnId string) *Schema {
 	return rt.schemas[urnId]
 }
