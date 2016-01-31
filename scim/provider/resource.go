@@ -167,7 +167,7 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 	defer func() {
 		err := recover()
 		if err != nil {
-			log.Debugf("panicking %#v\n", err)
+			log.Debugf("panicked while parsing resource data %#v\n", err)
 			rs = nil
 		}
 	}()

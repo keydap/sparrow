@@ -1,33 +1,43 @@
 package provider
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
 
 type Layout struct {
-	ConfDir   string
-	SchemaDir string
-	DataDir   string
-	LogDir    string
+	ConfDir     string
+	SchemaDir   string
+	DataDir     string
+	LogDir      string
+	ResTypesDir string
 }
 
 var DIR_PERM os.FileMode = 0744 //rwxr--r--
 
-func New(baseDir string, create bool) *Layout {
-	err := os.Chdir(baseDir)
+func NewLayout(baseDir string, create bool) (layout *Layout, err error) {
+	err = os.Chdir(baseDir)
 	if err != nil && !create {
 		log.Criticalf("Failed to open the base directory %s [%s]", baseDir, err)
-		os.Exit(1)
+		return nil, err
 	}
 
 	if create {
 		err := os.MkdirAll(baseDir, DIR_PERM)
 		if err != nil {
-			log.Criticalf("Failed to create the base directory %s [%s]", baseDir, err)
-			os.Exit(1)
+			log.Criticalf("Failed to create the base directory %s [%#v]", baseDir, err)
+			return nil, err
 		}
 	}
+
+	defer func() {
+		r := recover()
+		if r != nil {
+			log.Debugf("recovering after failed to create the layout %#v\n", r)
+			err = r.(error)
+		}
+	}()
 
 	cdir := filepath.Join(baseDir, "conf")
 	checkAndCreate(cdir)
@@ -41,9 +51,12 @@ func New(baseDir string, create bool) *Layout {
 	ldir := filepath.Join(baseDir, "logs")
 	checkAndCreate(ldir)
 
-	layout := &Layout{SchemaDir: sdir, DataDir: ddir, LogDir: ldir}
+	resTypesdir := filepath.Join(baseDir, "resourcetypes")
+	checkAndCreate(resTypesdir)
 
-	return layout
+	layout = &Layout{ConfDir: cdir, SchemaDir: sdir, DataDir: ddir, LogDir: ldir, ResTypesDir: resTypesdir}
+
+	return layout, nil
 }
 
 func checkAndCreate(dirName string) {
@@ -53,10 +66,11 @@ func checkAndCreate(dirName string) {
 		err := os.Mkdir(dirName, DIR_PERM)
 		if err != nil {
 			log.Criticalf("Failed to create the directory %s [%s]", dirName, err)
-			os.Exit(1)
+			panic(err)
 		}
 	} else if !finfo.IsDir() {
-		log.Criticalf("The file %s already exists and is not a directory, please delete it and retry [%s]", dirName, err)
-		os.Exit(1)
+		s := fmt.Errorf("The file %s already exists and is not a directory, please delete it and retry\n", dirName)
+		log.Criticalf(s.Error())
+		panic(s)
 	}
 }

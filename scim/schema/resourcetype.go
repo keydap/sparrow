@@ -24,6 +24,7 @@ type ResourceType struct {
 	}
 
 	schemas map[string]*Schema // map containing the main and extension schemas
+	Text    string             // the JSON representation of this resource type
 }
 
 func LoadResourceType(name string, sm map[string]*Schema) (*ResourceType, error) {
@@ -70,7 +71,6 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 	}
 
 	if len(rt.SchemaExtensions) != 0 {
-
 		for _, ext := range rt.SchemaExtensions {
 			ext.Schema = strings.TrimSpace(ext.Schema)
 			if len(ext.Schema) == 0 {
@@ -92,6 +92,7 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 	// common attributes
 	addCommonAttrs(mainSchema)
 
+	rt.Text = string(data)
 	return &rt, nil
 }
 

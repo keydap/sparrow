@@ -57,6 +57,7 @@ func TestLayoutCreation(t *testing.T) {
 	assertDir(layout.DataDir, t)
 	assertDir(layout.LogDir, t)
 	assertDir(layout.SchemaDir, t)
+	assertDir(layout.ResTypesDir, t)
 
 	// remove the directory
 	os.Remove(layout.SchemaDir)
