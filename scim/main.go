@@ -40,11 +40,13 @@ func main() {
 	sm[sc.Id] = sc
 	fmt.Printf("%#v\n", sc.AttrMap)
 
+	rtMap := make(map[string]*schema.ResourceType)
 	rt, err := schema.LoadResourceType(resDir+"/types/user.json", sm)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	rtMap[rt.Id] = rt
 
 	data, err := ioutil.ReadFile(resDir + "/samples/ent-user.json")
 
@@ -53,7 +55,7 @@ func main() {
 		return
 	}
 
-	rs, err := provider.ParseResource(rt, sm, string(data))
+	rs, err := provider.ParseResource(rtMap, sm, string(data))
 	if err != nil {
 		fmt.Print("error \n")
 		fmt.Println(err)

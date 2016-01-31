@@ -121,16 +121,16 @@ func (atg *AtGroup) setSchema(sc *schema.Schema) {
 	}
 }
 
-func ParseResource(rt *schema.ResourceType, sm map[string]*schema.Schema, jsonData string) (*Resource, error) {
+func ParseResource(resTypes map[string]*schema.ResourceType, sm map[string]*schema.Schema, jsonData string) (*Resource, error) {
 	if sm == nil {
 		err := NewError()
-		err.Detail = "Schema cannot be null"
+		err.Detail = "Schemas cannot be null"
 		return nil, err
 	}
 
-	if rt == nil {
+	if resTypes == nil {
 		err := NewError()
-		err.Detail = "ResourceType cannot be null"
+		err.Detail = "ResourceTypes cannot be null"
 		return nil, err
 	}
 
@@ -151,6 +151,87 @@ func ParseResource(rt *schema.ResourceType, sm map[string]*schema.Schema, jsonDa
 	}
 
 	obj := i.(map[string]interface{})
+
+	schemaIds := obj["schemas"]
+
+	if schemaIds == nil {
+		return nil, NewBadRequestError("Invalid resource, 'schemas' attribute is missing")
+	}
+
+	rv := reflect.ValueOf(schemaIds)
+	kind := rv.Kind()
+	if (kind != reflect.Slice) && (kind != reflect.Array) {
+		msg := "Value of the 'schemas' attribute must be an array"
+		log.Debugf(msg)
+		return nil, NewBadRequestError(msg)
+	}
+
+	schemaIdMap := make(map[string]int)
+	for i := 0; i < rv.Len(); i++ {
+		// make sure the values are all primitives
+		v := rv.Index(i)
+		kind = v.Kind()
+		fmt.Println(v, kind)
+		if kind != reflect.String && kind != reflect.Interface {
+			msg := "Value given for the 'schemas' attribute is invalid"
+			log.Debugf(msg)
+			return nil, NewBadRequestError(msg)
+		}
+
+		var strVal string
+		if kind == reflect.Interface {
+			strVal = fmt.Sprint(v.Interface())
+		} else {
+			strVal = v.String()
+		}
+
+		schemaIdMap[strVal] = 0
+	}
+
+	var rt *schema.ResourceType
+
+	for _, rtype := range resTypes {
+		if _, present := schemaIdMap[rtype.Schema]; present {
+			rt = rtype
+			break
+		}
+	}
+
+	if rt == nil {
+		msg := fmt.Sprintf("No resource type found with the schemas %#v", schemaIdMap)
+		log.Debugf(msg)
+		return nil, NewBadRequestError(msg)
+	}
+
+	// delete the main schema, those that remained are extensions
+	delete(schemaIdMap, rt.Schema)
+
+	// validate extensions
+	if len(rt.SchemaExtensions) != 0 {
+		for _, v := range rt.SchemaExtensions {
+			if v.Required { // this MUST be present in 'schemas'
+				if _, present := schemaIdMap[v.Schema]; !present {
+					msg := fmt.Sprintf("The extensions schema %s is missing in the resource data, it is mandatory for resource type %s", v.Schema, rt.Id)
+					log.Debugf(msg)
+					return nil, NewBadRequestError(msg)
+
+				}
+			}
+			// start deleting the extension schemas
+			delete(schemaIdMap, v.Schema)
+		}
+
+		// at the end schemaIdMap should be empty, otherwise it means it has some unknown extension schemas
+		if len(schemaIdMap) != 0 {
+			msg := fmt.Sprintf("Unknown schema extensions are present in the given resource data %#v", schemaIdMap)
+			log.Debugf(msg)
+			return nil, NewBadRequestError(msg)
+		}
+	} else if len(schemaIdMap) > 0 { // note that only extension schemas are present in schemaIdMap by the time we get here
+		msg := fmt.Sprintf("Given resource data has specified schema extension(s) but the resource type %s has no schema extensions", rt.Id)
+		log.Debugf(msg)
+		return nil, NewBadRequestError(msg)
+	}
 
 	log.Debugf("converting to resource")
 	return toResource(rt, sm, obj)
