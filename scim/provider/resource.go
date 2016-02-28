@@ -10,9 +10,17 @@ import (
 	"strings"
 )
 
-type Attribute struct {
+const URI_DELIM = ":"
+
+type Attribute interface {
+	IsSimple() bool
+	GetSimpleAt() *SimpleAttribute
+	GetComplexAt() *ComplexAttribute
+	GetType() *schema.AttrType
 }
 
+// Name will always be stored in lowercase in all Attributes, to get the
+// original user provided name, refer to the Name field of AttrType
 type SimpleAttribute struct {
 	atType *schema.AttrType
 	Name   string
@@ -39,6 +47,131 @@ type Resource struct {
 	TypeName string // resourcetype's name
 	Core     *AtGroup
 	Ext      map[string]*AtGroup
+}
+
+// Attribute contract
+
+func (sa *SimpleAttribute) IsSimple() bool {
+	return true
+}
+
+func (sa *SimpleAttribute) GetType() *schema.AttrType {
+	return sa.atType
+}
+
+func (sa *SimpleAttribute) GetSimpleAt() *SimpleAttribute {
+	return sa
+}
+
+func (sa *SimpleAttribute) GetComplexAt() *ComplexAttribute {
+	panic("Not a complex attribute")
+}
+
+func (ca *ComplexAttribute) IsSimple() bool {
+	return false
+}
+
+func (ca *ComplexAttribute) GetType() *schema.AttrType {
+	return ca.atType
+}
+
+func (ca *ComplexAttribute) GetSimpleAt() *SimpleAttribute {
+	panic("Not a simple attribute")
+}
+
+func (ca *ComplexAttribute) GetComplexAt() *ComplexAttribute {
+	return ca
+}
+
+// accessor methods for common attributes
+
+func (rs *Resource) GetId() *string {
+	sa := rs.Core.SimpleAts["id"]
+	if sa == nil {
+		return nil
+	}
+
+	return &sa.Values[0]
+}
+
+func (rs *Resource) SetId(id string) {
+	sa := rs.Core.SimpleAts["id"]
+	if sa != nil {
+		log.Warningf("Attribute ID is already set on resource")
+		return
+	}
+
+	sa.Values = make([]string, 1)
+	sa.Values[0] = id
+}
+
+func (rs *Resource) GetExternalId() *string {
+	sa := rs.Core.SimpleAts["externalid"]
+	if sa == nil {
+		return nil
+	}
+
+	return &sa.Values[0]
+}
+
+func (rs *Resource) GetMeta() *ComplexAttribute {
+	ca := rs.Core.ComplexAts["meta"]
+	if ca == nil { // if there is no meta attribute then create one
+		ca = &ComplexAttribute{}
+		ca.Name = "meta"
+		ca.atType = rs.resType.GetMainSchema().AttrMap["meta"]
+		ca.SubAts = make([][]*SimpleAttribute, 5)
+		rs.Core.ComplexAts["meta"] = ca
+	}
+
+	return ca
+}
+
+// ---------------- attribute accessors -------------
+
+func (rs *Resource) GetAttr(attrPath string) Attribute {
+	pos := strings.LastIndex(attrPath, URI_DELIM)
+	if pos < 0 {
+		var atg *AtGroup
+		uri := attrPath[:pos]
+		attrPath = attrPath[pos+1:]
+		atg = rs.Ext[uri]
+		if atg == nil {
+			atg = rs.Core
+		}
+
+		// search
+		at := atg.SimpleAts[attrPath]
+		if at != nil {
+			return at
+		}
+
+		return atg.ComplexAts[attrPath]
+	}
+
+	at := rs.Core.SimpleAts[attrPath]
+	if at != nil {
+		return at
+	}
+
+	for _, v := range rs.Ext {
+		at = v.SimpleAts[attrPath]
+		if at != nil {
+			return at
+		}
+		ct := v.ComplexAts[attrPath]
+		if ct != nil {
+			return ct
+		}
+	}
+
+	return nil
+}
+
+// ------------------ end of attribute accessors ----
+
+func (rs *Resource) GetType() *schema.ResourceType {
+	return rs.resType
 }
 
 func newAtGroup() *AtGroup {
@@ -315,7 +448,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 	rv := reflect.ValueOf(iVal)
 
 	sa := &SimpleAttribute{}
-	sa.Name = attrType.Name
+	sa.Name = strings.ToLower(attrType.Name)
 	sa.atType = attrType
 
 	log.Debugf("Parsing simple attribute %s\n", sa.Name)
@@ -388,7 +521,7 @@ func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 	rv := reflect.ValueOf(iVal)
 
 	ca := &ComplexAttribute{}
-	ca.Name = attrType.Name
+	ca.Name = strings.ToLower(attrType.Name)
 	ca.atType = attrType
 
 	if attrType.MultiValued {
@@ -506,7 +639,9 @@ func (atg *AtGroup) ToMap() map[string]interface{} {
 		for _, v := range atg.SimpleAts {
 			i := v.valToInterface()
 			if i != nil {
-				obj[v.Name] = i
+				// use the name from AttrType
+				// this name will be in camelcase
+				obj[v.atType.Name] = i
 			}
 		}
 	}
@@ -515,7 +650,9 @@ func (atg *AtGroup) ToMap() map[string]interface{} {
 		for _, v := range atg.ComplexAts {
 			i := v.valToInterface()
 			if i != nil {
-				obj[v.Name] = i
+				// use the name from AttrType
+				// this name will be in camelcase
+				obj[v.atType.Name] = i
 			}
 		}
 	}

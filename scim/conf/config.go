@@ -1,4 +1,9 @@
-package provider
+package conf
+
+import (
+	"encoding/json"
+	"io/ioutil"
+)
 
 type AuthenticationScheme struct {
 	Description      string
@@ -39,6 +44,12 @@ type Sort struct {
 	Notes     string
 }
 
+type ResourceConf struct {
+	Name        string
+	IndexFields []string
+	Notes       string
+}
+
 type Config struct {
 	DocumentationURI      string
 	AuthenticationSchemes []AuthenticationScheme
@@ -48,6 +59,7 @@ type Config struct {
 	Filter                Filter
 	Patch                 Patch
 	Sort                  Sort
+	Resources             []ResourceConf
 	Notes                 string
 }
 
@@ -76,5 +88,24 @@ func DefaultConfig() *Config {
 	sort := Sort{Supported: true}
 	cf.Sort = sort
 
+	rc := ResourceConf{Name: "User", IndexFields: []string{"userName", "name.firstName", "employeeNumber", "organization"}}
+	cf.Resources = []ResourceConf{rc}
+
 	return cf
+}
+
+func ParseConfig(file string) (*Config, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	cf := &Config{}
+
+	err = json.Unmarshal(data, cf)
+	if err != nil {
+		return nil, err
+	}
+
+	return cf, nil
 }

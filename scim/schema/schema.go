@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const ATTR_DELIM = "."
+
 var (
 	validTypes = []string{"string", "boolean", "decimal", "integer", "datetime", "binary", "reference", "complex"}
 
@@ -60,6 +62,8 @@ type Schema struct {
 		Location     string // location
 		ResourceType string // resourceType
 	} // meta
+
+	UniqueAts []string
 }
 
 var log logger.Logger
@@ -154,6 +158,8 @@ func (ve *ValidationErrors) add(e string) {
 	ve.Msgs = append(ve.Msgs, e)
 }
 
+// TODO avoid the need for strings.ToLower() in all IsXXX methods by replacing with lowercase values or by storing
+// the result in boolean fields
 func (attr *AttrType) IsComplex() bool {
 	return strings.ToLower(attr.Type) == "complex"
 }
@@ -174,6 +180,11 @@ func (attr *AttrType) IsReference() bool {
 	return strings.ToLower(attr.Type) == "reference"
 }
 
+func (attr *AttrType) IsUnique() bool {
+	u := strings.ToLower(attr.Uniqueness)
+	return (u == "server") || (u == "global")
+}
+
 func validate(sc *Schema) error {
 	ve := &ValidationErrors{0, make([]string, 2)}
 
@@ -187,10 +198,15 @@ func validate(sc *Schema) error {
 	}
 
 	sc.AttrMap = make(map[string]*AttrType)
+	sc.UniqueAts = make([]string, 1)
 
 	for _, attr := range sc.Attributes {
 		validateAttrType(attr, sc, ve)
-		sc.AttrMap[strings.ToLower(attr.Name)] = attr
+		name := strings.ToLower(attr.Name)
+		sc.AttrMap[name] = attr
+		if attr.IsUnique() {
+			sc.UniqueAts = append(sc.UniqueAts, name)
+		}
 	}
 
 	if ve.Count == 0 {
@@ -255,7 +271,13 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 			for _, sa := range attr.SubAttributes {
 				validateAttrType(sa, sc, ve)
 				sa.Parent = attr
-				attr.SubAttrMap[strings.ToLower(sa.Name)] = sa
+				name := strings.ToLower(sa.Name)
+				attr.SubAttrMap[name] = sa
+				if sa.IsUnique() {
+					name = attr.Name + ATTR_DELIM + name
+					sc.UniqueAts = append(sc.UniqueAts, strings.ToLower(name))
+				}
+
 			}
 		}
 

@@ -18,7 +18,7 @@ type AuthContext struct {
 var log logger.Logger
 
 func init() {
-	log = logger.GetLogger("scim.provider")
+	log = logger.GetLogger("sparrow.scim.provider")
 }
 
 func Start(layout *Layout) error {

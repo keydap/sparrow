@@ -23,8 +23,9 @@ type ResourceType struct {
 		ResourceType string
 	}
 
-	schemas map[string]*Schema // map containing the main and extension schemas
-	Text    string             // the JSON representation of this resource type
+	schemas   map[string]*Schema // map containing the main and extension schemas
+	Text      string             // the JSON representation of this resource type
+	UniqueAts []string           // a collection of all unique attributes
 }
 
 func LoadResourceType(name string, sm map[string]*Schema) (*ResourceType, error) {
@@ -70,6 +71,8 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 		log.Debugf("setting main schema %s on resourcetype %s", rt.Schema, rt.Name)
 	}
 
+	rt.UniqueAts = make([]string, 5)
+
 	if len(rt.SchemaExtensions) != 0 {
 		for _, ext := range rt.SchemaExtensions {
 			ext.Schema = strings.TrimSpace(ext.Schema)
@@ -79,6 +82,7 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 				ve.add("No Schema found associated with the extension schema URN " + ext.Schema)
 			} else {
 				rt.schemas[ext.Schema] = sm[ext.Schema]
+				rt.UniqueAts = append(rt.UniqueAts, sm[ext.Schema].UniqueAts...)
 			}
 		}
 	}
@@ -88,6 +92,7 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 	}
 
 	mainSchema := rt.schemas[rt.Schema]
+	rt.UniqueAts = append(rt.UniqueAts, mainSchema.UniqueAts...)
 
 	// common attributes
 	addCommonAttrs(mainSchema)
@@ -191,4 +196,15 @@ func (rt *ResourceType) GetMainSchema() *Schema {
 // Returns the schema identified by the URN associated with the given resourcetype
 func (rt *ResourceType) GetSchema(urnId string) *Schema {
 	return rt.schemas[urnId]
+}
+
+func (rt *ResourceType) GetAtType(atPath string) *AttrType {
+	for _, sc := range rt.schemas {
+		at := sc.GetAtType(atPath)
+		if at != nil {
+			return at
+		}
+	}
+
+	return nil
 }

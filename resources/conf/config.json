@@ -24,6 +24,13 @@
     "etag":{
         "supported":true
     },
+    
+    "resources": [
+      {
+          "name": "User",
+          "indexfields": "userName", "name.firstName", "employeeNumber", "organization"
+      }
+    ],
     "authenticationSchemes":[
         {
             "name":"OAuth Bearer Token",
