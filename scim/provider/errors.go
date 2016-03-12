@@ -31,3 +31,10 @@ func NewBadRequestError(detail string) *ScimError {
 	err.Status = "400"
 	return err
 }
+
+func NewNotFoundError(detail string) *ScimError {
+	err := NewError()
+	err.Detail = detail
+	err.Status = "404"
+	return err
+}

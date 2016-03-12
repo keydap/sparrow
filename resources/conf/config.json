@@ -28,7 +28,7 @@
     "resources": [
       {
           "name": "User",
-          "indexfields": "userName", "name.firstName", "employeeNumber", "organization"
+          "indexfields": "userName", "name.givenName", "employeeNumber", "organization"
       }
     ],
     "authenticationSchemes":[

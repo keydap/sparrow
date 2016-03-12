@@ -198,7 +198,7 @@ func validate(sc *Schema) error {
 	}
 
 	sc.AttrMap = make(map[string]*AttrType)
-	sc.UniqueAts = make([]string, 1)
+	sc.UniqueAts = make([]string, 0)
 
 	for _, attr := range sc.Attributes {
 		validateAttrType(attr, sc, ve)
@@ -262,13 +262,14 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 	attr.SchemaId = sc.Id
 
 	if attr.IsComplex() {
-		log.Debugf("validating sub-attributes of attributetype %s\n", attr.Name)
 		if attr.SubAttrMap == nil {
 			attr.SubAttrMap = make(map[string]*AttrType)
 		}
 
 		if subAttrLen != 0 {
+			log.Debugf("validating sub-attributes of attributetype %s\n", attr.Name)
 			for _, sa := range attr.SubAttributes {
+				log.Tracef("validating sub-type %s of %s", sa.Name, attr.Name)
 				validateAttrType(sa, sc, ve)
 				sa.Parent = attr
 				name := strings.ToLower(sa.Name)
@@ -338,6 +339,8 @@ func (sc *Schema) GetAtType(name string) *AttrType {
 
 	var atType *AttrType
 
+	log.Debugf("Looking up attribute type %s", name)
+
 	if strings.ContainsRune(normName, '.') {
 		arr := strings.SplitN(normName, ".", 2)
 		parent := sc.AttrMap[arr[0]]
@@ -360,7 +363,7 @@ func (sc *Schema) GetAtType(name string) *AttrType {
 	}
 
 	if atType == nil {
-		panic("Attribute type " + normName + " not found")
+		//panic("Attribute type " + normName + " not found")
 	}
 
 	return atType

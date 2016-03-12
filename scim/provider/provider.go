@@ -22,12 +22,12 @@ func init() {
 }
 
 func Start(layout *Layout) error {
-	err := loadSchemas(layout)
+	_, err := LoadSchemas(layout.SchemaDir)
 	if err != nil {
 		return err
 	}
 
-	err = loadResTypes(layout)
+	_, err = LoadResTypes(layout.ResTypesDir)
 	if err != nil {
 		return err
 	}
@@ -39,17 +39,17 @@ func AddSchema(sc *schema.Schema) {
 	schemas[sc.Id] = sc
 }
 
-func loadSchemas(layout *Layout) error {
-	dir, err := os.Open(layout.SchemaDir)
+func LoadSchemas(sDirPath string) (map[string]*schema.Schema, error) {
+	dir, err := os.Open(sDirPath)
 	if err != nil {
-		log.Criticalf("Could not open schema directory %s [%s]", layout.SchemaDir, err)
-		return err
+		log.Criticalf("Could not open schema directory %s [%s]", sDirPath, err)
+		return nil, err
 	}
 
 	files, err := dir.Readdir(-1)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, f := range files {
@@ -59,7 +59,7 @@ func loadSchemas(layout *Layout) error {
 
 		name := f.Name()
 		if strings.HasSuffix(strings.ToLower(name), ".json") {
-			sc, err := schema.LoadSchema(name)
+			sc, err := schema.LoadSchema((sDirPath + "/" + name))
 			if err != nil {
 				log.Warningf("Failed to load schema from file %s [%s]", name, err)
 				continue
@@ -71,20 +71,20 @@ func loadSchemas(layout *Layout) error {
 	}
 
 	log.Infof("Loaded %d schemas", len(schemas))
-	return nil
+	return schemas, nil
 }
 
-func loadResTypes(layout *Layout) error {
-	dir, err := os.Open(layout.ResTypesDir)
+func LoadResTypes(rtDirPath string) (map[string]*schema.ResourceType, error) {
+	dir, err := os.Open(rtDirPath)
 	if err != nil {
-		log.Criticalf("Could not open resourcetypes directory %s [%s]", layout.ResTypesDir, err)
-		return err
+		log.Criticalf("Could not open resourcetypes directory %s [%s]", rtDirPath, err)
+		return nil, err
 	}
 
 	files, err := dir.Readdir(-1)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, f := range files {
@@ -94,19 +94,22 @@ func loadResTypes(layout *Layout) error {
 
 		name := f.Name()
 		if strings.HasSuffix(strings.ToLower(name), ".json") {
-			rt, err := schema.LoadResourceType(name, schemas)
+			rt, err := schema.LoadResourceType((rtDirPath + "/" + name), schemas)
 			if err != nil {
 				log.Warningf("Failed to load resource type from file %s [%s]", name, err)
 				continue
 			}
 
 			log.Infof("Loaded resource type %s", rt.Id)
-			resources[rt.Id] = rt
+			if _, ok := resources[rt.Schema]; ok {
+				panic(fmt.Errorf("Duplicate resource type, a ResourceType with the schema ID '%s' already exists", rt.Schema))
+			}
+			resources[rt.Schema] = rt
 		}
 	}
 
 	log.Infof("Loaded %d resource types", len(resources))
-	return nil
+	return resources, nil
 }
 
 func GetSchemaJsonArray() string {

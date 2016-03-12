@@ -71,7 +71,7 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 		log.Debugf("setting main schema %s on resourcetype %s", rt.Schema, rt.Name)
 	}
 
-	rt.UniqueAts = make([]string, 5)
+	rt.UniqueAts = make([]string, 0)
 
 	if len(rt.SchemaExtensions) != 0 {
 		for _, ext := range rt.SchemaExtensions {

@@ -15,11 +15,11 @@ func GenUUID() string {
 func Itob(i int64) []byte {
 	var v uint64
 	if i < 0 {
-		v = uint64(^i << 1) | 1
+		v = uint64(^i<<1) | 1
 	} else {
 		v = uint64(i << 1)
 	}
-	
+
 	return encodeUint(v)
 }
 
@@ -45,12 +45,12 @@ func decodeUint(data []byte) uint64 {
 	if len(data) > 8 {
 		panic("Invalid integer bytes, data length exceeds 8")
 	}
-	
+
 	var x uint64
 	for _, b := range data {
-		x = x << 8 | uint64(b)
+		x = x<<8 | uint64(b)
 	}
-	
+
 	return x
 }
 func encodeUint(v uint64) []byte {
@@ -61,7 +61,6 @@ func encodeUint(v uint64) []byte {
 		pos--
 		v >>= 8
 	}
-	
+
 	return data
 }
-

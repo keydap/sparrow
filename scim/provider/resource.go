@@ -12,6 +12,8 @@ import (
 
 const URI_DELIM = ":"
 
+const ATTR_DELIM = "."
+
 type Attribute interface {
 	IsSimple() bool
 	GetSimpleAt() *SimpleAttribute
@@ -83,22 +85,44 @@ func (ca *ComplexAttribute) GetComplexAt() *ComplexAttribute {
 	return ca
 }
 
-// accessor methods for common attributes
-
-func (rs *Resource) GetId() *string {
-	sa := rs.Core.SimpleAts["id"]
-	if sa == nil {
-		return nil
+func (atg *AtGroup) getAttribute(name string) Attribute {
+	var at Attribute
+	if atg.SimpleAts != nil {
+		// the interface will always be non-nil even if the
+		// key is not present
+		// so do not call
+		// at = atg.SimpleAts[name] -- this will result in a non-nil value even if the key doesn't exist
+		if v, ok := atg.SimpleAts[name]; ok {
+			at = v
+		}
 	}
 
-	return &sa.Values[0]
+	if (at == nil) && (atg.ComplexAts != nil) {
+		log.Debugf("searching complex ats for %s", name)
+		if v, ok := atg.ComplexAts[name]; ok {
+			at = v
+		}
+	}
+
+	return at
+}
+
+// accessor methods for common attributes
+
+func (rs *Resource) GetId() string {
+	sa := rs.Core.SimpleAts["id"]
+	if sa == nil {
+		return ""
+	}
+
+	return sa.Values[0]
 }
 
 func (rs *Resource) SetId(id string) {
 	sa := rs.Core.SimpleAts["id"]
 	if sa != nil {
 		log.Warningf("Attribute ID is already set on resource")
-		return
+		//return
 	}
 
 	sa.Values = make([]string, 1)
@@ -130,42 +154,71 @@ func (rs *Resource) GetMeta() *ComplexAttribute {
 // ---------------- attribute accessors -------------
 
 func (rs *Resource) GetAttr(attrPath string) Attribute {
+	log.Debugf("searching for attribute %s", attrPath)
 	pos := strings.LastIndex(attrPath, URI_DELIM)
-	if pos < 0 {
+	if pos > 0 {
 		var atg *AtGroup
 		uri := attrPath[:pos]
 		attrPath = attrPath[pos+1:]
-		atg = rs.Ext[uri]
+
+		if rs.Ext != nil {
+			atg = rs.Ext[uri]
+		}
+
 		if atg == nil {
-			atg = rs.Core
+			// select Core only if the URI matches the main schema
+			if uri == rs.resType.Schema {
+				atg = rs.Core
+			} else {
+				log.Warningf("Unknown URI prefix given in the attribute %s", attrPath)
+				return nil
+			}
 		}
 
-		// search
-		at := atg.SimpleAts[attrPath]
-		if at != nil {
-			return at
-		}
-
-		return atg.ComplexAts[attrPath]
+		return rs.searchAttr(attrPath, atg)
 	}
 
-	at := rs.Core.SimpleAts[attrPath]
-	if at != nil {
-		return at
-	}
-
-	for _, v := range rs.Ext {
-		at = v.SimpleAts[attrPath]
-		if at != nil {
-			return at
-		}
-		ct := v.ComplexAts[attrPath]
-		if ct != nil {
-			return ct
+	at := rs.searchAttr(attrPath, rs.Core)
+	if at == nil && rs.Ext != nil {
+		for _, exAtg := range rs.Ext {
+			at = rs.searchAttr(attrPath, exAtg)
+			if at != nil {
+				break
+			}
 		}
 	}
 
-	return nil
+	return at
+}
+
+func (rs *Resource) searchAttr(attrPath string, atg *AtGroup) Attribute {
+	if atg == nil {
+		return nil
+	}
+	pos := strings.LastIndex(attrPath, ATTR_DELIM)
+	//handle the attributes with . char
+	if pos > 0 {
+		parent := attrPath[:pos]
+		at := atg.getAttribute(parent)
+		if at != nil && !at.IsSimple() {
+			ct := at.GetComplexAt()
+			// always get the first attribute, even if it is multi-valued
+			// for accessing all values of the attribute caller should search for the parent alone
+			if len(ct.SubAts) > 0 {
+				child := attrPath[pos+1:]
+				saArr := ct.SubAts[0]
+				for _, sa := range saArr {
+					if sa.Name == child {
+						return sa
+					}
+				}
+			}
+		}
+
+		return nil
+	} else {
+		return atg.getAttribute(attrPath)
+	}
 }
 
 // ------------------ end of attribute accessors ----

@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	logger "github.com/juju/loggo"
-	"reflect"
 	"sparrow/scim/conf"
 	"sparrow/scim/provider"
 	"sparrow/scim/schema"
 	"sparrow/scim/utils"
 	"strconv"
 	"strings"
-	"math"
 )
 
 var (
@@ -29,13 +27,17 @@ var (
 
 var log logger.Logger
 
+var schemas map[string]*schema.Schema
+var restypes map[string]*schema.ResourceType
+
 func init() {
 	log = logger.GetLogger("sparrow.scim.silo")
 }
 
-type Backend struct {
+type Silo struct {
 	db        *bolt.DB                     // DB handle
-	resources map[string]map[string]*Index // the resource buckets and the index buckets, each index name will be in the form {resource-name}:{attribute-name}
+	resources map[string][]byte            // the resource buckets
+	indices   map[string]map[string]*Index // the index buckets, each index name will be in the form {resource-name}:{attribute-name}
 }
 
 type Index struct {
@@ -43,46 +45,111 @@ type Index struct {
 	Name          string
 	BnameBytes    []byte
 	AllowDupKey   bool
-	ValType       string // instead save the attribute's type name as a string
+	ValType       string // save the attribute's type name as a string
 	CaseSensitive bool
 	db            *bolt.DB
 }
 
-func (idx *Index) add(val string) bool {
+// Inserts the given <attribute value, resource ID> tuple in the index
+func (idx *Index) add(val string, rid string, tx *bolt.Tx) error {
+	log.Debugf("adding value %s of resource %s to index %s", val, rid, idx.Name)
+	vData := idx.convert(val)
+	buck := tx.Bucket(idx.BnameBytes)
+
+	var err error
+	if idx.AllowDupKey {
+		dupBuck := buck.Bucket(vData)
+
+		if dupBuck == nil {
+			dupBuck, err = buck.CreateBucket(vData)
+			if err != nil {
+				return err
+			}
+		}
+
+		err = dupBuck.Put([]byte(rid), []byte(nil))
+	} else {
+		err = buck.Put(vData, []byte(rid))
+	}
+
+	return err
+}
+
+func (idx *Index) remove(val string, rid string, tx *bolt.Tx) error {
+	log.Debugf("removing value %s of resource %s from index %s", val, rid, idx.Name)
+	vData := idx.convert(val)
+	buck := tx.Bucket(idx.BnameBytes)
+
+	var err error
+	if idx.AllowDupKey {
+		dupBuck := buck.Bucket(vData)
+
+		if dupBuck != nil {
+			err = dupBuck.Delete([]byte(rid))
+			if err != nil {
+				return err
+			}
+
+			//TODO find a way to delete the dupBuck if all the keys were removed
+		}
+	} else {
+		err = buck.Delete(vData)
+	}
+
+	return err
+}
+
+// Get the resource ID associated with the given attribute value
+// This method is only applicable for unique attributes
+func (idx *Index) GetRid(val string, tx *bolt.Tx) *string {
+	vData := idx.convert(val)
+	ridBytes := tx.Bucket(idx.BnameBytes).Get(vData)
+
+	if ridBytes != nil {
+		rid := string(ridBytes)
+		return &rid
+	}
+
+	return nil
+}
+
+func (idx *Index) HasVal(val string, tx *bolt.Tx) bool {
+	return idx.GetRid(val, tx) != nil
+}
+
+func (idx *Index) convert(val string) []byte {
 	var vData []byte
 	switch idx.ValType {
 	case "string":
 		if !idx.CaseSensitive {
 			val = strings.ToLower(val)
 		}
-		vData = []byte(string)
+		vData = []byte(val)
 	case "integer":
-		vData = utils.Itob(strconv.Atoi(val, 10, 64))
+		i, _ := strconv.ParseInt(val, 10, 64)
+		vData = utils.Itob(i)
 	case "decimal":
-		vData = utils.Ftob(strconv.ParseFloat(val, 64))
+		f, _ := strconv.ParseFloat(val, 64)
+		vData = utils.Ftob(f)
 	}
-	
-	math.Float64bits()
-	return true
+
+	return vData
 }
 
-//func (idx *Index) hasValue(val string) bool {
-//	switch idx.ValType {
-//	case "string":
-//	}
-//	return true
-//}
+func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceType, sm map[string]*schema.Schema) (*Silo, error) {
+	restypes = rtypes
+	schemas = sm
 
-func Open(config *conf.Config, rtypes map[string]*schema.ResourceType, path string) (*Backend, error) {
 	db, err := bolt.Open(path, 0644, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	bc := &Backend{}
-	bc.db = db
-	bc.resources = make(map[string]map[string]*Index)
+	sl := &Silo{}
+	sl.db = db
+	sl.resources = make(map[string][]byte)
+	sl.indices = make(map[string]map[string]*Index)
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(BUC_RESOURCES)
@@ -103,15 +170,23 @@ func Open(config *conf.Config, rtypes map[string]*schema.ResourceType, path stri
 		return nil, err
 	}
 
-	newIndices := make([]string, 5)
+	newIndices := make([]string, 0)
 
 	for _, rc := range config.Resources {
-		rt := rtypes[rc.Name]
+
+		var rt *schema.ResourceType
+		for _, v := range rtypes {
+			if v.Name == rc.Name {
+				rt = v
+				break
+			}
+		}
+
 		if rt == nil {
 			return nil, fmt.Errorf("Unknown resource name %s found in config", rc.Name)
 		}
 
-		err = bc.CreateResourceBucket(rc)
+		err = sl.createResourceBucket(rc)
 		if err != nil {
 			return nil, err
 		}
@@ -127,23 +202,23 @@ func Open(config *conf.Config, rtypes map[string]*schema.ResourceType, path stri
 				continue
 			}
 
-			isNewIndex, idx, err := bc.CreateIndexBucket(rc.Name, idxName, at)
+			isNewIndex, idx, err := sl.createIndexBucket(rc.Name, idxName, at)
 			if err != nil {
 				return nil, err
 			}
 
 			if isNewIndex {
-				newIndices = append(newIndices, idx.name)
+				newIndices = append(newIndices, idx.Name)
 			}
 		}
 	}
 
 	// delete the unused resource or index buckets
-	err = bc.db.Update(func(tx *bolt.Tx) error {
+	err = sl.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(BUC_RESOURCES)
 		bucket.ForEach(func(k, v []byte) error {
 			resName := string(k)
-			_, present := bc.resources[resName]
+			_, present := sl.indices[resName]
 			if !present {
 				log.Infof("Deleting unused bucket of resource %s", resName)
 				bucket.Delete(k)
@@ -158,7 +233,7 @@ func Open(config *conf.Config, rtypes map[string]*schema.ResourceType, path stri
 			tokens := strings.Split(idxBName, RES_INDEX_DELIM)
 			resName := tokens[0]
 			idxName := tokens[1]
-			_, present := bc.resources[resName][idxName]
+			_, present := sl.indices[resName][idxName]
 			if !present {
 				log.Infof("Deleting unused bucket of index %s of resource %s", idxName, resName)
 				bucket.Delete(k)
@@ -170,14 +245,19 @@ func Open(config *conf.Config, rtypes map[string]*schema.ResourceType, path stri
 		return err
 	})
 
-	return bc, nil
+	return sl, nil
 }
 
-func (bc *Backend) CreateResourceBucket(rc conf.ResourceConf) error {
+func (sl *Silo) Close() {
+	log.Infof("Closing silo")
+	sl.db.Close()
+}
+
+func (sl *Silo) createResourceBucket(rc conf.ResourceConf) error {
 	name := strings.ToLower(rc.Name)
 	data := []byte(name)
 
-	err := bc.db.Update(func(tx *bolt.Tx) error {
+	err := sl.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket(data)
 
 		if err == nil {
@@ -194,13 +274,14 @@ func (bc *Backend) CreateResourceBucket(rc conf.ResourceConf) error {
 	})
 
 	if err == nil {
-		bc.resources[name] = make(map[string]*Index)
+		sl.resources[name] = data
+		sl.indices[name] = make(map[string]*Index)
 	}
 
 	return err
 }
 
-func (bc *Backend) CreateIndexBucket(resourceName, attrName string, at *schema.AttrType) (bool, *Index, error) {
+func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.AttrType) (bool, *Index, error) {
 	bname := resourceName + RES_INDEX_DELIM + attrName
 	bname = strings.ToLower(bname)
 	bnameBytes := []byte(bname)
@@ -212,11 +293,11 @@ func (bc *Backend) CreateIndexBucket(resourceName, attrName string, at *schema.A
 	idx.CaseSensitive = at.CaseExact
 	idx.ValType = at.Type
 	idx.AllowDupKey = at.MultiValued
-	idx.db = bc.db
+	idx.db = sl.db
 
 	var isNewIndex bool
 
-	err := bc.db.Update(func(tx *bolt.Tx) error {
+	err := sl.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket(bnameBytes)
 
 		if err == bolt.ErrBucketExists {
@@ -242,7 +323,8 @@ func (bc *Backend) CreateIndexBucket(resourceName, attrName string, at *schema.A
 	})
 
 	if err == nil {
-		bc.resources[resourceName][idx.name] = idx
+		resIdxMap := sl.indices[strings.ToLower(resourceName)]
+		resIdxMap[idx.Name] = idx
 	}
 
 	return isNewIndex, idx, err
@@ -280,35 +362,179 @@ func fillIndexMap(bucket *bolt.Bucket, m map[string]*Index) error {
 	return err
 }
 
-func (bc *Backend) insert(resource *provider.Resource) (*provider.Resource, error) {
-	id := utils.GenUUID()
-	resource.SetId(id)
+func (sl *Silo) Insert(resource *provider.Resource) (*provider.Resource, error) {
+	rid := utils.GenUUID()
+	resource.SetId(rid)
 
-	// validate the uniqueness contraints based on the schema
+	// validate the uniqueness constraints based on the schema
 	rt := resource.GetType()
+	rtName := strings.ToLower(rt.Name)
 
+	tx, err := sl.db.Begin(true)
+
+	if err != nil {
+		log.Criticalf("Could not begin a transaction for inserting the resource %s", err.Error())
+		return nil, err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			log.Debugf("failed to insert resource %s", e)
+			resource = nil
+			tx.Rollback()
+		} else {
+			tx.Commit()
+			log.Debugf("Successfully inserted resource with id %s", rid)
+		}
+	}()
+
+	//log.Debugf("checking unique attributes %s", rt.UniqueAts)
+	//log.Debugf("indices map %#v", sl.indices[rtName])
 	for _, name := range rt.UniqueAts {
-		// check if the value has been used already
-		//		idx := bc.
+		// check if the value has already been used
+		idx := sl.indices[rtName][name]
 		attr := resource.GetAttr(name)
 		if attr.IsSimple() {
 			sa := attr.GetSimpleAt()
 			for _, val := range sa.Values {
-				fmt.Print(val)
+				fmt.Printf("checking unique attribute %#v\n", idx)
+				if idx.HasVal(val, tx) {
+					err := fmt.Errorf("Uniqueness violation, value %s of attribute %s already exists", val, sa.Name)
+					panic(err)
+				}
+			}
+		}
+	}
+
+	for name, idx := range sl.indices[rtName] {
+		attr := resource.GetAttr(name)
+		if attr == nil {
+			continue
+		}
+		if attr.IsSimple() {
+			sa := attr.GetSimpleAt()
+			for _, val := range sa.Values {
+				err := idx.add(val, rid, tx)
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 	}
 
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(resource)
-	
-	gob.NewDecoder()
+	err = enc.Encode(resource)
 
 	if err != nil {
-		log.Warningf("Failed to encode resource %s", err.Error())
-		return resource, err
+		log.Warningf("Failed to encode resource %s", err)
+		panic(err)
 	}
 
-	return nil, nil
+	resBucket := tx.Bucket(sl.resources[rtName])
+	err = resBucket.Put([]byte(rid), buf.Bytes())
+	if err != nil {
+		panic(err)
+	}
+
+	return resource, nil
+}
+
+func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *provider.Resource, err error) {
+	ridBytes := []byte(rid)
+	rtNameBytes := sl.resources[strings.ToLower(rt.Name)]
+
+	err = sl.db.View(func(tx *bolt.Tx) error {
+		buck := tx.Bucket(rtNameBytes)
+
+		resData := buck.Get(ridBytes)
+		if len(resData) > 0 {
+			reader := bytes.NewReader(resData)
+			decoder := gob.NewDecoder(reader)
+			err = decoder.Decode(&resource)
+		}
+
+		return err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resource != nil {
+		resource.SetSchema(rt)
+	}
+
+	return resource, nil
+}
+
+func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
+	ridBytes := []byte(rid)
+	rtName := strings.ToLower(rt.Name)
+	rtNameBytes := sl.resources[rtName]
+
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		err := recover()
+		if err != nil {
+			log.Debugf("failed to remove resource with ID %s\n %s", rid, err)
+			tx.Rollback()
+		} else {
+			tx.Commit()
+			log.Debugf("Successfully removed resource with ID %s", rid)
+		}
+	}()
+
+	buck := tx.Bucket(rtNameBytes)
+	resData := buck.Get(ridBytes)
+	if len(resData) == 0 {
+		return provider.NewNotFoundError(rt.Name + " resource with ID " + rid + " not found")
+	}
+
+	var resource *provider.Resource
+
+	reader := bytes.NewReader(resData)
+	decoder := gob.NewDecoder(reader)
+	err = decoder.Decode(&resource)
+
+	if err != nil {
+		return err
+	}
+
+	if resource != nil {
+		resource.SetSchema(rt)
+	}
+
+	for name, idx := range sl.indices[rtName] {
+		attr := resource.GetAttr(name)
+		if attr == nil {
+			continue
+		}
+		if attr.IsSimple() {
+			sa := attr.GetSimpleAt()
+			for _, val := range sa.Values {
+				err := idx.remove(val, rid, tx)
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
+	}
+
+	err = buck.Delete(ridBytes)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (sl *Silo) Search() {
+
 }
