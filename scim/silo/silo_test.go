@@ -33,6 +33,10 @@ func TestMain(m *testing.M) {
 	os.Remove(dbFilePath)
 }
 
+func createTestUser() *provide.Resource {
+
+}
+
 func initSilo() {
 	if sl != nil {
 		sl.Close()
@@ -93,4 +97,17 @@ func TestInsert(t *testing.T) {
 	if rid != loaded.GetId() {
 		t.Errorf("Invalid resource was retrieved, inserted resource's ID %s is not matching with the retrieved resource's ID", rid)
 	}
+
+	// add the same user, should return an error
+	rs, err = sl.Insert(loadTestUser())
+	if err == nil {
+		t.Error("Failed to detect uniqueness violation of username attribute in the resource")
+	}
+
+}
+
+func TestIndexOps(t *testing.T) {
+	//var idx Index
+
+	//idx.add
 }

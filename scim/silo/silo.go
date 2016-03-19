@@ -362,7 +362,7 @@ func fillIndexMap(bucket *bolt.Bucket, m map[string]*Index) error {
 	return err
 }
 
-func (sl *Silo) Insert(resource *provider.Resource) (*provider.Resource, error) {
+func (sl *Silo) Insert(resource *provider.Resource) (res *provider.Resource, err error) {
 	rid := utils.GenUUID()
 	resource.SetId(rid)
 
@@ -380,11 +380,13 @@ func (sl *Silo) Insert(resource *provider.Resource) (*provider.Resource, error) 
 	defer func() {
 		e := recover()
 		if e != nil {
-			log.Debugf("failed to insert resource %s", e)
-			resource = nil
+			err = e.(error)
 			tx.Rollback()
+			res = nil
+			log.Debugf("failed to insert resource %s", err)
 		} else {
 			tx.Commit()
+			res = resource
 			log.Debugf("Successfully inserted resource with id %s", rid)
 		}
 	}()

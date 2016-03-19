@@ -6,3 +6,5 @@ Sparrow design (14-Oct-2015)
 The end goal is to make it an alternative for LDAP by supporting
 fast reads, ACID writes, and namespaces/domains
 
+How about storing ppolicy data in a separate index, keyed by either username or resource's ID?
+This might boost the performance by avoiding deserializing resource data and applying schema.
