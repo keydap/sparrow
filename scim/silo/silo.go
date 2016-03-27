@@ -437,6 +437,11 @@ func (sl *Silo) Insert(resource *provider.Resource) (res *provider.Resource, err
 	rt := resource.GetType()
 	rtName := strings.ToLower(rt.Name)
 
+	//TODO remove all read-only attributes except ID
+
+	// now, add meta attribute
+	resource.AddMeta()
+
 	tx, err := sl.db.Begin(true)
 
 	if err != nil {

@@ -109,7 +109,15 @@ func loadTestUser() *provider.Resource {
 
 func TestInsert(t *testing.T) {
 	initSilo()
-	rs, err := sl.Insert(loadTestUser())
+	user := loadTestUser()
+	metaMap := make(map[string]interface{})
+	metaMap["created"] = "abc"
+	metaMap["lastmodified"] = "xyz"
+
+	user.AddCA("meta", metaMap)
+	uMeta := user.GetMeta()
+
+	rs, err := sl.Insert(user)
 
 	rid := rs.GetId()
 
@@ -124,6 +132,16 @@ func TestInsert(t *testing.T) {
 
 	if len(rid) == 0 {
 		t.Error("Invalid insert operation, no generated ID found for the inserted resource")
+	}
+
+	// check that metadata is overwritten
+	rsMeta := rs.GetMeta()
+	if uMeta.Get("created") == rsMeta.Get("created") {
+		t.Error("created time should not match")
+	}
+
+	if uMeta.Get("lastmodified") == rsMeta.Get("lastmodified") {
+		t.Error("lastmodified time should not match")
 	}
 
 	loaded, err := sl.Get(rid, rs.GetType())
@@ -189,6 +207,9 @@ func TestIndexOps(t *testing.T) {
 	if !r1 || !r2 {
 		t.Errorf("Required two resource IDs are not present in emails.value index")
 	}
+
+	//json, _ := rs.ToJSON()
+	//fmt.Println(json)
 
 	// now delete the resources
 	sl.Remove(rid1, rs.GetType())
