@@ -101,20 +101,39 @@ func (idx *Index) remove(val string, rid string, tx *bolt.Tx) error {
 
 // Get the resource ID associated with the given attribute value
 // This method is only applicable for unique attributes
-func (idx *Index) GetRid(val string, tx *bolt.Tx) *string {
+func (idx *Index) GetRid(val string, tx *bolt.Tx) string {
 	vData := idx.convert(val)
 	ridBytes := tx.Bucket(idx.BnameBytes).Get(vData)
 
 	if ridBytes != nil {
 		rid := string(ridBytes)
-		return &rid
+		return rid
 	}
 
-	return nil
+	return ""
+}
+
+func (idx *Index) GetRids(val string, tx *bolt.Tx) []string {
+	vData := idx.convert(val)
+	buck := tx.Bucket(idx.BnameBytes)
+
+	dupBuck := buck.Bucket(vData)
+
+	var rids []string
+
+	if dupBuck != nil {
+		//rids = make([]string, 0)
+		cur := dupBuck.Cursor()
+		for k, _ := cur.First(); k != nil; k, _ = cur.Next() {
+			rids = append(rids, string(k))
+		}
+	}
+
+	return rids
 }
 
 func (idx *Index) HasVal(val string, tx *bolt.Tx) bool {
-	return idx.GetRid(val, tx) != nil
+	return len(idx.GetRid(val, tx)) != 0
 }
 
 func (idx *Index) convert(val string) []byte {
@@ -292,7 +311,12 @@ func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.Attr
 	idx.BnameBytes = bnameBytes
 	idx.CaseSensitive = at.CaseExact
 	idx.ValType = at.Type
-	idx.AllowDupKey = at.MultiValued
+	// parent's singularity applies for complex attributes
+	if at.Parent != nil {
+		idx.AllowDupKey = at.Parent.MultiValued
+	} else {
+		idx.AllowDupKey = at.MultiValued
+	}
 	idx.db = sl.db
 
 	var isNewIndex bool

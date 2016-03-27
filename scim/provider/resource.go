@@ -122,7 +122,11 @@ func (rs *Resource) SetId(id string) {
 	sa := rs.Core.SimpleAts["id"]
 	if sa != nil {
 		log.Warningf("Attribute ID is already set on resource")
-		//return
+	} else {
+		sa = &SimpleAttribute{}
+		sa.Name = "id"
+		sa.atType = rs.GetType().GetAtType("id")
+		rs.Core.SimpleAts["id"] = sa
 	}
 
 	sa.Values = make([]string, 1)
@@ -229,6 +233,69 @@ func (rs *Resource) GetType() *schema.ResourceType {
 
 func newAtGroup() *AtGroup {
 	return &AtGroup{SimpleAts: make(map[string]*SimpleAttribute), ComplexAts: make(map[string]*ComplexAttribute)}
+}
+
+func NewResource(rt *schema.ResourceType) *Resource {
+	rs := &Resource{}
+	rs.resType = rt
+	rs.TypeName = rt.Name
+	rs.Core = newAtGroup()
+	rs.Ext = make(map[string]*AtGroup)
+
+	return rs
+}
+
+func (rs *Resource) AddSA(name string, val ...string) error {
+	sa := &SimpleAttribute{}
+	sa.Name = strings.ToLower(name)
+	sa.atType = rs.resType.GetAtType(name)
+	if sa.atType == nil {
+		return fmt.Errorf("No attribute type found with the name %s in the resource type %s", name, rs.resType.Schema)
+	}
+
+	if len(val) == 0 {
+		return fmt.Errorf("Invalid values given for the attribute %s", name)
+	}
+
+	if !sa.atType.MultiValued {
+		sa.Values = make([]string, 1)
+		sa.Values[0] = val[0]
+	} else {
+		sa.Values = val
+	}
+
+	rs.addSimpleAt(sa)
+
+	return nil
+}
+
+func (rs *Resource) AddCA(name string, val ...map[string]interface{}) (err error) {
+	atType := rs.resType.GetAtType(name)
+	if atType == nil {
+		return fmt.Errorf("No attribute type found with the name %s in the resource type %s", name, rs.resType.Schema)
+	}
+
+	if len(val) == 0 {
+		return fmt.Errorf("Invalid values given for the attribute %s", name)
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			log.Debugf("panicked while adding complex attribute %s, %#v\n", name, e)
+			err = e.(error)
+		}
+	}()
+
+	var ca *ComplexAttribute
+	if atType.MultiValued {
+		ca = parseComplexAttr(atType, val)
+	} else {
+		ca = parseComplexAttr(atType, val[0])
+	}
+
+	rs.addComplexAt(ca)
+	return nil
 }
 
 func (rs *Resource) addSimpleAt(sa *SimpleAttribute) {

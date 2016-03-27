@@ -14,6 +14,8 @@ var dbFilePath = "/tmp/silo_test.db"
 var config = conf.DefaultConfig()
 var resDir, _ = os.Getwd()
 var sl *Silo
+var uCount int
+var userResSchema = "urn:ietf:params:scim:schemas:core:2.0:User"
 
 func TestMain(m *testing.M) {
 	logger.ConfigureLoggers("<root>=debug;scim.main=debug")
@@ -26,6 +28,8 @@ func TestMain(m *testing.M) {
 	schemas, _ = provider.LoadSchemas(schemaDir)
 	restypes, _ = provider.LoadResTypes(rtDir)
 
+	os.Remove(dbFilePath)
+
 	// now run the tests
 	m.Run()
 
@@ -33,8 +37,42 @@ func TestMain(m *testing.M) {
 	os.Remove(dbFilePath)
 }
 
-func createTestUser() *provide.Resource {
+func createTestUser() *provider.Resource {
+	rt := restypes[userResSchema]
 
+	rs := provider.NewResource(rt)
+
+	uCount++
+
+	username := fmt.Sprintf("user-%d", uCount)
+	err := rs.AddSA("username", username)
+
+	if err != nil {
+		panic(err)
+	}
+
+	nameMap := make(map[string]interface{})
+	nameMap["formatted"] = "Formatted " + username
+	nameMap["familyname"] = "Family " + username
+	nameMap["givenName"] = "Given " + username
+	nameMap["middleName"] = "Middle " + username
+	nameMap["honorificPrefix"] = "Mr."
+	nameMap["honorificSuffix"] = "Jr"
+
+	err = rs.AddCA("name", nameMap)
+	if err != nil {
+		panic(err)
+	}
+
+	// always add the same email address so that we can test the duplicate keys in index
+	emailsMap := make(map[string]interface{})
+	emailsMap["value"] = "bjensen@example.com"
+	err = rs.AddCA("emails", emailsMap)
+	if err != nil {
+		panic(err)
+	}
+
+	return rs
 }
 
 func initSilo() {
@@ -103,11 +141,53 @@ func TestInsert(t *testing.T) {
 	if err == nil {
 		t.Error("Failed to detect uniqueness violation of username attribute in the resource")
 	}
-
 }
 
 func TestIndexOps(t *testing.T) {
-	//var idx Index
+	initSilo()
+	email := "bjensen@example.com"
 
-	//idx.add
+	idx := sl.indices["user"]["emails.value"]
+
+	readTx, err := sl.db.Begin(false)
+	if err != nil {
+		panic(err)
+	}
+
+	exists := idx.HasVal(email, readTx)
+	readTx.Rollback()
+
+	if exists {
+		t.Errorf("Email %s should not exist", email)
+	}
+
+	// first user
+	rs := createTestUser()
+	sl.Insert(rs)
+	rid1 := rs.GetId()
+
+	// second user
+	rs = createTestUser()
+	sl.Insert(rs)
+	rid2 := rs.GetId()
+
+	fmt.Println("getting RIDs of email")
+	readTx, _ = sl.db.Begin(false)
+	rids := idx.GetRids(email, readTx)
+	readTx.Rollback()
+
+	var r1, r2 bool
+	for _, v := range rids {
+		if v == rid1 {
+			r1 = true
+		}
+
+		if v == rid2 {
+			r2 = true
+		}
+	}
+
+	if !r1 || !r2 {
+		t.Errorf("Required two resource IDs are not present in emails.value index")
+	}
 }
