@@ -60,14 +60,35 @@ func (idx *Index) add(val string, rid string, tx *bolt.Tx) error {
 	if idx.AllowDupKey {
 		dupBuck := buck.Bucket(vData)
 
+		countKey := []byte(strings.ToLower(val) + "_count")
+		var count int64
+		firstCount := false
+
 		if dupBuck == nil {
 			dupBuck, err = buck.CreateBucket(vData)
 			if err != nil {
 				return err
 			}
+
+			err = buck.Put(countKey, utils.Itob(1))
+			if err != nil {
+				return err
+			}
+			firstCount = true
+		} else {
+			cb := buck.Get(countKey)
+			count = utils.Btoi(cb)
 		}
 
 		err = dupBuck.Put([]byte(rid), []byte(nil))
+		if err != nil {
+			return err
+		}
+
+		if !firstCount {
+			count++
+			err = buck.Put(countKey, utils.Itob(count))
+		}
 	} else {
 		err = buck.Put(vData, []byte(rid))
 	}
@@ -85,12 +106,32 @@ func (idx *Index) remove(val string, rid string, tx *bolt.Tx) error {
 		dupBuck := buck.Bucket(vData)
 
 		if dupBuck != nil {
-			err = dupBuck.Delete([]byte(rid))
-			if err != nil {
-				return err
-			}
+			countKey := []byte(strings.ToLower(val) + "_count")
 
-			//TODO find a way to delete the dupBuck if all the keys were removed
+			cb := buck.Get(countKey)
+			count := utils.Btoi(cb)
+
+			if count > 1 {
+				err = dupBuck.Delete([]byte(rid))
+				if err != nil {
+					return err
+				}
+
+				count--
+				err = buck.Put(countKey, utils.Itob(count))
+				if err != nil {
+					return err
+				}
+			} else {
+				err = buck.DeleteBucket(vData)
+				log.Debugf("Deleting the bucket associated with %s %s", val, err)
+				if err != nil {
+					return err
+				}
+
+				log.Debugf("Deleting the bucket counter associated with %s", val)
+				err = buck.Delete(countKey)
+			}
 		}
 	} else {
 		err = buck.Delete(vData)
@@ -113,6 +154,8 @@ func (idx *Index) GetRid(val string, tx *bolt.Tx) string {
 	return ""
 }
 
+// Get the resource ID associated with the given attribute value
+// This method is applicable for multivalued attributes only
 func (idx *Index) GetRids(val string, tx *bolt.Tx) []string {
 	vData := idx.convert(val)
 	buck := tx.Bucket(idx.BnameBytes)

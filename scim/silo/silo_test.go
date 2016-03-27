@@ -171,7 +171,6 @@ func TestIndexOps(t *testing.T) {
 	sl.Insert(rs)
 	rid2 := rs.GetId()
 
-	fmt.Println("getting RIDs of email")
 	readTx, _ = sl.db.Begin(false)
 	rids := idx.GetRids(email, readTx)
 	readTx.Rollback()
@@ -190,4 +189,24 @@ func TestIndexOps(t *testing.T) {
 	if !r1 || !r2 {
 		t.Errorf("Required two resource IDs are not present in emails.value index")
 	}
+
+	// now delete the resources
+	sl.Remove(rid1, rs.GetType())
+	sl.Remove(rid2, rs.GetType())
+
+	readTx, _ = sl.db.Begin(false)
+	rids = idx.GetRids(email, readTx)
+	readTx.Rollback()
+
+	if len(rids) != 0 {
+		t.Error("Expecting an empty resource ID slice")
+	}
+
+	readTx, _ = sl.db.Begin(false)
+	bucket := readTx.Bucket(idx.BnameBytes)
+	bucket = bucket.Bucket([]byte(email))
+	if bucket != nil {
+		t.Error("Bucket associated with indexed attribute still exists though no values are indexed")
+	}
+	readTx.Rollback()
 }
