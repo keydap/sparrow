@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sparrow/scim/schema"
+	"sparrow/scim/utils"
 	"strconv"
 	"strings"
 )
@@ -85,6 +86,22 @@ func (ca *ComplexAttribute) GetComplexAt() *ComplexAttribute {
 	return ca
 }
 
+func (ca *ComplexAttribute) Get(subAtName string) interface{} {
+	if len(ca.SubAts) == 0 {
+		return nil
+	}
+
+	atArr := ca.SubAts[0]
+	subAtName = strings.ToLower(subAtName)
+	for _, v := range atArr {
+		if v.Name == subAtName {
+			return v.Values[0]
+		}
+	}
+
+	return nil
+}
+
 func (atg *AtGroup) getAttribute(name string) Attribute {
 	var at Attribute
 	if atg.SimpleAts != nil {
@@ -125,8 +142,8 @@ func (rs *Resource) SetId(id string) {
 	} else {
 		sa = &SimpleAttribute{}
 		sa.Name = "id"
-		sa.atType = rs.GetType().GetAtType("id")
-		rs.Core.SimpleAts["id"] = sa
+		sa.atType = rs.GetType().GetAtType(sa.Name)
+		rs.Core.SimpleAts[sa.Name] = sa
 	}
 
 	sa.Values = make([]string, 1)
@@ -143,16 +160,86 @@ func (rs *Resource) GetExternalId() *string {
 }
 
 func (rs *Resource) GetMeta() *ComplexAttribute {
-	ca := rs.Core.ComplexAts["meta"]
-	if ca == nil { // if there is no meta attribute then create one
-		ca = &ComplexAttribute{}
-		ca.Name = "meta"
-		ca.atType = rs.resType.GetMainSchema().AttrMap["meta"]
-		ca.SubAts = make([][]*SimpleAttribute, 5)
-		rs.Core.ComplexAts["meta"] = ca
-	}
+	return rs.Core.ComplexAts["meta"]
+}
+
+func (rs *Resource) AddMeta() *ComplexAttribute {
+	// manually adding with the assumption that this performs better than parsing map[string]interface{} when AddCA() is used
+	ca := &ComplexAttribute{}
+	ca.Name = "meta"
+	sc := rs.resType.GetMainSchema()
+	ca.atType = sc.AttrMap[ca.Name]
+	ca.SubAts = make([][]*SimpleAttribute, 1)
+	rs.Core.ComplexAts[ca.Name] = ca
+
+	parentAt := sc.AttrMap[ca.Name]
+	atArr := make([]*SimpleAttribute, 5)
+	ca.SubAts[0] = atArr
+
+	// FIXME the sub-attributes resourcetype, location and version can be injected on demand during querying
+	// this will save some disk space
+	resTypeAt := &SimpleAttribute{Name: "resourcetype"}
+	resTypeAt.atType = parentAt.SubAttrMap[resTypeAt.Name]
+	resTypeAt.Values = make([]string, 1)
+	resTypeAt.Values[0] = rs.resType.Name
+	atArr[0] = resTypeAt
+
+	createdAt := &SimpleAttribute{Name: "created"}
+	createdAt.atType = parentAt.SubAttrMap[createdAt.Name]
+	createdAt.Values = make([]string, 1)
+	createdAt.Values[0] = utils.DateTime()
+	atArr[1] = createdAt
+
+	lastModAt := &SimpleAttribute{Name: "lastmodified"}
+	lastModAt.atType = parentAt.SubAttrMap[lastModAt.Name]
+	lastModAt.Values = make([]string, 1)
+	lastModAt.Values[0] = utils.DateTime()
+	atArr[2] = lastModAt
+
+	locationAt := &SimpleAttribute{Name: "location"}
+	locationAt.atType = parentAt.SubAttrMap[locationAt.Name]
+	locationAt.Values = make([]string, 1)
+	locationAt.Values[0] = rs.resType.Endpoint + "/" + rs.GetId()
+	atArr[3] = locationAt
+
+	versionAt := &SimpleAttribute{Name: "version"}
+	versionAt.atType = parentAt.SubAttrMap[versionAt.Name]
+	versionAt.Values = make([]string, 1)
+	versionAt.Values[0] = lastModAt.Values[0]
+	atArr[4] = versionAt
 
 	return ca
+}
+
+func (rs *Resource) RemoveReadOnlyAt() {
+	_removeReadOnly(rs.Core)
+	if len(rs.Ext) > 0 {
+		for _, v := range rs.Ext {
+			_removeReadOnly(v)
+		}
+	}
+}
+
+func _removeReadOnly(atg *AtGroup) {
+	if atg == nil {
+		return
+	}
+
+	if len(atg.SimpleAts) > 0 {
+		for k, v := range atg.SimpleAts {
+			if v.GetType().IsReadOnly() {
+				delete(atg.SimpleAts, k)
+			}
+		}
+	}
+
+	if len(atg.ComplexAts) > 0 {
+		for k, v := range atg.ComplexAts {
+			if v.GetType().IsReadOnly() {
+				delete(atg.ComplexAts, k)
+			}
+		}
+	}
 }
 
 // ---------------- attribute accessors -------------
@@ -746,7 +833,7 @@ func (ca *ComplexAttribute) valToInterface() interface{} {
 func simpleATArrayToMap(sas []*SimpleAttribute) map[string]interface{} {
 	obj := make(map[string]interface{})
 	for _, v := range sas {
-		obj[v.Name] = v.valToInterface()
+		obj[v.atType.Name] = v.valToInterface()
 	}
 
 	return obj

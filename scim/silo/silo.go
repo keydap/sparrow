@@ -429,18 +429,18 @@ func fillIndexMap(bucket *bolt.Bucket, m map[string]*Index) error {
 	return err
 }
 
-func (sl *Silo) Insert(resource *provider.Resource) (res *provider.Resource, err error) {
+func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err error) {
+	inRes.RemoveReadOnlyAt()
+
 	rid := utils.GenUUID()
-	resource.SetId(rid)
+	inRes.SetId(rid)
 
 	// validate the uniqueness constraints based on the schema
-	rt := resource.GetType()
+	rt := inRes.GetType()
 	rtName := strings.ToLower(rt.Name)
 
-	//TODO remove all read-only attributes except ID
-
 	// now, add meta attribute
-	resource.AddMeta()
+	inRes.AddMeta()
 
 	tx, err := sl.db.Begin(true)
 
@@ -458,7 +458,7 @@ func (sl *Silo) Insert(resource *provider.Resource) (res *provider.Resource, err
 			log.Debugf("failed to insert resource %s", err)
 		} else {
 			tx.Commit()
-			res = resource
+			res = inRes
 			log.Debugf("Successfully inserted resource with id %s", rid)
 		}
 	}()
@@ -468,7 +468,7 @@ func (sl *Silo) Insert(resource *provider.Resource) (res *provider.Resource, err
 	for _, name := range rt.UniqueAts {
 		// check if the value has already been used
 		idx := sl.indices[rtName][name]
-		attr := resource.GetAttr(name)
+		attr := inRes.GetAttr(name)
 		if attr.IsSimple() {
 			sa := attr.GetSimpleAt()
 			for _, val := range sa.Values {
@@ -482,7 +482,7 @@ func (sl *Silo) Insert(resource *provider.Resource) (res *provider.Resource, err
 	}
 
 	for name, idx := range sl.indices[rtName] {
-		attr := resource.GetAttr(name)
+		attr := inRes.GetAttr(name)
 		if attr == nil {
 			continue
 		}
@@ -499,7 +499,7 @@ func (sl *Silo) Insert(resource *provider.Resource) (res *provider.Resource, err
 
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	err = enc.Encode(resource)
+	err = enc.Encode(inRes)
 
 	if err != nil {
 		log.Warningf("Failed to encode resource %s", err)
@@ -512,7 +512,7 @@ func (sl *Silo) Insert(resource *provider.Resource) (res *provider.Resource, err
 		panic(err)
 	}
 
-	return resource, nil
+	return inRes, nil
 }
 
 func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *provider.Resource, err error) {

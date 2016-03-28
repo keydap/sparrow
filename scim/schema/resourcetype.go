@@ -117,6 +117,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	idAttr.Returned = "always"
 	idAttr.CaseExact = true
 	idAttr.MultiValued = false
+	idAttr.Mutability = "readonly"
 	idAttr.SchemaId = mainSchema.Id
 	mainSchema.Attributes = append(mainSchema.Attributes, idAttr)
 	mainSchema.AttrMap[idAttr.Name] = idAttr

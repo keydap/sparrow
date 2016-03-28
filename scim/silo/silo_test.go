@@ -208,9 +208,6 @@ func TestIndexOps(t *testing.T) {
 		t.Errorf("Required two resource IDs are not present in emails.value index")
 	}
 
-	//json, _ := rs.ToJSON()
-	//fmt.Println(json)
-
 	// now delete the resources
 	sl.Remove(rid1, rs.GetType())
 	sl.Remove(rid2, rs.GetType())
@@ -230,4 +227,16 @@ func TestIndexOps(t *testing.T) {
 		t.Error("Bucket associated with indexed attribute still exists though no values are indexed")
 	}
 	readTx.Rollback()
+
+	json, _ := rs.ToJSON()
+	fmt.Println(json)
+
+	// a non-silo related test
+	rs.RemoveReadOnlyAt()
+	json, _ = rs.ToJSON()
+	fmt.Println(json)
+
+	if (len(rs.GetId()) != 0) || (rs.GetMeta() != nil) {
+		t.Error("RemoveReadOnlyAt() didn't remove readonly attributes")
+	}
 }

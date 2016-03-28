@@ -22,6 +22,13 @@ func TestSerializeFloat(t *testing.T) {
 	encodeDecodeFloat(math.SmallestNonzeroFloat64, t)
 }
 
+func TestDateTime(t *testing.T) {
+	date := DateTime()
+	if date[len(date)-1] != 'Z' {
+		t.Errorf("Invalid datetime, missing Z char")
+	}
+}
+
 func encodeDecodeInt(in int64, t *testing.T) {
 	data := Itob(in)
 	out := Btoi(data)

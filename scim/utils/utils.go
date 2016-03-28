@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math"
+	"time"
 )
 
 func GenUUID() string {
@@ -53,6 +54,7 @@ func decodeUint(data []byte) uint64 {
 
 	return x
 }
+
 func encodeUint(v uint64) []byte {
 	data := make([]byte, 8)
 	pos := 7
@@ -63,4 +65,9 @@ func encodeUint(v uint64) []byte {
 	}
 
 	return data
+}
+
+func DateTime() string {
+	t := time.Now().UTC()
+	return t.Format(time.RFC3339)
 }
