@@ -8,7 +8,6 @@ import (
 
 const (
 	READ_ATTR_OR_NOT_NODE = iota
-	READ_ATTR
 	READ_OP
 	READ_VAL
 )
@@ -25,28 +24,10 @@ type FilterNode struct {
 }
 
 type position struct {
-	//runes []rune
-	index      int
+	index      int // current position in the rune array
 	tokenStart int // position of the beginning of the token, used for information purpose
-	state      int
+	state      int // the state required to interpret the current token
 }
-
-/*func (rb *runeBuf) hasMore() bool {
-	return rb.index < len(rb.runes)
-}
-
-func (rb *runeBuf) prevRune() rune {
-	if rb.index == 0 {
-		return -1
-	}
-
-	return rb.runes[rb.index - 1]
-}
-
-func (rb *runeBuf) nextRune() rune {
-	rb.index++
-	return rb.runes[rb.index]
-}*/
 
 func ParseFilter(filter string) (expr *FilterNode, err error) {
 	log.Debugf("Parsing filter %s", filter)
@@ -63,14 +44,17 @@ func ParseFilter(filter string) (expr *FilterNode, err error) {
 
 	filter = strings.TrimSpace(filter)
 
-	return parse([]rune(filter), pos, nil), nil
+	return parse([]rune(filter), pos), nil
 }
 
-func parse(rb []rune, pos *position, root *FilterNode) *FilterNode {
+func parse(rb []rune, pos *position) *FilterNode {
 	length := (len(rb) - 1)
 
 	var node *FilterNode
-	node = nil
+	var root *FilterNode
+
+	complexAtBegin := false
+	var parentAt string
 
 	for {
 		c := rb[pos.index]
@@ -103,8 +87,8 @@ func parse(rb []rune, pos *position, root *FilterNode) *FilterNode {
 						tmpRoot = root
 					}
 
-					pos.index++ // preparse for parsing the next node
-					child := parse(rb, pos, nil)
+					pos.index++ // prepare for parsing the next node
+					child := parse(rb, pos)
 					tmp.addChild(child)
 
 					if tmpRoot == nil {
@@ -115,16 +99,26 @@ func parse(rb []rune, pos *position, root *FilterNode) *FilterNode {
 					// state remains at READ_ATTR_OR_NOT_NODE
 				} else {
 					log.Debugf("read at %s", t)
+
+					//valuePath = attrPath "[" valFilter "]" ; FILTER uses sub-attributes of a parent attrPath
+					dotPos := strings.IndexRune(t, '[')
+					if dotPos > 0 && dotPos < (len(t)-1) {
+						if complexAtBegin { // if there exists a prior [ but was not matched with a closing ] then panic
+							panic(fmt.Errorf("Invalid filter mismatched square brackets [ and ] starting at pos %d", pos.tokenStart))
+						}
+
+						complexAtBegin = true
+						parentAt = t[:dotPos]
+						t = parentAt + "." + t[dotPos+1:]
+					} else if complexAtBegin {
+						t = parentAt + "." + t
+					}
+
 					node = &FilterNode{}
 					node.Name = t
+
 					pos.state = READ_OP
 				}
-
-			case READ_ATTR:
-				log.Debugf("read at %s", t)
-				node = &FilterNode{}
-				node.Name = t
-				pos.state = READ_OP
 
 			case READ_OP:
 				log.Debugf("read op %s", t)
@@ -168,13 +162,17 @@ func parse(rb []rune, pos *position, root *FilterNode) *FilterNode {
 			}
 
 		case ' ':
-			fmt.Println("SPace delimiter")
+			log.Debugf("SPace delimiter")
 
 		case '(', ')':
-			fmt.Println("terminal")
+			log.Debugf("terminals ( )")
 
-		case '[', ']':
-			fmt.Println("terminal")
+		case ']':
+			if !complexAtBegin {
+				panic(fmt.Errorf("Invalid filter, found ] without a complex attribute definition"))
+			}
+			complexAtBegin = false
+			log.Debugf("terminal ]")
 		}
 
 		pos.index++
@@ -224,20 +222,21 @@ func readToken(rb []rune, start int, pos *position) (token string, err error) {
 				return string(rb[start : pos.index+1]), nil
 			}
 
-		case '[':
+		case '(', ']', ')': // terminals
 			if !startQuote {
-				return string(rb[start : pos.index+1]), nil
+				// do not add 1 to the index, this is required to exclude ], ( or ) chars from token
+				return string(rb[start:pos.index]), nil
 			}
 		}
 
 		pr = c
 	}
-	
+
 	if startQuote {
 		return "", fmt.Errorf("No ending \" found at the end of the token stream starting at position %d", beginAt)
 	}
 
-	return string(rb[start : pos.index]), nil
+	return string(rb[start:pos.index]), nil
 }
 
 func toOperator(op string) string {
