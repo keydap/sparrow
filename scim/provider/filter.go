@@ -56,6 +56,7 @@ func parse(rb []rune, pos *position) *FilterNode {
 	complexAtBegin := false
 	var parentAt string
 
+outer:
 	for {
 		c := rb[pos.index]
 		switch c {
@@ -125,18 +126,19 @@ func parse(rb []rune, pos *position) *FilterNode {
 				op := toOperator(t)
 
 				if isLogical(op) {
-					tmp := &FilterNode{Op: op}
-
 					if root == nil {
 						root = node
+						node = nil
 					}
 
-					if root != nil {
+					if root == nil {
+						panic(fmt.Errorf("Invalid %s node, missing child", op))
+					}
+
+					if root.Op != op {
+						tmp := &FilterNode{Op: op}
 						tmp.addChild(root)
 						root = tmp
-						node = nil
-					} else {
-						panic(fmt.Errorf("Invalid %s node, missing child", op))
 					}
 
 					pos.state = READ_ATTR_OR_NOT_NODE
@@ -164,8 +166,20 @@ func parse(rb []rune, pos *position) *FilterNode {
 		case ' ':
 			log.Debugf("SPace delimiter")
 
-		case '(', ')':
-			log.Debugf("terminals ( )")
+		case '(':
+			// beginning of a group, parse this entirely as a node
+			if root != nil {
+				tmp := parse(rb, pos)
+				if isLogical(root.Op) {
+					root.addChild(tmp)
+				} else {
+					panic(fmt.Errorf("Invalid filter grouping"))
+				}
+			}
+
+		case ')':
+			log.Debugf("terminal )")
+			break outer
 
 		case ']':
 			if !complexAtBegin {
