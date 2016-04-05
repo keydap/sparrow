@@ -249,8 +249,8 @@ func (rs *Resource) GetAttr(attrPath string) Attribute {
 	pos := strings.LastIndex(attrPath, URI_DELIM)
 	if pos > 0 {
 		var atg *AtGroup
-		uri := attrPath[:pos]
-		attrPath = attrPath[pos+1:]
+		uri := attrPath[:pos]                        // URI is case sensitive
+		attrPath = strings.ToLower(attrPath[pos+1:]) // attribute is not
 
 		if rs.Ext != nil {
 			atg = rs.Ext[uri]
@@ -269,6 +269,7 @@ func (rs *Resource) GetAttr(attrPath string) Attribute {
 		return rs.searchAttr(attrPath, atg)
 	}
 
+	attrPath = strings.ToLower(attrPath) // here no URI exists, can be converted to lowercase
 	at := rs.searchAttr(attrPath, rs.Core)
 	if at == nil && rs.Ext != nil {
 		for _, exAtg := range rs.Ext {
