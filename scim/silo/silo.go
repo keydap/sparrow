@@ -50,6 +50,14 @@ type Index struct {
 	db            *bolt.DB
 }
 
+func (sl *Silo) GetIndex(resId string, atName string) *Index {
+	return nil
+}
+
+func (idx *Index) count(key string, tx *bolt.Tx) int64 {
+	return 0
+}
+
 // Inserts the given <attribute value, resource ID> tuple in the index
 func (idx *Index) add(val string, rid string, tx *bolt.Tx) error {
 	log.Debugf("adding value %s of resource %s to index %s", val, rid, idx.Name)

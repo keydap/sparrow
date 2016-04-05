@@ -9,8 +9,9 @@ import (
 	"strings"
 )
 
-var schemas = make(map[string]*schema.Schema)
-var resources = make(map[string]*schema.ResourceType)
+var schemas = make(map[string]*schema.Schema)         // a map of Schema ID to Schema
+var resources = make(map[string]*schema.ResourceType) // a map of Name to ResourceTye
+var rsPathMap = make(map[string]*schema.ResourceType) // a map of EndPoint to ResourceTye
 
 type AuthContext struct {
 }
@@ -101,10 +102,19 @@ func LoadResTypes(rtDirPath string) (map[string]*schema.ResourceType, error) {
 			}
 
 			log.Infof("Loaded resource type %s", rt.Id)
-			if _, ok := resources[rt.Schema]; ok {
-				panic(fmt.Errorf("Duplicate resource type, a ResourceType with the schema ID '%s' already exists", rt.Schema))
+
+			// check if any of the resources are defined with duplicate Name or
+			if _, ok := resources[rt.Name]; ok {
+				panic(fmt.Errorf("Duplicate resource type, a ResourceType with the Name '%s' already exists", rt.Name))
 			}
-			resources[rt.Schema] = rt
+
+			// are mapped to the same path
+			if _, ok := rsPathMap[rt.Endpoint]; ok {
+				panic(fmt.Errorf("Duplicate resource type, a ResourceType with the Endpoint '%s' already exists", rt.Endpoint))
+			}
+
+			resources[rt.Name] = rt
+			rsPathMap[rt.Endpoint] = rt
 		}
 	}
 
@@ -146,11 +156,11 @@ func GetResTypeJsonArray() string {
 	return json + "]"
 }
 
-func GetResourceType(id string) (string, error) {
-	rt := resources[id]
+func GetResourceType(name string) (string, error) {
+	rt := resources[name]
 
 	if rt == nil {
-		return "", fmt.Errorf("No resource type present with the ID %s", id)
+		return "", fmt.Errorf("No resource type present with the ID %s", name)
 	}
 
 	return rt.Text, nil

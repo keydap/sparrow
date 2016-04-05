@@ -15,7 +15,7 @@ var config = conf.DefaultConfig()
 var resDir, _ = os.Getwd()
 var sl *Silo
 var uCount int
-var userResSchema = "urn:ietf:params:scim:schemas:core:2.0:User"
+var userResName = "User"
 
 func TestMain(m *testing.M) {
 	logger.ConfigureLoggers("<root>=debug;scim.main=debug")
@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 }
 
 func createTestUser() *provider.Resource {
-	rt := restypes[userResSchema]
+	rt := restypes[userResName]
 
 	rs := provider.NewResource(rt)
 
