@@ -2,6 +2,7 @@ package silo
 
 import (
 	"fmt"
+	"github.com/boltdb/bolt"
 	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"os"
@@ -173,9 +174,10 @@ func TestIndexOps(t *testing.T) {
 	}
 
 	exists := idx.HasVal(email, readTx)
+	count := idx.count(email, readTx)
 	readTx.Rollback()
 
-	if exists {
+	if exists || (count != 0) {
 		t.Errorf("Email %s should not exist", email)
 	}
 
@@ -184,6 +186,16 @@ func TestIndexOps(t *testing.T) {
 	sl.Insert(rs)
 	rid1 := rs.GetId()
 
+	readTx, _ = sl.db.Begin(false)
+	count = idx.count(email, readTx)
+	if count != 1 {
+		t.Errorf("Email %s count mismatch", email)
+	}
+
+	assertPrCount(rs, readTx, 1, t)
+
+	readTx.Rollback()
+
 	// second user
 	rs = createTestUser()
 	sl.Insert(rs)
@@ -191,6 +203,7 @@ func TestIndexOps(t *testing.T) {
 
 	readTx, _ = sl.db.Begin(false)
 	rids := idx.GetRids(email, readTx)
+	assertPrCount(rs, readTx, 2, t)
 	readTx.Rollback()
 
 	var r1, r2 bool
@@ -238,5 +251,19 @@ func TestIndexOps(t *testing.T) {
 
 	if (len(rs.GetId()) != 0) || (rs.GetMeta() != nil) {
 		t.Error("RemoveReadOnlyAt() didn't remove readonly attributes")
+	}
+}
+
+func assertPrCount(rs *provider.Resource, readTx *bolt.Tx, expected int64, t *testing.T) {
+	prIdx := sl.getSysIndex("user", "presence")
+	for _, atName := range config.Resources[0].IndexFields {
+		// skip if there is no value for the attribute
+		if rs.GetAttr(atName) == nil {
+			continue
+		}
+		actual := prIdx.count(atName, readTx)
+		if actual != expected {
+			t.Errorf("attribute %s count mismatch in presence index actual %d expected %d", atName, actual, expected)
+		}
 	}
 }

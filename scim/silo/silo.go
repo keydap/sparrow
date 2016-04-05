@@ -35,9 +35,10 @@ func init() {
 }
 
 type Silo struct {
-	db        *bolt.DB                     // DB handle
-	resources map[string][]byte            // the resource buckets
-	indices   map[string]map[string]*Index // the index buckets, each index name will be in the form {resource-name}:{attribute-name}
+	db         *bolt.DB                     // DB handle
+	resources  map[string][]byte            // the resource buckets
+	indices    map[string]map[string]*Index // the index buckets, each index name will be in the form {resource-name}:{attribute-name}
+	sysIndices map[string]map[string]*Index
 }
 
 type Index struct {
@@ -50,12 +51,42 @@ type Index struct {
 	db            *bolt.DB
 }
 
-func (sl *Silo) GetIndex(resId string, atName string) *Index {
+func (sl *Silo) getIndex(resName string, atName string) *Index {
 	return nil
 }
 
+// Gets the system index of the given name associated with the given resource
+func (sl *Silo) getSysIndex(resName string, name string) *Index {
+	idx := sl.sysIndices[strings.ToLower(resName)][name]
+	if idx == nil {
+		panic(fmt.Errorf("There is no system index with the name %s in resource tyep %s", name, resName))
+	}
+
+	return idx
+}
+
+// Gets the number of values associated with the given key present in the index
 func (idx *Index) count(key string, tx *bolt.Tx) int64 {
-	return 0
+	log.Debugf("getting count of value %s in the index %s", key, idx.Name)
+	buck := tx.Bucket(idx.BnameBytes)
+	var count int64
+	count = 0
+
+	if idx.AllowDupKey {
+		countKey := []byte(strings.ToLower(key) + "_count")
+		cb := buck.Get(countKey)
+		if cb != nil {
+			count = utils.Btoi(cb)
+		}
+	} else {
+		vData := idx.convert(key)
+		val := buck.Get(vData)
+		if val != nil {
+			count = 1
+		}
+	}
+
+	return count
 }
 
 // Inserts the given <attribute value, resource ID> tuple in the index
@@ -220,6 +251,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 	sl.db = db
 	sl.resources = make(map[string][]byte)
 	sl.indices = make(map[string]map[string]*Index)
+	sl.sysIndices = make(map[string]map[string]*Index)
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(BUC_RESOURCES)
@@ -272,7 +304,8 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 				continue
 			}
 
-			isNewIndex, idx, err := sl.createIndexBucket(rc.Name, idxName, at)
+			resIdxMap := sl.indices[strings.ToLower(rc.Name)]
+			isNewIndex, idx, err := sl.createIndexBucket(rc.Name, idxName, at, false, resIdxMap)
 			if err != nil {
 				return nil, err
 			}
@@ -280,6 +313,19 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 			if isNewIndex {
 				newIndices = append(newIndices, idx.Name)
 			}
+		}
+
+		// create presence system index
+		sysIdxMap := sl.sysIndices[strings.ToLower(rc.Name)]
+
+		prAt := &schema.AttrType{Description: "Virtual attribute type for presence index"}
+		prAt.CaseExact = false
+		prAt.MultiValued = true
+		prAt.Type = "string"
+
+		_, _, err := sl.createIndexBucket(rc.Name, "presence", prAt, true, sysIdxMap)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -304,7 +350,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 			resName := tokens[0]
 			idxName := tokens[1]
 			_, present := sl.indices[resName][idxName]
-			if !present {
+			if !present && !strings.HasSuffix(idxName, "_system") { // do not delete system indices
 				log.Infof("Deleting unused bucket of index %s of resource %s", idxName, resName)
 				bucket.Delete(k)
 				tx.DeleteBucket(k)
@@ -346,13 +392,18 @@ func (sl *Silo) createResourceBucket(rc conf.ResourceConf) error {
 	if err == nil {
 		sl.resources[name] = data
 		sl.indices[name] = make(map[string]*Index)
+		sl.sysIndices[name] = make(map[string]*Index)
 	}
 
 	return err
 }
 
-func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.AttrType) (bool, *Index, error) {
+func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.AttrType, sysIdx bool, resIdxMap map[string]*Index) (bool, *Index, error) {
 	bname := resourceName + RES_INDEX_DELIM + attrName
+	if sysIdx {
+		bname = bname + "_system"
+	}
+
 	bname = strings.ToLower(bname)
 	bnameBytes := []byte(bname)
 
@@ -398,7 +449,6 @@ func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.Attr
 	})
 
 	if err == nil {
-		resIdxMap := sl.indices[strings.ToLower(resourceName)]
 		resIdxMap[idx.Name] = idx
 	}
 
@@ -489,6 +539,8 @@ func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err er
 		}
 	}
 
+	prIdx := sl.getSysIndex(rt.Name, "presence")
+
 	for name, idx := range sl.indices[rtName] {
 		attr := inRes.GetAttr(name)
 		if attr == nil {
@@ -501,6 +553,12 @@ func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err er
 				if err != nil {
 					panic(err)
 				}
+			}
+
+			err := prIdx.add(name, rid, tx) // do not add sa.Name that will lose the attribute path
+			if err != nil {
+				fmt.Println("error while adding into pr index ", err)
+				panic(err)
 			}
 		}
 	}
