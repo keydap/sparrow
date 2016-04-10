@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"sparrow/scim/schema"
+	"strconv"
 	"strings"
 )
 
@@ -16,11 +17,14 @@ var op_map = map[string]int{"EQ": 0, "NE": 1, "CO": 2, "SW": 3, "EW": 4, "GT": 5
 
 // A structure representing a filter expression
 type FilterNode struct {
-	Op       string
-	Name     string
-	AtType   *schema.AttrType
-	Value    string
-	Children []*FilterNode
+	Op        string
+	Name      string
+	ResType   *schema.ResourceType // resource type this attribute belongs to
+	atType    *schema.AttrType     // access AT type using Getter and Setter
+	Value     string
+	NormValue interface{}
+	Children  []*FilterNode
+	Count     int64 // the number of possible entries this node might evaluate
 }
 
 type position struct {
@@ -154,6 +158,7 @@ outer:
 					node.Op = op
 					pos.state = READ_VAL
 				}
+
 			case READ_VAL:
 				log.Debugf("read val %s", t)
 				node.Value = t
@@ -270,6 +275,46 @@ func toOperator(op string) string {
 
 func isLogical(op string) bool {
 	return op_map[op] >= 11
+}
+
+func (fn *FilterNode) GetAtType() *schema.AttrType {
+	return fn.atType
+}
+
+func (fn *FilterNode) SetAtType(atType *schema.AttrType) {
+	fn.NormValue = nil
+	fn.atType = atType
+	fn.normalize()
+}
+
+// make fn.Value as interface{} type then the below parsing is not needed
+func (fn *FilterNode) normalize() {
+	if fn.atType == nil || len(fn.Value) == 0 {
+		return
+	}
+
+	switch fn.atType.Type {
+	case "string":
+		if !fn.atType.CaseExact {
+			fn.NormValue = strings.ToLower(fn.Value)
+		} else {
+			fn.NormValue = fn.Value
+		}
+
+	case "integer":
+		i, err := strconv.ParseInt(fn.Value, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		fn.NormValue = i
+
+	case "decimal":
+		f, err := strconv.ParseFloat(fn.Value, 64)
+		if err != nil {
+			panic(err)
+		}
+		fn.NormValue = f
+	}
 }
 
 func (fn *FilterNode) isEmpty() bool {

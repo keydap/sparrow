@@ -104,6 +104,7 @@ func TestBnfgenFilter(t *testing.T) {
 	if true {
 		//return
 	}
+
 	for i := 0; i < 1000; i++ {
 		filter := bnfgen()
 		xpr, err := ParseFilter(filter)
@@ -113,7 +114,6 @@ func TestBnfgenFilter(t *testing.T) {
 		if xpr == nil || err != nil {
 			t.Errorf("Failed to parse BNFGEN filter %s", filter)
 		}
-
 	}
 }
 

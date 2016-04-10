@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	logger "github.com/juju/loggo"
+	"math"
 	"sparrow/scim/conf"
 	"sparrow/scim/provider"
 	"sparrow/scim/schema"
@@ -20,6 +21,9 @@ var (
 
 	// a bucket that holds the names of the resource buckets e.g users, groups etc.
 	BUC_INDICES = []byte("indices")
+
+	// a bucket that holds the total number of each of the resources present and the the tuple count in each of their indices
+	BUC_COUNTS = []byte("counts")
 
 	// the delimiter that separates resource and index name
 	RES_INDEX_DELIM = ":"
@@ -39,6 +43,7 @@ type Silo struct {
 	resources  map[string][]byte            // the resource buckets
 	indices    map[string]map[string]*Index // the index buckets, each index name will be in the form {resource-name}:{attribute-name}
 	sysIndices map[string]map[string]*Index
+	resCounts  map[string]int64
 }
 
 type Index struct {
@@ -49,15 +54,16 @@ type Index struct {
 	ValType       string // save the attribute's type name as a string
 	CaseSensitive bool
 	db            *bolt.DB
+	count         int64 // the number of records present in this index (ecluding the count keys, if any)
 }
 
 func (sl *Silo) getIndex(resName string, atName string) *Index {
-	return nil
+	return sl.indices[resName][strings.ToLower(atName)]
 }
 
 // Gets the system index of the given name associated with the given resource
 func (sl *Silo) getSysIndex(resName string, name string) *Index {
-	idx := sl.sysIndices[strings.ToLower(resName)][name]
+	idx := sl.sysIndices[resName][name]
 	if idx == nil {
 		panic(fmt.Errorf("There is no system index with the name %s in resource tyep %s", name, resName))
 	}
@@ -65,8 +71,20 @@ func (sl *Silo) getSysIndex(resName string, name string) *Index {
 	return idx
 }
 
+/*func (idx *Index) readCount(tx *bolt.Tx) int64 {
+	buck := tx.Bucket(BUC_COUNTS)
+	cb := buck.Get(idx.BnameBytes)
+	if cb == nil {
+		idx.count = 0
+	} else {
+		idx.count = utils.Btoi(cb)
+	}
+
+	return idx.count
+}*/
+
 // Gets the number of values associated with the given key present in the index
-func (idx *Index) count(key string, tx *bolt.Tx) int64 {
+func (idx *Index) keyCount(key string, tx *bolt.Tx) int64 {
 	log.Debugf("getting count of value %s in the index %s", key, idx.Name)
 	buck := tx.Bucket(idx.BnameBytes)
 	var count int64
@@ -130,6 +148,20 @@ func (idx *Index) add(val string, rid string, tx *bolt.Tx) error {
 		}
 	} else {
 		err = buck.Put(vData, []byte(rid))
+		if err != nil {
+			return err
+		}
+	}
+
+	// update count of index
+	countsBuck := tx.Bucket(BUC_COUNTS)
+
+	// TODO guard against multiple threads
+	idx.count++
+	err = countsBuck.Put(idx.BnameBytes, utils.Itob(idx.count))
+	if err != nil {
+		idx.count-- // restore if there is an error
+		return err
 	}
 
 	return err
@@ -174,6 +206,19 @@ func (idx *Index) remove(val string, rid string, tx *bolt.Tx) error {
 		}
 	} else {
 		err = buck.Delete(vData)
+		if err != nil {
+			return err
+		}
+	}
+
+	// update count of index
+	countsBuck := tx.Bucket(BUC_COUNTS)
+
+	idx.count--
+	err = countsBuck.Put(idx.BnameBytes, utils.Itob(idx.count))
+	if err != nil {
+		idx.count++ // restore count if there is an error
+		return err
 	}
 
 	return err
@@ -183,7 +228,8 @@ func (idx *Index) remove(val string, rid string, tx *bolt.Tx) error {
 // This method is only applicable for unique attributes
 func (idx *Index) GetRid(val string, tx *bolt.Tx) string {
 	vData := idx.convert(val)
-	ridBytes := tx.Bucket(idx.BnameBytes).Get(vData)
+	buc := tx.Bucket(idx.BnameBytes)
+	ridBytes := buc.Get(vData)
 
 	if ridBytes != nil {
 		rid := string(ridBytes)
@@ -252,6 +298,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 	sl.resources = make(map[string][]byte)
 	sl.indices = make(map[string]map[string]*Index)
 	sl.sysIndices = make(map[string]map[string]*Index)
+	sl.resCounts = make(map[string]int64)
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(BUC_RESOURCES)
@@ -260,6 +307,11 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 		}
 
 		_, err = tx.CreateBucketIfNotExists(BUC_INDICES)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateBucketIfNotExists(BUC_COUNTS)
 		if err != nil {
 			return err
 		}
@@ -304,7 +356,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 				continue
 			}
 
-			resIdxMap := sl.indices[strings.ToLower(rc.Name)]
+			resIdxMap := sl.indices[rc.Name]
 			isNewIndex, idx, err := sl.createIndexBucket(rc.Name, idxName, at, false, resIdxMap)
 			if err != nil {
 				return nil, err
@@ -316,7 +368,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 		}
 
 		// create presence system index
-		sysIdxMap := sl.sysIndices[strings.ToLower(rc.Name)]
+		sysIdxMap := sl.sysIndices[rc.Name]
 
 		prAt := &schema.AttrType{Description: "Virtual attribute type for presence index"}
 		prAt.CaseExact = false
@@ -329,16 +381,25 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 		}
 	}
 
-	// delete the unused resource or index buckets
+	// delete the unused resource or index buckets and initialize the counts of the indices and resources
 	err = sl.db.Update(func(tx *bolt.Tx) error {
+		countBucket := tx.Bucket(BUC_COUNTS)
+
 		bucket := tx.Bucket(BUC_RESOURCES)
 		bucket.ForEach(func(k, v []byte) error {
 			resName := string(k)
-			_, present := sl.indices[resName]
+			resBucKey, present := sl.resources[resName]
 			if !present {
 				log.Infof("Deleting unused bucket of resource %s", resName)
 				bucket.Delete(k)
 				tx.DeleteBucket(k)
+			} else {
+				cb := countBucket.Get(resBucKey)
+				if cb != nil {
+					count := utils.Btoi(cb)
+					sl.resCounts[resName] = count
+					log.Infof("There are total %d %s resources during startup", count, resName)
+				}
 			}
 			return nil
 		})
@@ -349,12 +410,19 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 			tokens := strings.Split(idxBName, RES_INDEX_DELIM)
 			resName := tokens[0]
 			idxName := tokens[1]
-			_, present := sl.indices[resName][idxName]
+			idx, present := sl.indices[resName][idxName]
 			if !present && !strings.HasSuffix(idxName, "_system") { // do not delete system indices
 				log.Infof("Deleting unused bucket of index %s of resource %s", idxName, resName)
 				bucket.Delete(k)
 				tx.DeleteBucket(k)
+			} else {
+				cb := countBucket.Get(k)
+				if cb != nil {
+					idx.count = utils.Btoi(cb)
+					log.Infof("Index %s has %d tuples during startup", idx.Name, idx.count)
+				}
 			}
+
 			return nil
 		})
 
@@ -370,8 +438,7 @@ func (sl *Silo) Close() {
 }
 
 func (sl *Silo) createResourceBucket(rc conf.ResourceConf) error {
-	name := strings.ToLower(rc.Name)
-	data := []byte(name)
+	data := []byte(rc.Name)
 
 	err := sl.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket(data)
@@ -390,25 +457,25 @@ func (sl *Silo) createResourceBucket(rc conf.ResourceConf) error {
 	})
 
 	if err == nil {
-		sl.resources[name] = data
-		sl.indices[name] = make(map[string]*Index)
-		sl.sysIndices[name] = make(map[string]*Index)
+		sl.resources[rc.Name] = data
+		sl.indices[rc.Name] = make(map[string]*Index)
+		sl.sysIndices[rc.Name] = make(map[string]*Index)
 	}
 
 	return err
 }
 
 func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.AttrType, sysIdx bool, resIdxMap map[string]*Index) (bool, *Index, error) {
-	bname := resourceName + RES_INDEX_DELIM + attrName
+	iName := strings.ToLower(attrName)
+	bname := resourceName + RES_INDEX_DELIM + iName
 	if sysIdx {
 		bname = bname + "_system"
 	}
 
-	bname = strings.ToLower(bname)
 	bnameBytes := []byte(bname)
 
 	idx := &Index{}
-	idx.Name = strings.ToLower(attrName)
+	idx.Name = iName
 	idx.Bname = bname
 	idx.BnameBytes = bnameBytes
 	idx.CaseSensitive = at.CaseExact
@@ -495,7 +562,6 @@ func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err er
 
 	// validate the uniqueness constraints based on the schema
 	rt := inRes.GetType()
-	rtName := strings.ToLower(rt.Name)
 
 	// now, add meta attribute
 	inRes.AddMeta()
@@ -525,7 +591,7 @@ func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err er
 	//log.Debugf("indices map %#v", sl.indices[rtName])
 	for _, name := range rt.UniqueAts {
 		// check if the value has already been used
-		idx := sl.indices[rtName][name]
+		idx := sl.indices[rt.Name][name]
 		attr := inRes.GetAttr(name)
 		if attr.IsSimple() {
 			sa := attr.GetSimpleAt()
@@ -541,7 +607,7 @@ func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err er
 
 	prIdx := sl.getSysIndex(rt.Name, "presence")
 
-	for name, idx := range sl.indices[rtName] {
+	for name, idx := range sl.indices[rt.Name] {
 		attr := inRes.GetAttr(name)
 		if attr == nil {
 			continue
@@ -572,24 +638,37 @@ func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err er
 		panic(err)
 	}
 
-	resBucket := tx.Bucket(sl.resources[rtName])
+	resBucket := tx.Bucket(sl.resources[rt.Name])
 	err = resBucket.Put([]byte(rid), buf.Bytes())
 	if err != nil {
 		panic(err)
 	}
+
+	// update count of index
+	countsBuck := tx.Bucket(BUC_COUNTS)
+
+	count := sl.resCounts[rt.Name]
+	count++
+	err = countsBuck.Put(sl.resources[rt.Name], utils.Itob(count))
+	if err != nil {
+		count-- // restore if there is an error
+		return nil, err
+	}
+
+	sl.resCounts[rt.Name] = count
 
 	return inRes, nil
 }
 
 func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *provider.Resource, err error) {
 	ridBytes := []byte(rid)
-	rtNameBytes := sl.resources[strings.ToLower(rt.Name)]
+	rtNameBytes := sl.resources[rt.Name]
 
 	err = sl.db.View(func(tx *bolt.Tx) error {
 		buck := tx.Bucket(rtNameBytes)
 
 		resData := buck.Get(ridBytes)
-		if len(resData) > 0 {
+		if resData != nil {
 			reader := bytes.NewReader(resData)
 			decoder := gob.NewDecoder(reader)
 			err = decoder.Decode(&resource)
@@ -611,8 +690,7 @@ func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *provider.Res
 
 func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
 	ridBytes := []byte(rid)
-	rtName := strings.ToLower(rt.Name)
-	rtNameBytes := sl.resources[rtName]
+	rtNameBytes := sl.resources[rt.Name]
 
 	tx, err := sl.db.Begin(true)
 	if err != nil {
@@ -650,7 +728,7 @@ func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
 		resource.SetSchema(rt)
 	}
 
-	for name, idx := range sl.indices[rtName] {
+	for name, idx := range sl.indices[rt.Name] {
 		attr := resource.GetAttr(name)
 		if attr == nil {
 			continue
@@ -672,9 +750,71 @@ func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
 		return err
 	}
 
+	// update count of index
+	countsBuck := tx.Bucket(BUC_COUNTS)
+
+	count := sl.resCounts[rt.Name]
+	count--
+	err = countsBuck.Put(sl.resources[rt.Name], utils.Itob(count))
+	if err != nil {
+		count++ // restore if there is an error
+		return err
+	}
+
+	sl.resCounts[rt.Name] = count
+
 	return nil
 }
 
-func (sl *Silo) Search() {
+func (sl *Silo) Search(sc *provider.SearchContext) (results map[string]*provider.Resource, err error) {
+	tx, err := sl.db.Begin(false)
 
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+			log.Debugf("Error while searching for resources %s", err.Error())
+			results = nil
+		}
+
+		tx.Rollback()
+	}()
+
+	if err != nil {
+		panic(err)
+	}
+
+	candidates := make(map[string]*provider.Resource)
+
+	results = make(map[string]*provider.Resource)
+
+	for _, rsType := range sc.ResTypes {
+		count := getOptimizedResults(sc.Filter, rsType, tx, sl, candidates)
+		evaluator := buildEvaluator(sc.Filter)
+
+		buc := tx.Bucket(sl.resources[rsType.Name])
+
+		if count < math.MaxInt64 {
+			for k, _ := range candidates {
+				data := buc.Get([]byte(k))
+				reader := bytes.NewReader(data)
+				decoder := gob.NewDecoder(reader)
+
+				if data != nil {
+					var rs *provider.Resource
+					err = decoder.Decode(&rs)
+					if err != nil {
+						panic(err)
+					}
+
+					rs.SetSchema(rsType)
+					if evaluator.evaluate(rs) {
+						results[k] = rs
+					}
+				}
+			}
+		}
+	}
+
+	return results, nil
 }

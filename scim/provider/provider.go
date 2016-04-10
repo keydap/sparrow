@@ -16,6 +16,17 @@ var rsPathMap = make(map[string]*schema.ResourceType) // a map of EndPoint to Re
 type AuthContext struct {
 }
 
+type OpContext struct {
+}
+
+type SearchContext struct {
+	ParamFilter string // the given filter parameter
+	Endpoint    string // endpoint used for filtering
+
+	Filter   *FilterNode
+	ResTypes []*schema.ResourceType
+}
+
 var log logger.Logger
 
 func init() {
@@ -180,3 +191,11 @@ func CreateResource(jsonData string) error {
 	return nil
 }
 */
+
+func Search(sc *SearchContext) {
+	//	node, err := ParseFilter(sc.ParamFilter)
+	//	if err != nil {
+	//		// handle error
+	//	}
+
+}

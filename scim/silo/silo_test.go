@@ -8,6 +8,7 @@ import (
 	"os"
 	"sparrow/scim/conf"
 	"sparrow/scim/provider"
+	"sparrow/scim/schema"
 	"testing"
 )
 
@@ -110,7 +111,7 @@ func loadTestUser() *provider.Resource {
 
 func TestInsert(t *testing.T) {
 	initSilo()
-	user := loadTestUser()
+	user := createTestUser()
 	metaMap := make(map[string]interface{})
 	metaMap["created"] = "abc"
 	metaMap["lastmodified"] = "xyz"
@@ -118,7 +119,17 @@ func TestInsert(t *testing.T) {
 	user.AddCA("meta", metaMap)
 	uMeta := user.GetMeta()
 
+	resCount := sl.resCounts[userResName]
+	if resCount != 0 {
+		t.Errorf("Invalid initial count %d of resource %s", resCount, userResName)
+	}
+
 	rs, err := sl.Insert(user)
+
+	resCount = sl.resCounts[userResName]
+	if resCount != 1 {
+		t.Errorf("Invalid initial count %d of resource %s", resCount, userResName)
+	}
 
 	rid := rs.GetId()
 
@@ -156,7 +167,7 @@ func TestInsert(t *testing.T) {
 	}
 
 	// add the same user, should return an error
-	rs, err = sl.Insert(loadTestUser())
+	rs, err = sl.Insert(user)
 	if err == nil {
 		t.Error("Failed to detect uniqueness violation of username attribute in the resource")
 	}
@@ -166,7 +177,7 @@ func TestIndexOps(t *testing.T) {
 	initSilo()
 	email := "bjensen@example.com"
 
-	idx := sl.indices["user"]["emails.value"]
+	idx := sl.indices[userResName]["emails.value"]
 
 	readTx, err := sl.db.Begin(false)
 	if err != nil {
@@ -174,7 +185,7 @@ func TestIndexOps(t *testing.T) {
 	}
 
 	exists := idx.HasVal(email, readTx)
-	count := idx.count(email, readTx)
+	count := idx.keyCount(email, readTx)
 	readTx.Rollback()
 
 	if exists || (count != 0) {
@@ -187,7 +198,7 @@ func TestIndexOps(t *testing.T) {
 	rid1 := rs.GetId()
 
 	readTx, _ = sl.db.Begin(false)
-	count = idx.count(email, readTx)
+	count = idx.keyCount(email, readTx)
 	if count != 1 {
 		t.Errorf("Email %s count mismatch", email)
 	}
@@ -254,16 +265,45 @@ func TestIndexOps(t *testing.T) {
 	}
 }
 
+func TestReloadSilo(t *testing.T) {
+
+}
+
 func assertPrCount(rs *provider.Resource, readTx *bolt.Tx, expected int64, t *testing.T) {
-	prIdx := sl.getSysIndex("user", "presence")
+	prIdx := sl.getSysIndex(userResName, "presence")
 	for _, atName := range config.Resources[0].IndexFields {
 		// skip if there is no value for the attribute
 		if rs.GetAttr(atName) == nil {
 			continue
 		}
-		actual := prIdx.count(atName, readTx)
+		actual := prIdx.keyCount(atName, readTx)
 		if actual != expected {
 			t.Errorf("attribute %s count mismatch in presence index actual %d expected %d", atName, actual, expected)
 		}
+	}
+}
+
+func TestSearch(t *testing.T) {
+	initSilo()
+	rs1 := createTestUser()
+	sl.Insert(rs1)
+
+	rs2 := createTestUser()
+	sl.Insert(rs2)
+
+	filter, _ := provider.ParseFilter("username eq " + rs1.GetAttr("username").GetSimpleAt().Values[0])
+	sc := &provider.SearchContext{}
+	sc.Filter = filter
+	sc.ResTypes = []*schema.ResourceType{restypes[userResName]}
+
+	results, err := sl.Search(sc)
+	if err != nil {
+		t.Errorf("Failed to search using filter %s (%s)", sc.Filter, err.Error())
+	}
+
+	fmt.Println(results)
+
+	if len(results) != 1 {
+		t.Errorf("Expected %d but received %d", 1, len(results))
 	}
 }
