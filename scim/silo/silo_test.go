@@ -306,4 +306,16 @@ func TestSearch(t *testing.T) {
 	if len(results) != 1 {
 		t.Errorf("Expected %d but received %d", 1, len(results))
 	}
+
+	// search using presence filter
+	filter, _ = provider.ParseFilter("id pr")
+	sc.Filter = filter
+	results, err = sl.Search(sc)
+	if err != nil {
+		t.Errorf("Failed to search using PR filter %s (%s)", sc.Filter, err.Error())
+	}
+
+	if len(results) != 2 {
+		t.Errorf("Expected %d but received %d", 2, len(results))
+	}
 }

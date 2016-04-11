@@ -813,6 +813,27 @@ func (sl *Silo) Search(sc *provider.SearchContext) (results map[string]*provider
 					}
 				}
 			}
+		} else {
+			log.Debugf("Scanning complete DB of %s for search results", rsType.Name)
+			cursor := buc.Cursor()
+
+			for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+				reader := bytes.NewReader(v)
+				decoder := gob.NewDecoder(reader)
+
+				if v != nil {
+					var rs *provider.Resource
+					err = decoder.Decode(&rs)
+					if err != nil {
+						panic(err)
+					}
+
+					rs.SetSchema(rsType)
+					if evaluator.evaluate(rs) {
+						results[string(k)] = rs
+					}
+				}
+			}
 		}
 	}
 

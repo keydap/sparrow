@@ -17,7 +17,7 @@ func getOptimizedResults(node *provider.FilterNode, rt *schema.ResourceType, tx 
 
 func gatherCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*provider.Resource) int64 {
 
-	if node.Count == 0 || node.Count == math.MaxInt64 {
+	if node.Count == 0 {
 		return 0
 	}
 
@@ -183,7 +183,7 @@ func presenceScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.T
 		log.Debugf("The attribute %s of resource type %s is indexed, presence count for key %s = %d", node.Name, rt.Name, node.Value, count)
 		return count
 	} else {
-		log.Debugf("The attribute %s of resource type %s is NOT indexed, using complete DB scan for key %s for presence evaluation", node.Name, rt.Name, node.Value)
+		log.Debugf("The attribute %s of resource type %s is NOT indexed, using complete DB scan for presence evaluation", node.Name, rt.Name)
 	}
 
 	return math.MaxInt64
