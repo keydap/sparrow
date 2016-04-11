@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"github.com/boltdb/bolt"
-	logger "github.com/juju/loggo"
 	"math"
 	"sparrow/scim/conf"
 	"sparrow/scim/provider"
@@ -13,6 +11,9 @@ import (
 	"sparrow/scim/utils"
 	"strconv"
 	"strings"
+
+	"github.com/boltdb/bolt"
+	logger "github.com/juju/loggo"
 )
 
 var (
@@ -43,7 +44,6 @@ type Silo struct {
 	resources  map[string][]byte            // the resource buckets
 	indices    map[string]map[string]*Index // the index buckets, each index name will be in the form {resource-name}:{attribute-name}
 	sysIndices map[string]map[string]*Index
-	resCounts  map[string]int64
 }
 
 type Index struct {
@@ -54,7 +54,6 @@ type Index struct {
 	ValType       string // save the attribute's type name as a string
 	CaseSensitive bool
 	db            *bolt.DB
-	count         int64 // the number of records present in this index (ecluding the count keys, if any)
 }
 
 func (sl *Silo) getIndex(resName string, atName string) *Index {
@@ -71,17 +70,16 @@ func (sl *Silo) getSysIndex(resName string, name string) *Index {
 	return idx
 }
 
-/*func (idx *Index) readCount(tx *bolt.Tx) int64 {
+// Returns total number of tuples present in the index, excluding the count keys, if any.
+func (idx *Index) getCount(tx *bolt.Tx) int64 {
 	buck := tx.Bucket(BUC_COUNTS)
 	cb := buck.Get(idx.BnameBytes)
 	if cb == nil {
-		idx.count = 0
-	} else {
-		idx.count = utils.Btoi(cb)
+		return 0
 	}
 
-	return idx.count
-}*/
+	return utils.Btoi(cb)
+}
 
 // Gets the number of values associated with the given key present in the index
 func (idx *Index) keyCount(key string, tx *bolt.Tx) int64 {
@@ -157,10 +155,10 @@ func (idx *Index) add(val string, rid string, tx *bolt.Tx) error {
 	countsBuck := tx.Bucket(BUC_COUNTS)
 
 	// TODO guard against multiple threads
-	idx.count++
-	err = countsBuck.Put(idx.BnameBytes, utils.Itob(idx.count))
+	count := idx.getCount(tx)
+	count++
+	err = countsBuck.Put(idx.BnameBytes, utils.Itob(count))
 	if err != nil {
-		idx.count-- // restore if there is an error
 		return err
 	}
 
@@ -214,10 +212,10 @@ func (idx *Index) remove(val string, rid string, tx *bolt.Tx) error {
 	// update count of index
 	countsBuck := tx.Bucket(BUC_COUNTS)
 
-	idx.count--
-	err = countsBuck.Put(idx.BnameBytes, utils.Itob(idx.count))
+	count := idx.getCount(tx)
+	count--
+	err = countsBuck.Put(idx.BnameBytes, utils.Itob(count))
 	if err != nil {
-		idx.count++ // restore count if there is an error
 		return err
 	}
 
@@ -298,7 +296,6 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 	sl.resources = make(map[string][]byte)
 	sl.indices = make(map[string]map[string]*Index)
 	sl.sysIndices = make(map[string]map[string]*Index)
-	sl.resCounts = make(map[string]int64)
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(BUC_RESOURCES)
@@ -383,24 +380,17 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 
 	// delete the unused resource or index buckets and initialize the counts of the indices and resources
 	err = sl.db.Update(func(tx *bolt.Tx) error {
-		countBucket := tx.Bucket(BUC_COUNTS)
 
 		bucket := tx.Bucket(BUC_RESOURCES)
 		bucket.ForEach(func(k, v []byte) error {
 			resName := string(k)
-			resBucKey, present := sl.resources[resName]
+			_, present := sl.resources[resName]
 			if !present {
 				log.Infof("Deleting unused bucket of resource %s", resName)
 				bucket.Delete(k)
 				tx.DeleteBucket(k)
-			} else {
-				cb := countBucket.Get(resBucKey)
-				if cb != nil {
-					count := utils.Btoi(cb)
-					sl.resCounts[resName] = count
-					log.Infof("There are total %d %s resources during startup", count, resName)
-				}
 			}
+
 			return nil
 		})
 
@@ -410,17 +400,11 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 			tokens := strings.Split(idxBName, RES_INDEX_DELIM)
 			resName := tokens[0]
 			idxName := tokens[1]
-			idx, present := sl.indices[resName][idxName]
+			_, present := sl.indices[resName][idxName]
 			if !present && !strings.HasSuffix(idxName, "_system") { // do not delete system indices
 				log.Infof("Deleting unused bucket of index %s of resource %s", idxName, resName)
 				bucket.Delete(k)
 				tx.DeleteBucket(k)
-			} else {
-				cb := countBucket.Get(k)
-				if cb != nil {
-					idx.count = utils.Btoi(cb)
-					log.Infof("Index %s has %d tuples during startup", idx.Name, idx.count)
-				}
 			}
 
 			return nil
@@ -644,19 +628,6 @@ func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err er
 		panic(err)
 	}
 
-	// update count of index
-	countsBuck := tx.Bucket(BUC_COUNTS)
-
-	count := sl.resCounts[rt.Name]
-	count++
-	err = countsBuck.Put(sl.resources[rt.Name], utils.Itob(count))
-	if err != nil {
-		count-- // restore if there is an error
-		return nil, err
-	}
-
-	sl.resCounts[rt.Name] = count
-
 	return inRes, nil
 }
 
@@ -749,19 +720,6 @@ func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
 	if err != nil {
 		return err
 	}
-
-	// update count of index
-	countsBuck := tx.Bucket(BUC_COUNTS)
-
-	count := sl.resCounts[rt.Name]
-	count--
-	err = countsBuck.Put(sl.resources[rt.Name], utils.Itob(count))
-	if err != nil {
-		count++ // restore if there is an error
-		return err
-	}
-
-	sl.resCounts[rt.Name] = count
 
 	return nil
 }

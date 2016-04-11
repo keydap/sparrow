@@ -119,17 +119,7 @@ func TestInsert(t *testing.T) {
 	user.AddCA("meta", metaMap)
 	uMeta := user.GetMeta()
 
-	resCount := sl.resCounts[userResName]
-	if resCount != 0 {
-		t.Errorf("Invalid initial count %d of resource %s", resCount, userResName)
-	}
-
 	rs, err := sl.Insert(user)
-
-	resCount = sl.resCounts[userResName]
-	if resCount != 1 {
-		t.Errorf("Invalid initial count %d of resource %s", resCount, userResName)
-	}
 
 	rid := rs.GetId()
 
