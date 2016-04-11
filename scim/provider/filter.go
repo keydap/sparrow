@@ -161,7 +161,7 @@ outer:
 
 			case READ_VAL:
 				log.Debugf("read val %s", t)
-				node.Value = t
+				node.Value = stripQuotes(t)
 				if root != nil && isLogical(root.Op) {
 					root.addChild(node)
 				}
@@ -275,6 +275,15 @@ func toOperator(op string) string {
 
 func isLogical(op string) bool {
 	return op_map[op] >= 11
+}
+
+func stripQuotes(token string) string {
+	if token[0:1] == "\"" {
+		token = token[1 : len(token)-1]
+		token = strings.Replace(token, "\\\"", "\"", -1)
+	}
+
+	return token
 }
 
 func (fn *FilterNode) GetAtType() *schema.AttrType {

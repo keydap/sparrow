@@ -286,12 +286,12 @@ func assertPrCount(rs *provider.Resource, readTx *bolt.Tx, expected int64, t *te
 func TestSearch(t *testing.T) {
 	initSilo()
 	rs1 := createTestUser()
-	sl.Insert(rs1)
+	rs1, _ = sl.Insert(rs1)
 
 	rs2 := createTestUser()
-	sl.Insert(rs2)
+	rs2, _ = sl.Insert(rs2)
 
-	filter, _ := provider.ParseFilter("username eq " + rs1.GetAttr("username").GetSimpleAt().Values[0])
+	filter, _ := provider.ParseFilter("username eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
 	sc := &provider.SearchContext{}
 	sc.Filter = filter
 	sc.ResTypes = []*schema.ResourceType{restypes[userResName]}
@@ -301,7 +301,7 @@ func TestSearch(t *testing.T) {
 		t.Errorf("Failed to search using filter %s (%s)", sc.Filter, err.Error())
 	}
 
-	fmt.Println(results)
+	fmt.Println(results[rs1.GetId()].ToJSON())
 
 	if len(results) != 1 {
 		t.Errorf("Expected %d but received %d", 1, len(results))
