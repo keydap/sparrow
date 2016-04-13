@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"sparrow/scim/schema"
+	"sparrow/scim/utils"
 	"strconv"
 	"strings"
 )
@@ -23,6 +24,7 @@ type FilterNode struct {
 	atType    *schema.AttrType     // access AT type using Getter and Setter
 	Value     string
 	NormValue interface{}
+	NvBytes   []byte // the norm value in bytes
 	Children  []*FilterNode
 	Count     int64 // the number of possible entries this node might evaluate
 }
@@ -104,6 +106,9 @@ outer:
 					// state remains at READ_ATTR_OR_NOT_NODE
 				} else {
 					log.Debugf("read at %s", t)
+
+					// the attribute path must be converted to lowercase
+					t = strings.ToLower(t)
 
 					//valuePath = attrPath "[" valFilter "]" ; FILTER uses sub-attributes of a parent attrPath
 					dotPos := strings.IndexRune(t, '[')
@@ -292,6 +297,8 @@ func (fn *FilterNode) GetAtType() *schema.AttrType {
 
 func (fn *FilterNode) SetAtType(atType *schema.AttrType) {
 	fn.NormValue = nil
+	fn.NvBytes = nil
+	fn.Count = 0 // should be reset so that we will have accurate count when the ResourceType changes just before scanning
 	fn.atType = atType
 	fn.normalize()
 }
@@ -310,12 +317,15 @@ func (fn *FilterNode) normalize() {
 			fn.NormValue = fn.Value
 		}
 
+		fn.NvBytes = []byte(fn.NormValue.(string))
+
 	case "integer":
 		i, err := strconv.ParseInt(fn.Value, 10, 64)
 		if err != nil {
 			panic(err)
 		}
 		fn.NormValue = i
+		fn.NvBytes = utils.Itob(i)
 
 	case "decimal":
 		f, err := strconv.ParseFloat(fn.Value, 64)
@@ -323,6 +333,7 @@ func (fn *FilterNode) normalize() {
 			panic(err)
 		}
 		fn.NormValue = f
+		fn.NvBytes = utils.Ftob(f)
 	}
 }
 

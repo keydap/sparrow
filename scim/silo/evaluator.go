@@ -16,6 +16,14 @@ type Evaluator interface {
 type EmptyEvaluator struct {
 }
 
+type AndEvaluator struct {
+	children []Evaluator
+}
+
+type OrEvaluator struct {
+	children []Evaluator
+}
+
 type ArithmeticEvaluator struct {
 	node *provider.FilterNode
 }
@@ -26,6 +34,26 @@ type PresenceEvaluator struct {
 
 type NotEvaluator struct {
 	childEv Evaluator
+}
+
+func (and *AndEvaluator) evaluate(rs *provider.Resource) bool {
+	for _, ev := range and.children {
+		if !ev.evaluate(rs) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (or *OrEvaluator) evaluate(rs *provider.Resource) bool {
+	for _, ev := range or.children {
+		if ev.evaluate(rs) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (empty *EmptyEvaluator) evaluate(rs *provider.Resource) bool {
@@ -123,7 +151,6 @@ func compare(node *provider.FilterNode, rs *provider.Resource) bool {
 
 		case "decimal":
 			f, _ := strconv.ParseFloat(val, 64)
-
 			nfloat := node.NormValue.(float64)
 			switch node.Op {
 			case "EQ":
@@ -163,14 +190,34 @@ func buildEvaluator(node *provider.FilterNode) Evaluator {
 	switch node.Op {
 	case "EQ", "NE", "CO", "SW", "EW", "GT", "LT", "GE", "LE":
 		return &ArithmeticEvaluator{node: node}
+
 	case "PR":
 		return &PresenceEvaluator{node: node}
+
 	case "NOT":
 		childEv := buildEvaluator(node.Children[0])
 		return &NotEvaluator{childEv: childEv}
+
 	case "OR":
+		orEvList := buildEvList(node.Children)
+		//TODO sort evaluators based on they scan count, descending order
+		return &OrEvaluator{children: orEvList}
+
 	case "AND":
+		andEvList := buildEvList(node.Children)
+		//TODO sort evaluators based on they scan count, ascending order
+		return &AndEvaluator{children: andEvList}
 	}
 
 	panic(fmt.Errorf("Unknown filter node type %s", node.Op))
+}
+
+func buildEvList(children []*provider.FilterNode) []Evaluator {
+	evList := make([]Evaluator, 0)
+	for _, node := range children {
+		ev := buildEvaluator(node)
+		evList = append(evList, ev)
+	}
+
+	return evList
 }

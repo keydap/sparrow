@@ -166,6 +166,7 @@ func TestInsert(t *testing.T) {
 func TestIndexOps(t *testing.T) {
 	initSilo()
 	email := "bjensen@example.com"
+	emailBytes := []byte(email)
 
 	idx := sl.indices[userResName]["emails.value"]
 
@@ -203,7 +204,7 @@ func TestIndexOps(t *testing.T) {
 	rid2 := rs.GetId()
 
 	readTx, _ = sl.db.Begin(false)
-	rids := idx.GetRids(email, readTx)
+	rids := idx.GetRids(emailBytes, readTx)
 	assertPrCount(rs, readTx, 2, t)
 	readTx.Rollback()
 
@@ -227,7 +228,7 @@ func TestIndexOps(t *testing.T) {
 	sl.Remove(rid2, rs.GetType())
 
 	readTx, _ = sl.db.Begin(false)
-	rids = idx.GetRids(email, readTx)
+	rids = idx.GetRids(emailBytes, readTx)
 	readTx.Rollback()
 
 	if len(rids) != 0 {
@@ -281,7 +282,7 @@ func TestSearch(t *testing.T) {
 	rs2 := createTestUser()
 	rs2, _ = sl.Insert(rs2)
 
-	filter, _ := provider.ParseFilter("username eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
+	filter, _ := provider.ParseFilter("userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
 	sc := &provider.SearchContext{}
 	sc.Filter = filter
 	sc.ResTypes = []*schema.ResourceType{restypes[userResName]}
@@ -290,8 +291,6 @@ func TestSearch(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to search using filter %s (%s)", sc.Filter, err.Error())
 	}
-
-	fmt.Println(results[rs1.GetId()].ToJSON())
 
 	if len(results) != 1 {
 		t.Errorf("Expected %d but received %d", 1, len(results))
@@ -307,5 +306,20 @@ func TestSearch(t *testing.T) {
 
 	if len(results) != 2 {
 		t.Errorf("Expected %d but received %d", 2, len(results))
+	}
+
+	// search using AND filter
+	filter, _ = provider.ParseFilter("id pr and userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
+	sc.Filter = filter
+	results, err = sl.Search(sc)
+
+	fmt.Println(results[rs1.GetId()].ToJSON())
+
+	if err != nil {
+		t.Errorf("Failed to search using PR filter %s (%s)", sc.Filter, err.Error())
+	}
+
+	if len(results) != 1 {
+		t.Errorf("Expected %d but received %d", 1, len(results))
 	}
 }

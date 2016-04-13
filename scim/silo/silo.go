@@ -81,6 +81,12 @@ func (idx *Index) getCount(tx *bolt.Tx) int64 {
 	return utils.Btoi(cb)
 }
 
+func (idx *Index) cursor(tx *bolt.Tx) *bolt.Cursor {
+	idxBuck := tx.Bucket(idx.BnameBytes)
+
+	return idxBuck.Cursor()
+}
+
 // Gets the number of values associated with the given key present in the index
 func (idx *Index) keyCount(key string, tx *bolt.Tx) int64 {
 	log.Debugf("getting count of value %s in the index %s", key, idx.Name)
@@ -224,10 +230,9 @@ func (idx *Index) remove(val string, rid string, tx *bolt.Tx) error {
 
 // Get the resource ID associated with the given attribute value
 // This method is only applicable for unique attributes
-func (idx *Index) GetRid(val string, tx *bolt.Tx) string {
-	vData := idx.convert(val)
+func (idx *Index) GetRid(valKey []byte, tx *bolt.Tx) string {
 	buc := tx.Bucket(idx.BnameBytes)
-	ridBytes := buc.Get(vData)
+	ridBytes := buc.Get(valKey)
 
 	if ridBytes != nil {
 		rid := string(ridBytes)
@@ -239,11 +244,10 @@ func (idx *Index) GetRid(val string, tx *bolt.Tx) string {
 
 // Get the resource ID associated with the given attribute value
 // This method is applicable for multivalued attributes only
-func (idx *Index) GetRids(val string, tx *bolt.Tx) []string {
-	vData := idx.convert(val)
+func (idx *Index) GetRids(valKey []byte, tx *bolt.Tx) []string {
 	buck := tx.Bucket(idx.BnameBytes)
 
-	dupBuck := buck.Bucket(vData)
+	dupBuck := buck.Bucket(valKey)
 
 	var rids []string
 
@@ -259,7 +263,8 @@ func (idx *Index) GetRids(val string, tx *bolt.Tx) []string {
 }
 
 func (idx *Index) HasVal(val string, tx *bolt.Tx) bool {
-	return len(idx.GetRid(val, tx)) != 0
+	key := idx.convert(val)
+	return len(idx.GetRid(key, tx)) != 0
 }
 
 func (idx *Index) convert(val string) []byte {
@@ -270,12 +275,29 @@ func (idx *Index) convert(val string) []byte {
 			val = strings.ToLower(val)
 		}
 		vData = []byte(val)
+
+	case "boolean":
+		val = strings.ToLower(val)
+		vData = []byte(val)
+
+	case "binary", "reference":
+		vData = []byte(val)
+
 	case "integer":
 		i, _ := strconv.ParseInt(val, 10, 64)
 		vData = utils.Itob(i)
+
+	case "datetime":
+		//i, _ := strconv.ParseInt(val, 10, 64)
+		//vData = utils.Itob(i)
+		panic(fmt.Errorf("Yet to support converting datetime to int64"))
+
 	case "decimal":
 		f, _ := strconv.ParseFloat(val, 64)
 		vData = utils.Ftob(f)
+
+	default:
+		panic(fmt.Errorf("Invalid index datat type %s given for index %s", idx.ValType, idx.Name))
 	}
 
 	return vData
