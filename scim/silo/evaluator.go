@@ -2,12 +2,21 @@ package silo
 
 import (
 	"fmt"
+	"sort"
 	"sparrow/scim/provider"
 	"strconv"
 	"strings"
 )
 
 var EMPTY_EV = &EmptyEvaluator{}
+
+var ascendingCountNodes = func(n1, n2 *provider.FilterNode) bool {
+	return n1.Count < n2.Count
+}
+
+var descendingCountNodes = func(n1, n2 *provider.FilterNode) bool {
+	return n1.Count > n2.Count
+}
 
 type Evaluator interface {
 	evaluate(rs *provider.Resource) bool
@@ -199,13 +208,21 @@ func buildEvaluator(node *provider.FilterNode) Evaluator {
 		return &NotEvaluator{childEv: childEv}
 
 	case "OR":
-		orEvList := buildEvList(node.Children)
-		//TODO sort evaluators based on they scan count, descending order
+		orNs := &nodeSorter{}
+		orNs.nodes = make([]*provider.FilterNode, len(node.Children))
+		copy(orNs.nodes, node.Children)
+		orNs.order = descendingCountNodes
+		sort.Sort(orNs)
+		orEvList := buildEvList(orNs.nodes)
 		return &OrEvaluator{children: orEvList}
 
 	case "AND":
-		andEvList := buildEvList(node.Children)
-		//TODO sort evaluators based on they scan count, ascending order
+		andNs := &nodeSorter{}
+		andNs.nodes = make([]*provider.FilterNode, len(node.Children))
+		copy(andNs.nodes, node.Children)
+		andNs.order = ascendingCountNodes
+		sort.Sort(andNs)
+		andEvList := buildEvList(andNs.nodes)
 		return &AndEvaluator{children: andEvList}
 	}
 
@@ -220,4 +237,21 @@ func buildEvList(children []*provider.FilterNode) []Evaluator {
 	}
 
 	return evList
+}
+
+type nodeSorter struct {
+	nodes []*provider.FilterNode
+	order func(n1, n2 *provider.FilterNode) bool
+}
+
+func (ns *nodeSorter) Len() int {
+	return len(ns.nodes)
+}
+
+func (ns *nodeSorter) Swap(i, j int) {
+	ns.nodes[i], ns.nodes[j] = ns.nodes[j], ns.nodes[i]
+}
+
+func (ns *nodeSorter) Less(i, j int) bool {
+	return ns.order(ns.nodes[i], ns.nodes[j])
 }
