@@ -150,7 +150,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaResTypeAttr.CaseExact = true
 	metaResTypeAttr.Mutability = "readonly"
 	metaResTypeAttr.SchemaId = mainSchema.Id
-	metaResTypeAttr.Parent = metaAttr
+	metaResTypeAttr.parent = metaAttr
 	metaAttr.SubAttrMap[strings.ToLower(metaResTypeAttr.Name)] = metaResTypeAttr
 
 	// meta.created
@@ -159,7 +159,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaCreatedAttr.Type = "datetime"
 	metaCreatedAttr.Mutability = "readonly"
 	metaCreatedAttr.SchemaId = mainSchema.Id
-	metaCreatedAttr.Parent = metaAttr
+	metaCreatedAttr.parent = metaAttr
 	metaAttr.SubAttrMap[strings.ToLower(metaCreatedAttr.Name)] = metaCreatedAttr
 
 	// meta.lastModified
@@ -168,7 +168,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaLastModAttr.Type = "datetime"
 	metaLastModAttr.Mutability = "readonly"
 	metaLastModAttr.SchemaId = mainSchema.Id
-	metaLastModAttr.Parent = metaAttr
+	metaLastModAttr.parent = metaAttr
 	metaAttr.SubAttrMap[strings.ToLower(metaLastModAttr.Name)] = metaLastModAttr
 
 	// meta.location
@@ -176,7 +176,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaLocAttr.Name = "location"
 	metaLocAttr.Mutability = "readonly"
 	metaLocAttr.SchemaId = mainSchema.Id
-	metaLocAttr.Parent = metaAttr
+	metaLocAttr.parent = metaAttr
 	metaAttr.SubAttrMap[strings.ToLower(metaLocAttr.Name)] = metaLocAttr
 
 	// meta.version
@@ -185,7 +185,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaVerAttr.CaseExact = true
 	metaVerAttr.Mutability = "readonly"
 	metaVerAttr.SchemaId = mainSchema.Id
-	metaVerAttr.Parent = metaAttr
+	metaVerAttr.parent = metaAttr
 	metaAttr.SubAttrMap[strings.ToLower(metaVerAttr.Name)] = metaVerAttr
 }
 

@@ -30,7 +30,7 @@ func TestGenerateSchema(t *testing.T) {
 	fmt.Println(string(data))
 
 	data = []byte(`{"id": "abc"}`)
-	sc, err = New(data)
+	sc, err = NewSchema(data)
 
 	ve := err.(*ValidationErrors)
 	if ve.Count != 1 {

@@ -47,7 +47,7 @@ type AttrType struct {
 	CanonicalValues []string    // canonicalValues
 	SubAttrMap      map[string]*AttrType
 	SchemaId        string    // schema's ID
-	Parent          *AttrType // parent Attribute
+	parent          *AttrType // parent Attribute, should be non-exportable, otherwise stackoverflow occurs during marshalling
 }
 
 // Definition of the schema
@@ -185,6 +185,10 @@ func (attr *AttrType) IsUnique() bool {
 	return (u == "server") || (u == "global")
 }
 
+func (attr *AttrType) Parent() *AttrType {
+	return attr.parent
+}
+
 func validate(sc *Schema) error {
 	ve := &ValidationErrors{0, make([]string, 2)}
 
@@ -271,7 +275,7 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 			for _, sa := range attr.SubAttributes {
 				log.Tracef("validating sub-type %s of %s", sa.Name, attr.Name)
 				validateAttrType(sa, sc, ve)
-				sa.Parent = attr
+				sa.parent = attr
 				name := strings.ToLower(sa.Name)
 				attr.SubAttrMap[name] = sa
 				if sa.IsUnique() {
@@ -318,7 +322,7 @@ func addDefSubAttrs(attr *AttrType) {
 		key := strings.ToLower(a.Name)
 		if attr.SubAttrMap[key] == nil {
 			a.SchemaId = attr.SchemaId
-			a.Parent = attr
+			a.parent = attr
 			attr.SubAttrMap[key] = a
 		}
 	}
