@@ -350,7 +350,7 @@ func (sc *Schema) GetAtType(name string) *AttrType {
 		parent := sc.AttrMap[arr[0]]
 
 		if parent == nil {
-			log.Debugf("Parent attribute type %s not found", arr[0])
+			log.Debugf("Parent attribute type %s not found in schema %s", arr[0], sc.Name)
 			return nil
 		}
 
