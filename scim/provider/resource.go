@@ -37,7 +37,7 @@ type MultiSubAttribute struct {
 type ComplexAttribute struct {
 	atType *schema.AttrType
 	Name   string
-	SubAts [][]*SimpleAttribute // it can hold a list of simple sub attributes
+	SubAts []map[string]*SimpleAttribute // it can hold a list of simple sub attributes
 }
 
 type AtGroup struct {
@@ -86,17 +86,16 @@ func (ca *ComplexAttribute) GetComplexAt() *ComplexAttribute {
 	return ca
 }
 
-func (ca *ComplexAttribute) Get(subAtName string) interface{} {
+func (ca *ComplexAttribute) GetValue(subAtName string) interface{} {
 	if len(ca.SubAts) == 0 {
 		return nil
 	}
 
-	atArr := ca.SubAts[0]
+	atMap := ca.SubAts[0]
 	subAtName = strings.ToLower(subAtName)
-	for _, v := range atArr {
-		if v.Name == subAtName {
-			return v.Values[0]
-		}
+	sa := atMap[subAtName]
+	if sa != nil {
+		return sa.Values[0]
 	}
 
 	return nil
@@ -169,12 +168,12 @@ func (rs *Resource) AddMeta() *ComplexAttribute {
 	ca.Name = "meta"
 	sc := rs.resType.GetMainSchema()
 	ca.atType = sc.AttrMap[ca.Name]
-	ca.SubAts = make([][]*SimpleAttribute, 1)
+	ca.SubAts = make([]map[string]*SimpleAttribute, 1)
 	rs.Core.ComplexAts[ca.Name] = ca
 
 	parentAt := sc.AttrMap[ca.Name]
-	atArr := make([]*SimpleAttribute, 5)
-	ca.SubAts[0] = atArr
+	atMap := make(map[string]*SimpleAttribute)
+	ca.SubAts[0] = atMap
 
 	// FIXME the sub-attributes resourcetype, location and version can be injected on demand during querying
 	// this will save some disk space
@@ -182,31 +181,31 @@ func (rs *Resource) AddMeta() *ComplexAttribute {
 	resTypeAt.atType = parentAt.SubAttrMap[resTypeAt.Name]
 	resTypeAt.Values = make([]string, 1)
 	resTypeAt.Values[0] = rs.resType.Name
-	atArr[0] = resTypeAt
+	atMap[resTypeAt.Name] = resTypeAt
 
 	createdAt := &SimpleAttribute{Name: "created"}
 	createdAt.atType = parentAt.SubAttrMap[createdAt.Name]
 	createdAt.Values = make([]string, 1)
 	createdAt.Values[0] = utils.DateTime()
-	atArr[1] = createdAt
+	atMap[createdAt.Name] = createdAt
 
 	lastModAt := &SimpleAttribute{Name: "lastmodified"}
 	lastModAt.atType = parentAt.SubAttrMap[lastModAt.Name]
 	lastModAt.Values = make([]string, 1)
 	lastModAt.Values[0] = utils.DateTime()
-	atArr[2] = lastModAt
+	atMap[lastModAt.Name] = lastModAt
 
 	locationAt := &SimpleAttribute{Name: "location"}
 	locationAt.atType = parentAt.SubAttrMap[locationAt.Name]
 	locationAt.Values = make([]string, 1)
 	locationAt.Values[0] = rs.resType.Endpoint + "/" + rs.GetId()
-	atArr[3] = locationAt
+	atMap[locationAt.Name] = locationAt
 
 	versionAt := &SimpleAttribute{Name: "version"}
 	versionAt.atType = parentAt.SubAttrMap[versionAt.Name]
 	versionAt.Values = make([]string, 1)
 	versionAt.Values[0] = lastModAt.Values[0]
-	atArr[4] = versionAt
+	atMap[versionAt.Name] = versionAt
 
 	return ca
 }
@@ -296,15 +295,11 @@ func (rs *Resource) searchAttr(attrPath string, atg *AtGroup) Attribute {
 			ct := at.GetComplexAt()
 			// always get the first attribute, even if it is multi-valued
 			// for accessing all values of the attribute caller should search for the parent alone
-			if len(ct.SubAts) > 0 {
-				child := attrPath[pos+1:]
-				saArr := ct.SubAts[0]
-				for _, sa := range saArr {
-					if sa.Name == child {
-						return sa
-					}
-				}
-			}
+			child := attrPath[pos+1:]
+			atMap := ct.SubAts[0]
+			sa := atMap[child]
+
+			return sa
 		}
 
 		return nil
@@ -738,25 +733,25 @@ func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 			panic(NewBadRequestError(msg))
 		}
 
-		subAtArr := make([][]*SimpleAttribute, rv.Len())
+		subAtArrMap := make([]map[string]*SimpleAttribute, rv.Len())
 		for i := 0; i < rv.Len(); i++ {
 			v := rv.Index(i)
-			simpleAtArr := parseSubAtList(v.Interface(), attrType)
-			subAtArr[i] = simpleAtArr
+			simpleAtMap := parseSubAtList(v.Interface(), attrType)
+			subAtArrMap[i] = simpleAtMap
 		}
 
-		ca.SubAts = subAtArr
+		ca.SubAts = subAtArrMap
 
 		return ca
 	}
 
-	simpleAtArr := parseSubAtList(iVal, attrType)
-	ca.SubAts = [][]*SimpleAttribute{simpleAtArr}
+	simpleAtMap := parseSubAtList(iVal, attrType)
+	ca.SubAts = []map[string]*SimpleAttribute{simpleAtMap}
 
 	return ca
 }
 
-func parseSubAtList(v interface{}, attrType *schema.AttrType) []*SimpleAttribute {
+func parseSubAtList(v interface{}, attrType *schema.AttrType) map[string]*SimpleAttribute {
 	var vObj map[string]interface{}
 
 	switch v.(type) {
@@ -767,8 +762,7 @@ func parseSubAtList(v interface{}, attrType *schema.AttrType) []*SimpleAttribute
 		panic(NewBadRequestError(msg))
 	}
 
-	arr := make([]*SimpleAttribute, len(vObj))
-	count := 0
+	arr := make(map[string]*SimpleAttribute)
 	for k, v := range vObj {
 		subAtName := strings.ToLower(k)
 		subAtType := attrType.SubAttrMap[subAtName]
@@ -781,8 +775,7 @@ func parseSubAtList(v interface{}, attrType *schema.AttrType) []*SimpleAttribute
 		}
 
 		subAt := parseSimpleAttr(subAtType, v)
-		arr[count] = subAt
-		count++
+		arr[subAt.Name] = subAt
 	}
 
 	return arr
@@ -822,16 +815,16 @@ func (ca *ComplexAttribute) valToInterface() interface{} {
 		arr := make([]map[string]interface{}, len(ca.SubAts))
 		for i, v := range ca.SubAts {
 			log.Debugf("reading sub attributes of AT %s\n", ca.Name)
-			arr[i] = simpleATArrayToMap(v)
+			arr[i] = simpleATMapToMap(v)
 		}
 
 		return arr
 	}
 
-	return simpleATArrayToMap(ca.SubAts[0])
+	return simpleATMapToMap(ca.SubAts[0])
 }
 
-func simpleATArrayToMap(sas []*SimpleAttribute) map[string]interface{} {
+func simpleATMapToMap(sas map[string]*SimpleAttribute) map[string]interface{} {
 	obj := make(map[string]interface{})
 	for _, v := range sas {
 		obj[v.atType.Name] = v.valToInterface()

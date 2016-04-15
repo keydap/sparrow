@@ -1,7 +1,7 @@
 package provider
 
 import (
-	"fmt"
+//	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -34,7 +34,6 @@ func randAlphaStr(length int) string {
 			b += 6
 		}
 
-		fmt.Println(b)
 		chars[i] = b
 	}
 
@@ -45,7 +44,7 @@ var rootLoc = "/tmp/"
 
 func TestLayoutCreation(t *testing.T) {
 	name := randAlphaStr(5)
-	fmt.Println(name)
+	//fmt.Println(name)
 	dir := rootLoc + name
 	layout, _ := NewLayout(dir, true)
 
