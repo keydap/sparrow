@@ -138,11 +138,11 @@ func TestInsert(t *testing.T) {
 
 	// check that metadata is overwritten
 	rsMeta := rs.GetMeta()
-	if uMeta.Get("created") == rsMeta.Get("created") {
+	if uMeta.GetValue("created") == rsMeta.GetValue("created") {
 		t.Error("created time should not match")
 	}
 
-	if uMeta.Get("lastmodified") == rsMeta.Get("lastmodified") {
+	if uMeta.GetValue("lastmodified") == rsMeta.GetValue("lastmodified") {
 		t.Error("lastmodified time should not match")
 	}
 

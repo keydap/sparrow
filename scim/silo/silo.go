@@ -487,8 +487,8 @@ func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.Attr
 	idx.CaseSensitive = at.CaseExact
 	idx.ValType = at.Type
 	// parent's singularity applies for complex attributes
-	if at.Parent != nil {
-		idx.AllowDupKey = at.Parent.MultiValued
+	if at.Parent() != nil {
+		idx.AllowDupKey = at.Parent().MultiValued
 	} else {
 		idx.AllowDupKey = at.MultiValued
 	}
@@ -650,6 +650,17 @@ func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err er
 		panic(err)
 	}
 
+	//	if rt.Name == "Group" {
+	//		members := inRes.GetAttr("members")
+	//		if members != nil {
+	//			ca := members.GetComplexAt()
+	//			for _, subAts := range ca.SubAts {
+	//				for _, at := range subAts {
+	//					//at.
+	//				}
+	//			}
+	//		}
+	//	}
 	return inRes, nil
 }
 
