@@ -39,8 +39,8 @@ func TestSimpleFilter(t *testing.T) {
 	for i, _ := range filters {
 		f := filters[i]
 		xpr, err := ParseFilter(f.f)
-		fmt.Println("parsed filter : ", xpr)
-		fmt.Println(err)
+//		fmt.Println("parsed filter : ", xpr)
+//		fmt.Println(err)
 		if f.pass {
 			if xpr == nil || err != nil {
 				t.Errorf("Failed to parse the valid filter at index %s", f.f)
@@ -70,7 +70,7 @@ func TestNodeHierarchy(t *testing.T) {
 		t.Errorf("Expected number of children are not present")
 	}
 
-	if xpr.Children[0].Op != "EQ" || xpr.Children[0].Name != "userName" {
+	if xpr.Children[0].Op != "EQ" || xpr.Children[0].Name != "username" {
 		t.Errorf("wrong first child")
 	}
 
@@ -108,8 +108,8 @@ func TestBnfgenFilter(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		filter := bnfgen()
 		xpr, err := ParseFilter(filter)
-		fmt.Println("parsed filter : ", xpr)
-		fmt.Println(err)
+//		fmt.Println("parsed filter : ", xpr)
+//		fmt.Println(err)
 
 		if xpr == nil || err != nil {
 			t.Errorf("Failed to parse BNFGEN filter %s", filter)
