@@ -86,6 +86,19 @@ func (ca *ComplexAttribute) GetComplexAt() *ComplexAttribute {
 	return ca
 }
 
+func (ca *ComplexAttribute) AddSubAts(subAtMap map[string]interface{}) {
+	subAt := parseSubAtList(subAtMap, ca.atType)
+	if ca.SubAts == nil {
+		ca.SubAts = make([]map[string]*SimpleAttribute, 1)
+	}
+
+	if ca.atType.MultiValued {
+		ca.SubAts[len(ca.SubAts)-1] = subAt
+	} else {
+		ca.SubAts[0] = subAt
+	}
+}
+
 func (ca *ComplexAttribute) GetValue(subAtName string) interface{} {
 	if len(ca.SubAts) == 0 {
 		return nil
