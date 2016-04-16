@@ -1,4 +1,4 @@
-package provider
+package base
 
 import (
 	"bytes"
@@ -39,8 +39,8 @@ func TestSimpleFilter(t *testing.T) {
 	for i, _ := range filters {
 		f := filters[i]
 		xpr, err := ParseFilter(f.f)
-//		fmt.Println("parsed filter : ", xpr)
-//		fmt.Println(err)
+		//		fmt.Println("parsed filter : ", xpr)
+		//		fmt.Println(err)
 		if f.pass {
 			if xpr == nil || err != nil {
 				t.Errorf("Failed to parse the valid filter at index %s", f.f)
@@ -108,8 +108,8 @@ func TestBnfgenFilter(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		filter := bnfgen()
 		xpr, err := ParseFilter(filter)
-//		fmt.Println("parsed filter : ", xpr)
-//		fmt.Println(err)
+		//		fmt.Println("parsed filter : ", xpr)
+		//		fmt.Println(err)
 
 		if xpr == nil || err != nil {
 			t.Errorf("Failed to parse BNFGEN filter %s", filter)

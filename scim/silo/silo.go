@@ -5,8 +5,8 @@ import (
 	"encoding/gob"
 	"fmt"
 	"math"
+	"sparrow/scim/base"
 	"sparrow/scim/conf"
-	"sparrow/scim/provider"
 	"sparrow/scim/schema"
 	"sparrow/scim/utils"
 	"strconv"
@@ -560,7 +560,7 @@ func fillIndexMap(bucket *bolt.Bucket, m map[string]*Index) error {
 	return err
 }
 
-func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err error) {
+func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 	inRes.RemoveReadOnlyAt()
 
 	rid := utils.GenUUID()
@@ -635,36 +635,62 @@ func (sl *Silo) Insert(inRes *provider.Resource) (res *provider.Resource, err er
 		}
 	}
 
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err = enc.Encode(inRes)
+	sl.storeResource(tx, inRes)
 
-	if err != nil {
-		log.Warningf("Failed to encode resource %s", err)
-		panic(err)
+	if rt.Name == "Group" {
+		members := inRes.GetAttr("members")
+		if members != nil {
+			ca := members.GetComplexAt()
+			for _, subAtMap := range ca.SubAts {
+				value := subAtMap["value"]
+				if value != nil {
+					refId := value.Values[0]
+					// TODO what should be done if the ref doesn't contain above "value" field's value
+					//ref := subAtMap["$ref"]
+					refType := subAtMap["$ref"]
+
+					refTypeVal := "Group" // default value
+					if refType != nil {
+						refTypeVal = refType.Values[0]
+					} else {
+						log.Debugf("No reference type is mentioned, assuming the default value %s", refTypeVal)
+					}
+
+					refRType := restypes[refTypeVal]
+					if refRType == nil {
+						panic(fmt.Errorf("Given reference type %s associated with value %s is not found", refTypeVal, refId))
+					}
+
+					refRes, _ := sl.Get(refId, refRType)
+
+					if refRes == nil {
+						panic(fmt.Errorf("There is no resource with the referenced value %s", refId))
+					}
+					groups := refRes.GetAttr("groups")
+					subAt := make(map[string]interface{})
+					subAt["value"] = rid
+					subAt["$ref"] = refRType.Endpoint + "/" + rid
+					subAt["type"] = refRType.Name
+
+					if groups == nil {
+						err = refRes.AddCA("groups", subAt)
+						if err != nil {
+							panic(err)
+						}
+					} else {
+						ca := groups.GetComplexAt()
+						ca.AddSubAts(subAt)
+					}
+
+					sl.storeResource(tx, refRes)
+				}
+			}
+		}
 	}
-
-	resBucket := tx.Bucket(sl.resources[rt.Name])
-	err = resBucket.Put([]byte(rid), buf.Bytes())
-	if err != nil {
-		panic(err)
-	}
-
-	//	if rt.Name == "Group" {
-	//		members := inRes.GetAttr("members")
-	//		if members != nil {
-	//			ca := members.GetComplexAt()
-	//			for _, subAts := range ca.SubAts {
-	//				for _, at := range subAts {
-	//					//at.
-	//				}
-	//			}
-	//		}
-	//	}
 	return inRes, nil
 }
 
-func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *provider.Resource, err error) {
+func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *base.Resource, err error) {
 	ridBytes := []byte(rid)
 	rtNameBytes := sl.resources[rt.Name]
 
@@ -715,10 +741,10 @@ func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
 	buck := tx.Bucket(rtNameBytes)
 	resData := buck.Get(ridBytes)
 	if len(resData) == 0 {
-		return provider.NewNotFoundError(rt.Name + " resource with ID " + rid + " not found")
+		return base.NewNotFoundError(rt.Name + " resource with ID " + rid + " not found")
 	}
 
-	var resource *provider.Resource
+	var resource *base.Resource
 
 	reader := bytes.NewReader(resData)
 	decoder := gob.NewDecoder(reader)
@@ -757,7 +783,24 @@ func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
 	return nil
 }
 
-func (sl *Silo) Search(sc *provider.SearchContext) (results map[string]*provider.Resource, err error) {
+func (sl *Silo) storeResource(tx *bolt.Tx, res *base.Resource) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(res)
+
+	if err != nil {
+		log.Warningf("Failed to encode resource %s", err)
+		panic(err)
+	}
+
+	resBucket := tx.Bucket(sl.resources[res.GetType().Name])
+	err = resBucket.Put([]byte(res.GetId()), buf.Bytes())
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (sl *Silo) Search(sc *base.SearchContext) (results map[string]*base.Resource, err error) {
 	tx, err := sl.db.Begin(false)
 
 	defer func() {
@@ -775,9 +818,9 @@ func (sl *Silo) Search(sc *provider.SearchContext) (results map[string]*provider
 		panic(err)
 	}
 
-	candidates := make(map[string]*provider.Resource)
+	candidates := make(map[string]*base.Resource)
 
-	results = make(map[string]*provider.Resource)
+	results = make(map[string]*base.Resource)
 
 	for _, rsType := range sc.ResTypes {
 		count := getOptimizedResults(sc.Filter, rsType, tx, sl, candidates)
@@ -792,7 +835,7 @@ func (sl *Silo) Search(sc *provider.SearchContext) (results map[string]*provider
 				decoder := gob.NewDecoder(reader)
 
 				if data != nil {
-					var rs *provider.Resource
+					var rs *base.Resource
 					err = decoder.Decode(&rs)
 					if err != nil {
 						panic(err)
@@ -813,7 +856,7 @@ func (sl *Silo) Search(sc *provider.SearchContext) (results map[string]*provider
 				decoder := gob.NewDecoder(reader)
 
 				if v != nil {
-					var rs *provider.Resource
+					var rs *base.Resource
 					err = decoder.Decode(&rs)
 					if err != nil {
 						panic(err)

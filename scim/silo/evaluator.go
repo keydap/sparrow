@@ -3,23 +3,23 @@ package silo
 import (
 	"fmt"
 	"sort"
-	"sparrow/scim/provider"
+	"sparrow/scim/base"
 	"strconv"
 	"strings"
 )
 
 var EMPTY_EV = &EmptyEvaluator{}
 
-var ascendingCountNodes = func(n1, n2 *provider.FilterNode) bool {
+var ascendingCountNodes = func(n1, n2 *base.FilterNode) bool {
 	return n1.Count < n2.Count
 }
 
-var descendingCountNodes = func(n1, n2 *provider.FilterNode) bool {
+var descendingCountNodes = func(n1, n2 *base.FilterNode) bool {
 	return n1.Count > n2.Count
 }
 
 type Evaluator interface {
-	evaluate(rs *provider.Resource) bool
+	evaluate(rs *base.Resource) bool
 }
 
 type EmptyEvaluator struct {
@@ -34,18 +34,18 @@ type OrEvaluator struct {
 }
 
 type ArithmeticEvaluator struct {
-	node *provider.FilterNode
+	node *base.FilterNode
 }
 
 type PresenceEvaluator struct {
-	node *provider.FilterNode
+	node *base.FilterNode
 }
 
 type NotEvaluator struct {
 	childEv Evaluator
 }
 
-func (and *AndEvaluator) evaluate(rs *provider.Resource) bool {
+func (and *AndEvaluator) evaluate(rs *base.Resource) bool {
 	for _, ev := range and.children {
 		if !ev.evaluate(rs) {
 			return false
@@ -55,7 +55,7 @@ func (and *AndEvaluator) evaluate(rs *provider.Resource) bool {
 	return true
 }
 
-func (or *OrEvaluator) evaluate(rs *provider.Resource) bool {
+func (or *OrEvaluator) evaluate(rs *base.Resource) bool {
 	for _, ev := range or.children {
 		if ev.evaluate(rs) {
 			return true
@@ -65,15 +65,15 @@ func (or *OrEvaluator) evaluate(rs *provider.Resource) bool {
 	return false
 }
 
-func (empty *EmptyEvaluator) evaluate(rs *provider.Resource) bool {
+func (empty *EmptyEvaluator) evaluate(rs *base.Resource) bool {
 	return false
 }
 
-func (not *NotEvaluator) evaluate(rs *provider.Resource) bool {
+func (not *NotEvaluator) evaluate(rs *base.Resource) bool {
 	return !not.childEv.evaluate(rs)
 }
 
-func (pr *PresenceEvaluator) evaluate(rs *provider.Resource) bool {
+func (pr *PresenceEvaluator) evaluate(rs *base.Resource) bool {
 	atType := pr.node.GetAtType()
 	if atType == nil {
 		return false
@@ -84,11 +84,11 @@ func (pr *PresenceEvaluator) evaluate(rs *provider.Resource) bool {
 	return at != nil
 }
 
-func (ar *ArithmeticEvaluator) evaluate(rs *provider.Resource) bool {
+func (ar *ArithmeticEvaluator) evaluate(rs *base.Resource) bool {
 	return compare(ar.node, rs)
 }
 
-func compare(node *provider.FilterNode, rs *provider.Resource) bool {
+func compare(node *base.FilterNode, rs *base.Resource) bool {
 	// last para of https://tools.ietf.org/html/rfc7644#section-3.4.2.1
 	atType := node.GetAtType()
 	if atType == nil {
@@ -190,7 +190,7 @@ func compare(node *provider.FilterNode, rs *provider.Resource) bool {
 	return matched
 }
 
-func buildEvaluator(node *provider.FilterNode) Evaluator {
+func buildEvaluator(node *base.FilterNode) Evaluator {
 
 	if node.Count == 0 {
 		return EMPTY_EV
@@ -209,7 +209,7 @@ func buildEvaluator(node *provider.FilterNode) Evaluator {
 
 	case "OR":
 		orNs := &nodeSorter{}
-		orNs.nodes = make([]*provider.FilterNode, len(node.Children))
+		orNs.nodes = make([]*base.FilterNode, len(node.Children))
 		copy(orNs.nodes, node.Children)
 		orNs.order = descendingCountNodes
 		sort.Sort(orNs)
@@ -218,7 +218,7 @@ func buildEvaluator(node *provider.FilterNode) Evaluator {
 
 	case "AND":
 		andNs := &nodeSorter{}
-		andNs.nodes = make([]*provider.FilterNode, len(node.Children))
+		andNs.nodes = make([]*base.FilterNode, len(node.Children))
 		copy(andNs.nodes, node.Children)
 		andNs.order = ascendingCountNodes
 		sort.Sort(andNs)
@@ -229,7 +229,7 @@ func buildEvaluator(node *provider.FilterNode) Evaluator {
 	panic(fmt.Errorf("Unknown filter node type %s", node.Op))
 }
 
-func buildEvList(children []*provider.FilterNode) []Evaluator {
+func buildEvList(children []*base.FilterNode) []Evaluator {
 	evList := make([]Evaluator, 0)
 	for _, node := range children {
 		ev := buildEvaluator(node)
@@ -240,8 +240,8 @@ func buildEvList(children []*provider.FilterNode) []Evaluator {
 }
 
 type nodeSorter struct {
-	nodes []*provider.FilterNode
-	order func(n1, n2 *provider.FilterNode) bool
+	nodes []*base.FilterNode
+	order func(n1, n2 *base.FilterNode) bool
 }
 
 func (ns *nodeSorter) Len() int {

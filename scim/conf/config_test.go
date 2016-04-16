@@ -1,7 +1,6 @@
 package conf
 
 import (
-	"fmt"
 	"testing"
 )
 

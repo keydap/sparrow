@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	"math"
-	"sparrow/scim/provider"
+	"sparrow/scim/base"
 	"sparrow/scim/schema"
 	"strings"
 )
 
-func getOptimizedResults(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*provider.Resource) int64 {
+func getOptimizedResults(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
 	scanCounts(node, rt, tx, sl)
 	return gatherCandidates(node, rt, tx, sl, candidates)
 }
 
 // --------------- gather the candidate set -----
 
-func gatherCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*provider.Resource) int64 {
+func gatherCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
 
 	if node.Count <= 0 {
 		return 0
@@ -58,7 +58,7 @@ func gatherCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bo
 	return 0
 }
 
-func orCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*provider.Resource) int64 {
+func orCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
 	var totalResults int64
 
 	for _, child := range node.Children {
@@ -79,7 +79,7 @@ func orCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.T
 	return totalResults
 }
 
-func andCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*provider.Resource) int64 {
+func andCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
 	var minCount int64
 	minCount = math.MaxInt64
 
@@ -101,7 +101,7 @@ func andCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.
 	return gatherCandidates(minChild, rt, tx, sl, candidates)
 }
 
-func eqCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*provider.Resource) int64 {
+func eqCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
 	if node.GetAtType() == nil { // there is no such AT type
 		return 0
 	}
@@ -134,7 +134,7 @@ func eqCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.T
 	return math.MaxInt64
 }
 
-func prCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*provider.Resource) int64 {
+func prCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
 	if node.GetAtType() == nil { // there is no such AT type for this resource
 		return 0
 	}
@@ -162,7 +162,7 @@ func prCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.T
 	return math.MaxInt64
 }
 
-func containsStringCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*provider.Resource) int64 {
+func containsStringCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
 	if node.GetAtType() == nil { // there is no such AT type
 		return 0
 	}
@@ -234,7 +234,7 @@ func containsStringCandidates(node *provider.FilterNode, rt *schema.ResourceType
 	return math.MaxInt64
 }
 
-func compareCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*provider.Resource) int64 {
+func compareCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
 	atType := node.GetAtType()
 	if atType == nil { // there is no such AT type
 		return 0
@@ -309,7 +309,7 @@ func compareCandidates(node *provider.FilterNode, rt *schema.ResourceType, tx *b
 // ------------ end of gathering candidates -----
 
 // ----------------------- scan the nodes and apply count heuristics -----
-func scanCounts(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) {
+func scanCounts(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) {
 	var count int64
 	count = math.MaxInt64 // the default worst case count
 
@@ -348,7 +348,7 @@ func scanCounts(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx,
 	node.Count = count
 }
 
-func equalityScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
+func equalityScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
 	node.ResType = rt
 	atType := rt.GetAtType(node.Name)
 	node.SetAtType(atType)
@@ -368,7 +368,7 @@ func equalityScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.T
 	return math.MaxInt64
 }
 
-func containsStringScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
+func containsStringScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
 	node.ResType = rt
 	atType := rt.GetAtType(node.Name)
 	node.SetAtType(atType)
@@ -440,7 +440,7 @@ func containsStringScan(node *provider.FilterNode, rt *schema.ResourceType, tx *
 	return math.MaxInt64
 }
 
-func compareScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
+func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
 	node.ResType = rt
 	atType := rt.GetAtType(node.Name)
 	node.SetAtType(atType)
@@ -513,7 +513,7 @@ func compareScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx
 	return math.MaxInt64
 }
 
-func presenceScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
+func presenceScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
 	// should we consider the count for more than one resource if searched at the server root? YES
 	node.ResType = rt
 	atType := rt.GetAtType(node.Name)
@@ -534,7 +534,7 @@ func presenceScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.T
 	return math.MaxInt64
 }
 
-func andScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
+func andScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
 	var count int64
 	count = math.MaxInt64
 
@@ -552,7 +552,7 @@ func andScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl
 	return count
 }
 
-func orScan(node *provider.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
+func orScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
 	var count int64
 	count = 0
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Layout struct {
@@ -12,6 +13,7 @@ type Layout struct {
 	DataDir     string
 	LogDir      string
 	ResTypesDir string
+	name        string
 }
 
 var DIR_PERM os.FileMode = 0744 //rwxr--r--
@@ -56,6 +58,13 @@ func NewLayout(baseDir string, create bool) (layout *Layout, err error) {
 
 	layout = &Layout{ConfDir: cdir, SchemaDir: sdir, DataDir: ddir, LogDir: ldir, ResTypesDir: resTypesdir}
 
+	// open the base directory just to get it's name
+	file, _ := os.Open(baseDir) // no error should be reported here
+
+	layout.name = strings.ToLower(file.Name())
+
+	file.Close()
+
 	return layout, nil
 }
 
@@ -73,4 +82,8 @@ func checkAndCreate(dirName string) {
 		log.Criticalf(s.Error())
 		panic(s)
 	}
+}
+
+func (lo *Layout) Name() string {
+	return lo.name
 }

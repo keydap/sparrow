@@ -4,27 +4,21 @@ import (
 	//"encoding/json"
 	"fmt"
 	logger "github.com/juju/loggo"
-	"os"
+	"path/filepath"
+	"sparrow/scim/base"
+	"sparrow/scim/conf"
 	"sparrow/scim/schema"
+	"sparrow/scim/silo"
 	"strings"
 )
 
-var schemas = make(map[string]*schema.Schema)         // a map of Schema ID to Schema
-var resources = make(map[string]*schema.ResourceType) // a map of Name to ResourceTye
-var rsPathMap = make(map[string]*schema.ResourceType) // a map of EndPoint to ResourceTye
-
-type AuthContext struct {
-}
-
-type OpContext struct {
-}
-
-type SearchContext struct {
-	ParamFilter string // the given filter parameter
-	Endpoint    string // endpoint used for filtering
-
-	Filter   *FilterNode
-	ResTypes []*schema.ResourceType
+type Provider struct {
+	schemas   map[string]*schema.Schema       // a map of Schema ID to Schema
+	rsTypes   map[string]*schema.ResourceType // a map of Name to ResourceTye
+	rtPathMap map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
+	config    *conf.Config
+	sl        *silo.Silo
+	layout    *Layout
 }
 
 var log logger.Logger
@@ -33,110 +27,37 @@ func init() {
 	log = logger.GetLogger("sparrow.scim.provider")
 }
 
-func Start(layout *Layout) error {
-	_, err := LoadSchemas(layout.SchemaDir)
+func NewProvider(layout *Layout) (prv *Provider, err error) {
+	schemas, err := base.LoadSchemas(layout.SchemaDir)
 	if err != nil {
-		return err
-	}
-
-	_, err = LoadResTypes(layout.ResTypesDir)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func AddSchema(sc *schema.Schema) {
-	schemas[sc.Id] = sc
-}
-
-func LoadSchemas(sDirPath string) (map[string]*schema.Schema, error) {
-	dir, err := os.Open(sDirPath)
-	if err != nil {
-		log.Criticalf("Could not open schema directory %s [%s]", sDirPath, err)
 		return nil, err
 	}
 
-	files, err := dir.Readdir(-1)
+	prv = &Provider{}
+	prv.schemas = schemas
+
+	prv.rsTypes, prv.rtPathMap, err = base.LoadResTypes(layout.ResTypesDir, prv.schemas)
+	if err != nil {
+		return nil, err
+	}
+
+	dataFilePath := filepath.Join(layout.DataDir, layout.name)
+
+	prv.sl, err = silo.Open(dataFilePath, prv.config, prv.rsTypes, prv.schemas)
 
 	if err != nil {
 		return nil, err
 	}
 
-	for _, f := range files {
-		if f.IsDir() {
-			continue
-		}
+	prv.layout = layout
 
-		name := f.Name()
-		if strings.HasSuffix(strings.ToLower(name), ".json") {
-			sc, err := schema.LoadSchema((sDirPath + "/" + name))
-			if err != nil {
-				log.Warningf("Failed to load schema from file %s [%s]", name, err)
-				continue
-			}
-
-			log.Infof("Loaded schema %s", sc.Id)
-			schemas[sc.Id] = sc
-		}
-	}
-
-	log.Infof("Loaded %d schemas", len(schemas))
-	return schemas, nil
+	return prv, nil
 }
 
-func LoadResTypes(rtDirPath string) (map[string]*schema.ResourceType, error) {
-	dir, err := os.Open(rtDirPath)
-	if err != nil {
-		log.Criticalf("Could not open resourcetypes directory %s [%s]", rtDirPath, err)
-		return nil, err
-	}
-
-	files, err := dir.Readdir(-1)
-
-	if err != nil {
-		return nil, err
-	}
-
-	for _, f := range files {
-		if f.IsDir() {
-			continue
-		}
-
-		name := f.Name()
-		if strings.HasSuffix(strings.ToLower(name), ".json") {
-			rt, err := schema.LoadResourceType((rtDirPath + "/" + name), schemas)
-			if err != nil {
-				log.Warningf("Failed to load resource type from file %s [%s]", name, err)
-				continue
-			}
-
-			log.Infof("Loaded resource type %s", rt.Id)
-
-			// check if any of the resources are defined with duplicate Name or
-			if _, ok := resources[rt.Name]; ok {
-				panic(fmt.Errorf("Duplicate resource type, a ResourceType with the Name '%s' already exists", rt.Name))
-			}
-
-			// are mapped to the same path
-			if _, ok := rsPathMap[rt.Endpoint]; ok {
-				panic(fmt.Errorf("Duplicate resource type, a ResourceType with the Endpoint '%s' already exists", rt.Endpoint))
-			}
-
-			resources[rt.Name] = rt
-			rsPathMap[rt.Endpoint] = rt
-		}
-	}
-
-	log.Infof("Loaded %d resource types", len(resources))
-	return resources, nil
-}
-
-func GetSchemaJsonArray() string {
+func (prv *Provider) GetSchemaJsonArray() string {
 	json := "["
 
-	for _, v := range schemas {
+	for _, v := range prv.schemas {
 		json += v.Text + ","
 	}
 
@@ -145,8 +66,8 @@ func GetSchemaJsonArray() string {
 	return json + "]"
 }
 
-func GetSchema(id string) (string, error) {
-	sc := schemas[id]
+func (prv *Provider) GetSchema(id string) (string, error) {
+	sc := prv.schemas[id]
 
 	if sc == nil {
 		return "", fmt.Errorf("No schema present with the ID %s", id)
@@ -155,10 +76,10 @@ func GetSchema(id string) (string, error) {
 	return sc.Text, nil
 }
 
-func GetResTypeJsonArray() string {
+func (prv *Provider) GetResTypeJsonArray() string {
 	json := "["
 
-	for _, v := range resources {
+	for _, v := range prv.rsTypes {
 		json += v.Text + ","
 	}
 
@@ -167,8 +88,8 @@ func GetResTypeJsonArray() string {
 	return json + "]"
 }
 
-func GetResourceType(name string) (string, error) {
-	rt := resources[name]
+func (prv *Provider) GetResourceType(name string) (string, error) {
+	rt := prv.rsTypes[name]
 
 	if rt == nil {
 		return "", fmt.Errorf("No resource type present with the ID %s", name)
@@ -178,7 +99,7 @@ func GetResourceType(name string) (string, error) {
 }
 
 /*
-func CreateResource(jsonData string) error {
+func (prv *Provider) CreateResource(jsonData string) error {
 	obj, err := validateData(sc, jsonData)
 
 	if obj != nil {
@@ -192,10 +113,12 @@ func CreateResource(jsonData string) error {
 }
 */
 
-func Search(sc *SearchContext) {
-	//	node, err := ParseFilter(sc.ParamFilter)
-	//	if err != nil {
-	//		// handle error
-	//	}
+func (prv *Provider) Search(sc *base.SearchContext) error {
+	node, err := base.ParseFilter(sc.ParamFilter)
+	if err != nil {
+		return base.NewBadRequestError(err.Error())
+	}
 
+	sc.Filter = node
+	return nil
 }

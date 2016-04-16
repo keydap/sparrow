@@ -7,7 +7,7 @@ import (
 	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"os"
-	"sparrow/scim/provider"
+	"sparrow/scim/base"
 	"sparrow/scim/schema"
 	"time"
 )
@@ -55,7 +55,7 @@ func main() {
 		return
 	}
 
-	rs, err := provider.ParseResource(rtMap, sm, string(data))
+	rs, err := base.ParseResource(rtMap, sm, string(data))
 	if err != nil {
 		fmt.Print("error \n")
 		fmt.Println(err)
@@ -82,7 +82,7 @@ func main() {
 	}
 
 	log.Debugf("size of the encoded buffer %d", rdata.Len())
-	var r provider.Resource
+	var r base.Resource
 	err = dec.Decode(&r)
 	if err != nil {
 		fmt.Printf("Error while decoding the resource %s\n", rs.TypeName)

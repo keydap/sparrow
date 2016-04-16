@@ -6,8 +6,8 @@ import (
 	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"os"
+	"sparrow/scim/base"
 	"sparrow/scim/conf"
-	"sparrow/scim/provider"
 	"sparrow/scim/schema"
 	"testing"
 )
@@ -27,8 +27,8 @@ func TestMain(m *testing.M) {
 	schemaDir := resDir + "/schemas"
 	rtDir := resDir + "/types"
 
-	schemas, _ = provider.LoadSchemas(schemaDir)
-	restypes, _ = provider.LoadResTypes(rtDir)
+	schemas, _ = base.LoadSchemas(schemaDir)
+	restypes, _, _ = base.LoadResTypes(rtDir, schemas)
 
 	os.Remove(dbFilePath)
 
@@ -39,10 +39,10 @@ func TestMain(m *testing.M) {
 	os.Remove(dbFilePath)
 }
 
-func createTestUser() *provider.Resource {
+func createTestUser() *base.Resource {
 	rt := restypes[userResName]
 
-	rs := provider.NewResource(rt)
+	rs := base.NewResource(rt)
 
 	uCount++
 
@@ -93,14 +93,14 @@ func initSilo() {
 	}
 }
 
-func loadTestUser() *provider.Resource {
+func loadTestUser() *base.Resource {
 	data, err := ioutil.ReadFile(resDir + "/samples/full-user.json")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	rs, err := provider.ParseResource(restypes, schemas, string(data))
+	rs, err := base.ParseResource(restypes, schemas, string(data))
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -260,7 +260,7 @@ func TestReloadSilo(t *testing.T) {
 
 }
 
-func assertPrCount(rs *provider.Resource, readTx *bolt.Tx, expected int64, t *testing.T) {
+func assertPrCount(rs *base.Resource, readTx *bolt.Tx, expected int64, t *testing.T) {
 	prIdx := sl.getSysIndex(userResName, "presence")
 	for _, atName := range config.Resources[0].IndexFields {
 		// skip if there is no value for the attribute
@@ -282,8 +282,8 @@ func TestSearch(t *testing.T) {
 	rs2 := createTestUser()
 	rs2, _ = sl.Insert(rs2)
 
-	filter, _ := provider.ParseFilter("userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
-	sc := &provider.SearchContext{}
+	filter, _ := base.ParseFilter("userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
+	sc := &base.SearchContext{}
 	sc.Filter = filter
 	sc.ResTypes = []*schema.ResourceType{restypes[userResName]}
 
@@ -297,7 +297,7 @@ func TestSearch(t *testing.T) {
 	}
 
 	// search using presence filter
-	filter, _ = provider.ParseFilter("id pr")
+	filter, _ = base.ParseFilter("id pr")
 	sc.Filter = filter
 	results, err = sl.Search(sc)
 	if err != nil {
@@ -309,7 +309,7 @@ func TestSearch(t *testing.T) {
 	}
 
 	// search using AND filter
-	filter, _ = provider.ParseFilter("id pr and userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
+	filter, _ = base.ParseFilter("id pr and userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
 	sc.Filter = filter
 	results, err = sl.Search(sc)
 

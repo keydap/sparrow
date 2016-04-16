@@ -1,7 +1,8 @@
-package provider
+package base
 
 import (
 	"fmt"
+	logger "github.com/juju/loggo"
 	"sparrow/scim/schema"
 	"sparrow/scim/utils"
 	"strconv"
@@ -15,6 +16,12 @@ const (
 )
 
 var op_map = map[string]int{"EQ": 0, "NE": 1, "CO": 2, "SW": 3, "EW": 4, "GT": 5, "LT": 6, "GE": 7, "LE": 8, "PR": 9, "NOT": 10, "OR": 11, "AND": 12}
+
+var log logger.Logger
+
+func init() {
+	log = logger.GetLogger("sparrow.scim.base")
+}
 
 // A structure representing a filter expression
 type FilterNode struct {
