@@ -19,6 +19,9 @@ var sl *Silo
 var uCount int
 var userResName = "User"
 
+var schemas map[string]*schema.Schema
+var restypes map[string]*schema.ResourceType
+
 func TestMain(m *testing.M) {
 	logger.ConfigureLoggers("<root>=debug;scim.main=debug")
 
@@ -287,10 +290,11 @@ func TestSearch(t *testing.T) {
 	sc.Filter = filter
 	sc.ResTypes = []*schema.ResourceType{restypes[userResName]}
 
-	results, err := sl.Search(sc)
-	if err != nil {
-		t.Errorf("Failed to search using filter %s (%s)", sc.Filter, err.Error())
-	}
+	outPipe := make(chan *base.Resource)
+
+	go sl.Search(sc, outPipe)
+
+	results := readResults(outPipe)
 
 	if len(results) != 1 {
 		t.Errorf("Expected %d but received %d", 1, len(results))
@@ -299,10 +303,9 @@ func TestSearch(t *testing.T) {
 	// search using presence filter
 	filter, _ = base.ParseFilter("id pr")
 	sc.Filter = filter
-	results, err = sl.Search(sc)
-	if err != nil {
-		t.Errorf("Failed to search using PR filter %s (%s)", sc.Filter, err.Error())
-	}
+	outPipe = make(chan *base.Resource)
+	go sl.Search(sc, outPipe)
+	results = readResults(outPipe)
 
 	if len(results) != 2 {
 		t.Errorf("Expected %d but received %d", 2, len(results))
@@ -311,15 +314,27 @@ func TestSearch(t *testing.T) {
 	// search using AND filter
 	filter, _ = base.ParseFilter("id pr and userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
 	sc.Filter = filter
-	results, err = sl.Search(sc)
+
+	outPipe = make(chan *base.Resource)
+
+	go sl.Search(sc, outPipe)
+
+	results = readResults(outPipe)
 
 	fmt.Println(results[rs1.GetId()].ToJSON())
-
-	if err != nil {
-		t.Errorf("Failed to search using PR filter %s (%s)", sc.Filter, err.Error())
-	}
 
 	if len(results) != 1 {
 		t.Errorf("Expected %d but received %d", 1, len(results))
 	}
+}
+
+func readResults(outPipe chan *base.Resource) map[string]*base.Resource {
+	fmt.Println("reading from pipe")
+	results := make(map[string]*base.Resource)
+	for rs := range outPipe {
+		fmt.Println("received RS ", rs.GetId())
+		results[rs.GetId()] = rs
+	}
+
+	return results
 }

@@ -32,9 +32,6 @@ var (
 
 var log logger.Logger
 
-var schemas map[string]*schema.Schema
-var restypes map[string]*schema.ResourceType
-
 func init() {
 	log = logger.GetLogger("sparrow.scim.silo")
 }
@@ -44,6 +41,8 @@ type Silo struct {
 	resources  map[string][]byte            // the resource buckets
 	indices    map[string]map[string]*Index // the index buckets, each index name will be in the form {resource-name}:{attribute-name}
 	sysIndices map[string]map[string]*Index
+	schemas    map[string]*schema.Schema
+	resTypes   map[string]*schema.ResourceType
 }
 
 type Index struct {
@@ -304,9 +303,6 @@ func (idx *Index) convert(val string) []byte {
 }
 
 func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceType, sm map[string]*schema.Schema) (*Silo, error) {
-	restypes = rtypes
-	schemas = sm
-
 	db, err := bolt.Open(path, 0644, nil)
 
 	if err != nil {
@@ -318,6 +314,8 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 	sl.resources = make(map[string][]byte)
 	sl.indices = make(map[string]map[string]*Index)
 	sl.sysIndices = make(map[string]map[string]*Index)
+	sl.schemas = sm
+	sl.resTypes = rtypes
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(BUC_RESOURCES)
@@ -656,7 +654,7 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 						log.Debugf("No reference type is mentioned, assuming the default value %s", refTypeVal)
 					}
 
-					refRType := restypes[refTypeVal]
+					refRType := sl.resTypes[refTypeVal]
 					if refRType == nil {
 						panic(fmt.Errorf("Given reference type %s associated with value %s is not found", refTypeVal, refId))
 					}
@@ -800,7 +798,7 @@ func (sl *Silo) storeResource(tx *bolt.Tx, res *base.Resource) {
 	}
 }
 
-func (sl *Silo) Search(sc *base.SearchContext) (results map[string]*base.Resource, err error) {
+func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
 	tx, err := sl.db.Begin(false)
 
 	defer func() {
@@ -808,9 +806,9 @@ func (sl *Silo) Search(sc *base.SearchContext) (results map[string]*base.Resourc
 		if e != nil {
 			err = e.(error)
 			log.Debugf("Error while searching for resources %s", err.Error())
-			results = nil
 		}
 
+		close(outPipe)
 		tx.Rollback()
 	}()
 
@@ -819,8 +817,6 @@ func (sl *Silo) Search(sc *base.SearchContext) (results map[string]*base.Resourc
 	}
 
 	candidates := make(map[string]*base.Resource)
-
-	results = make(map[string]*base.Resource)
 
 	for _, rsType := range sc.ResTypes {
 		count := getOptimizedResults(sc.Filter, rsType, tx, sl, candidates)
@@ -843,7 +839,7 @@ func (sl *Silo) Search(sc *base.SearchContext) (results map[string]*base.Resourc
 
 					rs.SetSchema(rsType)
 					if evaluator.evaluate(rs) {
-						results[k] = rs
+						outPipe <- rs
 					}
 				}
 			}
@@ -864,12 +860,12 @@ func (sl *Silo) Search(sc *base.SearchContext) (results map[string]*base.Resourc
 
 					rs.SetSchema(rsType)
 					if evaluator.evaluate(rs) {
-						results[string(k)] = rs
+						outPipe <- rs
 					}
 				}
 			}
 		}
 	}
 
-	return results, nil
+	return nil
 }

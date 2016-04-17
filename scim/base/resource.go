@@ -46,10 +46,11 @@ type AtGroup struct {
 }
 
 type Resource struct {
-	resType  *schema.ResourceType
-	TypeName string // resourcetype's name
-	Core     *AtGroup
-	Ext      map[string]*AtGroup
+	resType   *schema.ResourceType
+	TypeName  string // resourcetype's name
+	Core      *AtGroup
+	Ext       map[string]*AtGroup
+	schemaIds []string
 }
 
 // Attribute contract
@@ -137,6 +138,18 @@ func (atg *AtGroup) getAttribute(name string) Attribute {
 }
 
 // accessor methods for common attributes
+
+func (rs *Resource) GetSchemaIds() []string {
+	if rs.schemaIds == nil {
+		rs.schemaIds = make([]string, 1)
+		rs.schemaIds[0] = rs.resType.Schema
+		for _, v := range rs.resType.SchemaExtensions {
+			rs.schemaIds = append(rs.schemaIds, v.Schema)
+		}
+	}
+
+	return rs.schemaIds
+}
 
 func (rs *Resource) GetId() string {
 	sa := rs.Core.SimpleAts["id"]
@@ -907,6 +920,8 @@ func (rs *Resource) ToJSON() (string, error) {
 			obj[k] = extObj
 		}
 	}
+
+	obj["schemas"] = rs.GetSchemaIds()
 
 	data, err := json.Marshal(obj)
 	if err != nil {

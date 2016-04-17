@@ -113,12 +113,36 @@ func (prv *Provider) CreateResource(jsonData string) error {
 }
 */
 
-func (prv *Provider) Search(sc *base.SearchContext) error {
+func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
 	node, err := base.ParseFilter(sc.ParamFilter)
 	if err != nil {
 		return base.NewBadRequestError(err.Error())
 	}
 
 	sc.Filter = node
+
+	var rt *schema.ResourceType
+
+	for _, v := range prv.rsTypes {
+		if strings.Contains(sc.Endpoint, v.Endpoint) {
+			rt = v
+			break
+		}
+	}
+
+	if rt == nil { // must have been searched at server root
+		sc.ResTypes = make([]*schema.ResourceType, len(prv.rsTypes))
+		count := 0
+		for _, v := range prv.rsTypes {
+			sc.ResTypes[count] = v
+			count++
+		}
+	} else {
+		sc.ResTypes = make([]*schema.ResourceType, 1)
+		sc.ResTypes[0] = rt
+	}
+
+	prv.sl.Search(sc, outPipe)
+
 	return nil
 }
