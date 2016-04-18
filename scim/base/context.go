@@ -1,7 +1,6 @@
 package base
 
 import (
-	"sparrow/scim/base"
 	"sparrow/scim/schema"
 )
 
@@ -24,7 +23,7 @@ type SearchContext struct {
 
 type ListResponse struct {
 	TotalResults int64
-	Resources    []*base.Resource
+	Resources    []*Resource
 	StartIndex   int64
 	ItemsPerPage int
 }

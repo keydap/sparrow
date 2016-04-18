@@ -1,9 +1,9 @@
 package provider
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"sparrow/scim/utils"
 	"strings"
 )
 
@@ -42,46 +42,31 @@ func NewLayout(baseDir string, create bool) (layout *Layout, err error) {
 	}()
 
 	cdir := filepath.Join(baseDir, "conf")
-	checkAndCreate(cdir)
+	utils.CheckAndCreate(cdir)
 
 	sdir := filepath.Join(baseDir, "schema")
-	checkAndCreate(sdir)
+	utils.CheckAndCreate(sdir)
 
 	ddir := filepath.Join(baseDir, "data")
-	checkAndCreate(ddir)
+	utils.CheckAndCreate(ddir)
 
 	ldir := filepath.Join(baseDir, "logs")
-	checkAndCreate(ldir)
+	utils.CheckAndCreate(ldir)
 
 	resTypesdir := filepath.Join(baseDir, "resourcetypes")
-	checkAndCreate(resTypesdir)
+	utils.CheckAndCreate(resTypesdir)
 
 	layout = &Layout{ConfDir: cdir, SchemaDir: sdir, DataDir: ddir, LogDir: ldir, ResTypesDir: resTypesdir}
 
 	// open the base directory just to get it's name
 	file, _ := os.Open(baseDir) // no error should be reported here
+	stat, _ := file.Stat()
 
-	layout.name = strings.ToLower(file.Name())
+	layout.name = strings.ToLower(stat.Name())
 
 	file.Close()
 
 	return layout, nil
-}
-
-func checkAndCreate(dirName string) {
-	finfo, err := os.Stat(dirName)
-
-	if os.IsNotExist(err) {
-		err := os.Mkdir(dirName, DIR_PERM)
-		if err != nil {
-			log.Criticalf("Failed to create the directory %s [%s]", dirName, err)
-			panic(err)
-		}
-	} else if !finfo.IsDir() {
-		s := fmt.Errorf("The file %s already exists and is not a directory, please delete it and retry\n", dirName)
-		log.Criticalf(s.Error())
-		panic(s)
-	}
 }
 
 func (lo *Layout) Name() string {

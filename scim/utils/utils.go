@@ -3,9 +3,19 @@ package utils
 import (
 	"crypto/rand"
 	"fmt"
+	logger "github.com/juju/loggo"
 	"math"
+	"os"
 	"time"
 )
+
+var DIR_PERM os.FileMode = 0744 //rwxr--r--
+
+var log logger.Logger
+
+func init() {
+	log = logger.GetLogger("sparrow.scim.utils")
+}
 
 func GenUUID() string {
 	b := make([]byte, 16)
@@ -70,4 +80,20 @@ func encodeUint(v uint64) []byte {
 func DateTime() string {
 	t := time.Now().UTC()
 	return t.Format(time.RFC3339)
+}
+
+func CheckAndCreate(dirName string) {
+	finfo, err := os.Stat(dirName)
+
+	if os.IsNotExist(err) {
+		err := os.MkdirAll(dirName, DIR_PERM)
+		if err != nil {
+			log.Criticalf("Failed to create the directory %s [%s]", dirName, err)
+			panic(err)
+		}
+	} else if !finfo.IsDir() {
+		s := fmt.Errorf("The file %s already exists and is not a directory, please delete it and retry\n", dirName)
+		log.Criticalf(s.Error())
+		panic(s)
+	}
 }
