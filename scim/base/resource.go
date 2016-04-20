@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"sparrow/scim/schema"
 	"sparrow/scim/utils"
@@ -483,7 +484,7 @@ func (atg *AtGroup) setSchema(sc *schema.Schema) {
 	}
 }
 
-func ParseResource(resTypes map[string]*schema.ResourceType, sm map[string]*schema.Schema, jsonData string) (*Resource, error) {
+func ParseResource(resTypes map[string]*schema.ResourceType, sm map[string]*schema.Schema, body io.Reader) (*Resource, error) {
 	if sm == nil {
 		err := NewError()
 		err.Detail = "Schemas cannot be null"
@@ -496,12 +497,13 @@ func ParseResource(resTypes map[string]*schema.ResourceType, sm map[string]*sche
 		return nil, err
 	}
 
-	if len(jsonData) == 0 {
+	if body == nil {
 		return nil, NewBadRequestError("Invalid JSON data")
 	}
 
 	var i interface{}
-	err := json.Unmarshal([]byte(jsonData), &i)
+	dec := json.NewDecoder(body)
+	err := dec.Decode(&i)
 
 	if err != nil {
 		log.Debugf("%#v", err)
@@ -608,10 +610,11 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 	rs.Ext = make(map[string]*AtGroup)
 
 	defer func() {
-		err := recover()
-		if err != nil {
+		e := recover()
+		if e != nil {
 			log.Debugf("panicked while parsing resource data %#v\n", err)
 			rs = nil
+			err = e.(error)
 		}
 	}()
 

@@ -14,6 +14,8 @@ func LoadSchemas(sDirPath string) (map[string]*schema.Schema, error) {
 		return nil, err
 	}
 
+	defer dir.Close()
+
 	files, err := dir.Readdir(-1)
 
 	if err != nil {
@@ -50,6 +52,8 @@ func LoadResTypes(rtDirPath string, schemas map[string]*schema.Schema) (rsTypes 
 		log.Criticalf("Could not open resourcetypes directory %s [%s]", rtDirPath, err)
 		return nil, nil, err
 	}
+
+	defer dir.Close()
 
 	files, err := dir.Readdir(-1)
 

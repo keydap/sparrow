@@ -24,7 +24,7 @@ func main() {
 
 	if false {
 		log := logger.GetLogger("scim.main")
-		resDir = resDir + "/resources/"
+		resDir = resDir + "/../resources/"
 		sc, err := schema.LoadSchema(resDir + "/schemas/user.json")
 		if err != nil {
 			log.Debugf("%s", err)
@@ -60,7 +60,8 @@ func main() {
 			return
 		}
 
-		rs, err := base.ParseResource(rtMap, sm, string(data))
+		reader := bytes.NewReader(data)
+		rs, err := base.ParseResource(rtMap, sm, reader)
 		if err != nil {
 			fmt.Print("error \n")
 			fmt.Println(err)

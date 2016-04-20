@@ -4,6 +4,32 @@ import (
 	"encoding/json"
 )
 
+var (
+	TempRedirect      = "307"
+	PermRedirect      = "308"
+	BadRequest        = "400"
+	UnAuthorized      = "401"
+	Forbidden         = "403"
+	NotFound          = "404"
+	Conflict          = "409"
+	PreCondFailed     = "412"
+	PayloadTooLarge   = "413"
+	InternalServerErr = "500"
+	NotImplemented    = "501"
+)
+var (
+	ST_INVALIDFILTER = "invalidFilter"
+	ST_TOOMANY       = "tooMany"
+	ST_UNIQUENESS    = "uniqueness"
+	ST_MUTABILITY    = "mutability"
+	ST_INVALIDSYNTAX = "invalidSyntax"
+	ST_INVALIDPATH   = "invalidPath"
+	ST_NOTARGET      = "noTarget"
+	ST_INVALIDVALUE  = "invalidValue"
+	ST_INVALIDVERS   = "invalidVers"
+	ST_SENSITIVE     = "sensitive"
+)
+
 type ScimError struct {
 	Schemas  []string
 	ScimType string
@@ -36,5 +62,12 @@ func NewNotFoundError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.Status = "404"
+	return err
+}
+
+func NewConflictError(detail string) *ScimError {
+	err := NewError()
+	err.Detail = detail
+	err.Status = "409"
 	return err
 }
