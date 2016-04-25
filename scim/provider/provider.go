@@ -16,7 +16,7 @@ import (
 type Provider struct {
 	Schemas   map[string]*schema.Schema       // a map of Schema ID to Schema
 	RsTypes   map[string]*schema.ResourceType // a map of Name to ResourceTye
-	rtPathMap map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
+	RtPathMap map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
 	config    *conf.Config
 	sl        *silo.Silo
 	layout    *Layout
@@ -38,7 +38,7 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	prv = &Provider{}
 	prv.Schemas = schemas
 
-	prv.RsTypes, prv.rtPathMap, err = base.LoadResTypes(layout.ResTypesDir, prv.Schemas)
+	prv.RsTypes, prv.RtPathMap, err = base.LoadResTypes(layout.ResTypesDir, prv.Schemas)
 	if err != nil {
 		return nil, err
 	}
@@ -111,20 +111,9 @@ func (prv *Provider) GetConfigJson() (data []byte, err error) {
 	return ioutil.ReadFile(f)
 }
 
-/*
-func (prv *Provider) CreateResource(jsonData string) error {
-	obj, err := validateData(sc, jsonData)
-
-	if obj != nil {
-
-	}
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (prv *Provider) CreateResource(opCtx *base.OpContext) (res *base.Resource, err error) {
+	return prv.sl.Insert(opCtx.Rs)
 }
-*/
 
 func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
 	node, err := base.ParseFilter(sc.ParamFilter)

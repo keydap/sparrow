@@ -68,11 +68,7 @@ func main() {
 		}
 
 		fmt.Printf("%#v\n", rs)
-		v, err := rs.ToJSON()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
+		v := rs.ToJSON()
 		fmt.Printf("%s\n", v)
 		log.Debugf("length of the JSON data %d", len(v))
 
@@ -97,11 +93,7 @@ func main() {
 		fmt.Printf("\nTime took to encode a resource %#v sec\n", time.Since(start).Seconds())
 		fmt.Printf("decoded value %#v\n", r)
 		r.SetSchema(rt)
-		v, err = rs.ToJSON()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
+		v = rs.ToJSON()
 		fmt.Printf("decoded JSON\n %s", v)
 	}
 }

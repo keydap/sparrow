@@ -1,6 +1,7 @@
 package silo
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/boltdb/bolt"
 	logger "github.com/juju/loggo"
@@ -103,7 +104,8 @@ func loadTestUser() *base.Resource {
 		os.Exit(1)
 	}
 
-	rs, err := base.ParseResource(restypes, schemas, string(data))
+	reader := bytes.NewReader(data)
+	rs, err := base.ParseResource(restypes, schemas, reader)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -114,7 +116,7 @@ func loadTestUser() *base.Resource {
 
 func TestInsert(t *testing.T) {
 	initSilo()
-	user := createTestUser()
+	user := loadTestUser() //createTestUser()
 	metaMap := make(map[string]interface{})
 	metaMap["created"] = "abc"
 	metaMap["lastmodified"] = "xyz"
@@ -123,6 +125,8 @@ func TestInsert(t *testing.T) {
 	uMeta := user.GetMeta()
 
 	rs, err := sl.Insert(user)
+
+	fmt.Println(rs.ToJSON())
 
 	rid := rs.GetId()
 

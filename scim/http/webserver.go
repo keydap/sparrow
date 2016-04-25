@@ -22,9 +22,17 @@ var DIR_PERM os.FileMode = 0744 //rwxr--r--
 
 var TENANT_HEADER = "X-Sparrow-Tenant-Id"
 var SCIM_JSON_TYPE = "application/scim+json"
+var API_BASE = "/v2" // NO slash at the end
 
 func init() {
 	log = logger.GetLogger("sparrow.scim.http")
+}
+
+type httpContext struct {
+	w  http.ResponseWriter
+	r  *http.Request
+	pr *provider.Provider
+	*base.OpContext
 }
 
 func Start(srvHome string) {
@@ -49,7 +57,7 @@ func Start(srvHome string) {
 	router := mux.NewRouter()
 
 	// scim requests
-	scimRouter := router.PathPrefix("/v2").Subrouter()
+	scimRouter := router.PathPrefix(API_BASE).Subrouter()
 
 	scimRouter.HandleFunc("/Me", handleResRequest).Methods("GET", "POST", "PUT", "PATCH", "DELETE")
 
@@ -80,11 +88,35 @@ func bulkUpdate(w http.ResponseWriter, r *http.Request) {
 func search(w http.ResponseWriter, r *http.Request, pr *provider.Provider) {
 }
 
-func createResource(w http.ResponseWriter, r *http.Request, pr *provider.Provider) {
-	rs, err := base.ParseResource(pr.RsTypes, pr.Schemas, r.Body)
+func createResource(hc *httpContext) {
+	rs, err := base.ParseResource(hc.pr.RsTypes, hc.pr.Schemas, hc.r.Body)
 	if err != nil {
-
+		writeError(hc, err)
+		return
 	}
+
+	rtByPath := hc.pr.RtPathMap[hc.Endpoint]
+	rsType := rs.GetType()
+	if rsType != rtByPath {
+		// return bad request error
+		err = base.NewBadRequestError(fmt.Sprintf("Resource data of type %s is sent to the wrong endpoint %s", rsType.Name, hc.r.RequestURI))
+		writeError(hc, err)
+		return
+	}
+
+	hc.OpContext.Rs = rs
+	insertedRs, err := hc.pr.CreateResource(hc.OpContext)
+	if err != nil {
+		writeError(hc, err)
+		return
+	}
+
+	rid := insertedRs.GetId()
+	writeCommonHeaders(hc.w, hc.pr)
+	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
+	hc.w.WriteHeader(http.StatusCreated)
+	hc.w.Write(insertedRs.Serialize())
+	log.Debugf("Successfully inserted the resource with ID %s", rid)
 }
 
 func replaceResource(w http.ResponseWriter, r *http.Request, pr *provider.Provider) {
@@ -97,7 +129,7 @@ func deleteResource(w http.ResponseWriter, r *http.Request, pr *provider.Provide
 }
 
 func getServProvConf(w http.ResponseWriter, r *http.Request) {
-	pr := getProv(r)
+	pr := getProv(createOpCtx(r))
 	log.Debugf("Sending service provider configuration of domain %s", pr.Name)
 
 	data, err := pr.GetConfigJson()
@@ -110,7 +142,7 @@ func getServProvConf(w http.ResponseWriter, r *http.Request) {
 }
 
 func getResTypes(w http.ResponseWriter, r *http.Request) {
-	pr := getProv(r)
+	pr := getProv(createOpCtx(r))
 	log.Debugf("Sending resource types of the domain %s", pr.Name)
 
 	data := pr.GetResTypeJsonArray()
@@ -120,7 +152,7 @@ func getResTypes(w http.ResponseWriter, r *http.Request) {
 }
 
 func getSchemas(w http.ResponseWriter, r *http.Request) {
-	pr := getProv(r)
+	pr := getProv(createOpCtx(r))
 	log.Debugf("Sending schemas of the domain %s", pr.Name)
 
 	data := pr.GetSchemaJsonArray()
@@ -132,8 +164,11 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleResRequest(w http.ResponseWriter, r *http.Request) {
-	pr := getProv(r)
+	opCtx := createOpCtx(r)
+	pr := getProv(opCtx)
 	log.Debugf("handling %s request on %s for the domain %s", r.Method, r.RequestURI, pr.Name)
+
+	hc := &httpContext{w, r, pr, opCtx}
 
 	switch r.Method {
 	case "GET":
@@ -143,19 +178,34 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.RequestURI, "/.search") {
 			search(w, r, pr)
 		} else {
-			createResource(w, r, pr)
+			createResource(hc)
 		}
 	}
 }
 
-func getProv(r *http.Request) *provider.Provider {
+func createOpCtx(r *http.Request) *base.OpContext {
 	tenantId := r.Header.Get(TENANT_HEADER)
-	if len(tenantId) != 0 {
-		return providers[strings.ToLower(tenantId)]
+	if len(tenantId) == 0 {
+		// testing purpose
+		tenantId = "example.com"
 	}
 
-	// testing purpose
-	return providers["example.com"]
+	opCtx := &base.OpContext{}
+	opCtx.ClientIP = r.RemoteAddr
+	opCtx.Tenant = strings.ToLower(tenantId)
+
+	parts := strings.Split(r.RequestURI, API_BASE)
+	if len(parts) == 2 { // extract the part after API_BASE
+		opCtx.Endpoint = parts[1]
+	} else {
+		opCtx.Endpoint = r.RequestURI
+	}
+
+	return opCtx
+}
+
+func getProv(opCtx *base.OpContext) *provider.Provider {
+	return providers[opCtx.Tenant]
 }
 
 func writeCommonHeaders(w http.ResponseWriter, pr *provider.Provider) {
@@ -270,5 +320,17 @@ func copyDir(src, dest string) {
 		if err != nil {
 			panic(err)
 		}
+	}
+}
+
+func writeError(hc *httpContext, err error) {
+	se, ok := err.(*base.ScimError)
+	writeCommonHeaders(hc.w, hc.pr)
+	if ok {
+		hc.w.WriteHeader(se.Code())
+		hc.w.Write([]byte(se.Error()))
+	} else {
+		hc.w.WriteHeader(551) // unknown error
+		hc.w.Write([]byte(err.Error()))
 	}
 }

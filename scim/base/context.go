@@ -8,6 +8,10 @@ type AuthContext struct {
 }
 
 type OpContext struct {
+	ClientIP string
+	Tenant   string
+	Endpoint string
+	Rs       *Resource
 }
 
 type SearchContext struct {
