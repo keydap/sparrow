@@ -2,7 +2,6 @@ package base
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -141,7 +140,9 @@ func (atg *AtGroup) getAttribute(name string) Attribute {
 // accessor methods for common attributes
 
 func (rs *Resource) GetSchemaIds() []string {
-	if rs.schemaIds == nil {
+	sa := rs.Core.SimpleAts["schemas"]
+	return sa.Values
+	/*if rs.schemaIds == nil {
 		rs.schemaIds = make([]string, 1)
 		rs.schemaIds[0] = rs.resType.Schema
 		for _, v := range rs.resType.SchemaExtensions {
@@ -149,7 +150,7 @@ func (rs *Resource) GetSchemaIds() []string {
 		}
 	}
 
-	return rs.schemaIds
+	return rs.schemaIds*/
 }
 
 func (rs *Resource) GetId() string {
@@ -254,6 +255,11 @@ func _removeReadOnly(atg *AtGroup) {
 	if len(atg.SimpleAts) > 0 {
 		for k, v := range atg.SimpleAts {
 			if v.GetType().IsReadOnly() {
+				// do not delete schemas attribute
+				// this MUST be stored
+				if k == "schemas" {
+					continue
+				}
 				delete(atg.SimpleAts, k)
 			}
 		}
@@ -906,15 +912,15 @@ func getConvertedVal(v string, sa *SimpleAttribute) interface{} {
 	}
 }
 
-func (rs *Resource) ToJSON() (string, error) {
-	if rs == nil {
-		return "", errors.New("nil-resource")
-	}
-
+func (rs *Resource) ToJSON() string {
 	if rs.Core == nil {
-		return "", errors.New("invalid resource, no attributes")
+		return `{"ToJSON": "invalid resource, no attributes"}`
 	}
 
+	return string(rs.Serialize())
+}
+
+func (rs *Resource) Serialize() []byte {
 	obj := rs.Core.ToMap()
 
 	if len(rs.Ext) > 0 {
@@ -924,12 +930,11 @@ func (rs *Resource) ToJSON() (string, error) {
 		}
 	}
 
-	obj["schemas"] = rs.GetSchemaIds()
-
 	data, err := json.Marshal(obj)
 	if err != nil {
-		return "", err
+		log.Criticalf("Failed to serialize the resource %s", err)
+		return nil
 	}
 
-	return string(data), nil
+	return data
 }
