@@ -35,6 +35,7 @@ type ScimError struct {
 	ScimType string
 	Detail   string
 	Status   string
+	code     int // the Status value as an integer
 }
 
 func (se *ScimError) Error() string {
@@ -55,6 +56,7 @@ func NewBadRequestError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.Status = "400"
+	err.code = 400
 	return err
 }
 
@@ -62,6 +64,7 @@ func NewNotFoundError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.Status = "404"
+	err.code = 404
 	return err
 }
 
@@ -69,5 +72,10 @@ func NewConflictError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.Status = "409"
+	err.code = 409
 	return err
+}
+
+func (se ScimError) Code() int {
+	return se.code
 }
