@@ -3,6 +3,7 @@ package schema
 import (
 	"encoding/json"
 	"io/ioutil"
+	"path"
 	"strings"
 )
 
@@ -54,7 +55,7 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 		ve.add("Name attribute of the resourcetype cannot be empty")
 	}
 
-	rt.Endpoint = strings.TrimSpace(rt.Endpoint)
+	rt.Endpoint = path.Clean(strings.TrimSpace(rt.Endpoint))
 	if len(rt.Endpoint) == 0 {
 		ve.add("Endpoint attribute of the resourcetype cannot be empty")
 	}
@@ -107,6 +108,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	schemasAttr.Required = true
 	schemasAttr.Returned = "always"
 	schemasAttr.MultiValued = true
+	schemasAttr.Mutability = "readonly"
 	schemasAttr.SchemaId = mainSchema.Id
 	mainSchema.Attributes = append(mainSchema.Attributes, schemasAttr)
 	mainSchema.AttrMap[schemasAttr.Name] = schemasAttr
