@@ -46,11 +46,10 @@ type AtGroup struct {
 }
 
 type Resource struct {
-	resType   *schema.ResourceType
-	TypeName  string // resourcetype's name
-	Core      *AtGroup
-	Ext       map[string]*AtGroup
-	schemaIds []string
+	resType  *schema.ResourceType
+	TypeName string // resourcetype's name
+	Core     *AtGroup
+	Ext      map[string]*AtGroup
 }
 
 // Attribute contract
@@ -272,6 +271,35 @@ func _removeReadOnly(atg *AtGroup) {
 			}
 		}
 	}
+}
+
+func (rs *Resource) CheckMissingRequiredAts() error {
+	err := _checkMissingReqAts(rs.resType.GetMainSchema(), rs)
+	if err != nil {
+		return err
+	}
+
+	for scid, _ := range rs.Ext {
+		err = _checkMissingReqAts(rs.resType.GetSchema(scid), rs)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func _checkMissingReqAts(sc *schema.Schema, rs *Resource) error {
+	for _, atName := range sc.RequiredAts {
+		attr := rs.GetAttr(atName)
+		if attr == nil {
+			detail := fmt.Sprintf("Required attribute %s of schema %s is missing from the resource", atName, sc.Id)
+			log.Debugf(detail)
+			return NewBadRequestError(detail)
+		}
+	}
+
+	return nil
 }
 
 // ---------------- attribute accessors -------------

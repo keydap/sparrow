@@ -63,7 +63,8 @@ type Schema struct {
 		ResourceType string // resourceType
 	} // meta
 
-	UniqueAts []string
+	UniqueAts   []string
+	RequiredAts []string
 }
 
 var log logger.Logger
@@ -203,6 +204,7 @@ func validate(sc *Schema) error {
 
 	sc.AttrMap = make(map[string]*AttrType)
 	sc.UniqueAts = make([]string, 0)
+	sc.RequiredAts = make([]string, 0)
 
 	for _, attr := range sc.Attributes {
 		validateAttrType(attr, sc, ve)
@@ -210,6 +212,10 @@ func validate(sc *Schema) error {
 		sc.AttrMap[name] = attr
 		if attr.IsUnique() {
 			sc.UniqueAts = append(sc.UniqueAts, name)
+		}
+
+		if attr.Required {
+			sc.RequiredAts = append(sc.RequiredAts, name)
 		}
 	}
 
@@ -278,11 +284,13 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 				sa.parent = attr
 				name := strings.ToLower(sa.Name)
 				attr.SubAttrMap[name] = sa
+				name = strings.ToLower(attr.Name + ATTR_DELIM + name)
 				if sa.IsUnique() {
-					name = attr.Name + ATTR_DELIM + name
-					sc.UniqueAts = append(sc.UniqueAts, strings.ToLower(name))
+					sc.UniqueAts = append(sc.UniqueAts, name)
 				}
-
+				if sa.Required {
+					sc.RequiredAts = append(sc.RequiredAts, name)
+				}
 			}
 		}
 

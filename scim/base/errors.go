@@ -31,11 +31,11 @@ var (
 )
 
 type ScimError struct {
-	Schemas  []string
-	ScimType string
-	Detail   string
-	Status   string
-	code     int // the Status value as an integer
+	Schemas  []string `json:"schemas"`
+	ScimType string   `json:"scimType"`
+	Detail   string   `json:"detail"`
+	Status   string   `json:"status"`
+	code     int      // the Status value as an integer
 }
 
 func (se *ScimError) Error() string {
@@ -73,6 +73,14 @@ func NewConflictError(detail string) *ScimError {
 	err.Detail = detail
 	err.Status = "409"
 	err.code = 409
+	return err
+}
+
+func NewInternalserverError(detail string) *ScimError {
+	err := NewError()
+	err.Detail = detail
+	err.Status = "500"
+	err.code = 500
 	return err
 }
 

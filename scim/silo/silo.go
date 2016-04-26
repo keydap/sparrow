@@ -364,6 +364,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 
 		// the unique attributes should always be indexed
 		// this helps in faster insertion time checks on uniqueness of attributes
+		// we should not allow attribute name collisions in schemas
 		rc.IndexFields = append(rc.IndexFields, rt.UniqueAts...)
 
 		for _, idxName := range rc.IndexFields {
@@ -559,6 +560,11 @@ func fillIndexMap(bucket *bolt.Bucket, m map[string]*Index) error {
 }
 
 func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
+	err = inRes.CheckMissingRequiredAts()
+	if err != nil {
+		return nil, err
+	}
+
 	inRes.RemoveReadOnlyAt()
 
 	rid := utils.GenUUID()
@@ -573,7 +579,9 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 	tx, err := sl.db.Begin(true)
 
 	if err != nil {
-		log.Criticalf("Could not begin a transaction for inserting the resource %s", err.Error())
+		detail := fmt.Sprintf("Could not begin a transaction for inserting the resource [%s]", err.Error())
+		log.Criticalf(detail)
+		err = base.NewInternalserverError(detail)
 		return nil, err
 	}
 
@@ -583,7 +591,7 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 			err = e.(error)
 			tx.Rollback()
 			res = nil
-			log.Debugf("failed to insert resource %s", err)
+			log.Debugf("failed to insert %s resource [%s]", rt.Name, err)
 		} else {
 			tx.Commit()
 			res = inRes
@@ -595,14 +603,19 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 	//log.Debugf("indices map %#v", sl.indices[rtName])
 	for _, name := range rt.UniqueAts {
 		// check if the value has already been used
-		idx := sl.indices[rt.Name][name]
 		attr := inRes.GetAttr(name)
+		if attr == nil {
+			continue
+		}
+		idx := sl.indices[rt.Name][name]
 		if attr.IsSimple() {
 			sa := attr.GetSimpleAt()
 			for _, val := range sa.Values {
-				fmt.Printf("checking unique attribute %#v\n", idx)
+				log.Tracef("checking unique attribute %#v", idx)
 				if idx.HasVal(val, tx) {
-					err := fmt.Errorf("Uniqueness violation, value %s of attribute %s already exists", val, sa.Name)
+					detail := fmt.Sprintf("Uniqueness violation, value %s of attribute %s already exists", val, sa.Name)
+					err := base.NewConflictError(detail)
+					err.ScimType = base.ST_UNIQUENESS
 					panic(err)
 				}
 			}
@@ -627,8 +640,8 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 
 			err := prIdx.add(name, rid, tx) // do not add sa.Name that will lose the attribute path
 			if err != nil {
-				fmt.Println("error while adding into pr index ", err)
-				panic(err)
+				detail := fmt.Sprintf("error while adding attribute %s into presence index %s", name, err.Error())
+				panic(base.NewInternalserverError(detail))
 			}
 		}
 	}
@@ -656,13 +669,15 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 
 					refRType := sl.resTypes[refTypeVal]
 					if refRType == nil {
-						panic(fmt.Errorf("Given reference type %s associated with value %s is not found", refTypeVal, refId))
+						detail := fmt.Sprintf("Given reference type %s associated with value %s is not found", refTypeVal, refId)
+						panic(base.NewNotFoundError(detail))
 					}
 
 					refRes, _ := sl.Get(refId, refRType)
 
 					if refRes == nil {
-						panic(fmt.Errorf("There is no resource with the referenced value %s", refId))
+						detail := fmt.Sprintf("There is no resource with the referenced value %s", refId)
+						panic(base.NewNotFoundError(detail))
 					}
 					groups := refRes.GetAttr("groups")
 					subAt := make(map[string]interface{})
@@ -787,8 +802,9 @@ func (sl *Silo) storeResource(tx *bolt.Tx, res *base.Resource) {
 	err := enc.Encode(res)
 
 	if err != nil {
-		log.Warningf("Failed to encode resource %s", err)
-		panic(err)
+		detail := fmt.Sprintf("Failed to encode resource %s", err)
+		log.Warningf(detail)
+		panic(base.NewInternalserverError(detail))
 	}
 
 	resBucket := tx.Bucket(sl.resources[res.GetType().Name])
