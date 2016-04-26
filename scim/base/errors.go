@@ -38,14 +38,17 @@ type ScimError struct {
 	code     int      // the Status value as an integer
 }
 
-func (se *ScimError) Error() string {
+func (se *ScimError) Serialize() []byte {
 	data, err := json.Marshal(se)
-
 	if err != nil {
-		return err.Error()
+		return []byte(err.Error())
 	}
 
-	return string(data)
+	return data
+}
+
+func (se *ScimError) Error() string {
+	return string(se.Serialize())
 }
 
 func NewError() *ScimError {

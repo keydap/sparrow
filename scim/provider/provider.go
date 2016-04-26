@@ -115,6 +115,14 @@ func (prv *Provider) CreateResource(opCtx *base.OpContext) (res *base.Resource, 
 	return prv.sl.Insert(opCtx.Rs)
 }
 
+func (prv *Provider) DeleteResource(opCtx *base.OpContext, rid string, rt *schema.ResourceType) error {
+	return prv.sl.Remove(rid, rt)
+}
+
+func (prv *Provider) GetResource(opCtx *base.OpContext, rid string, rt *schema.ResourceType) (res *base.Resource, err error) {
+	return prv.sl.Get(rid, rt)
+}
+
 func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
 	node, err := base.ParseFilter(sc.ParamFilter)
 	if err != nil {

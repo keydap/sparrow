@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sparrow/scim/base"
 	"sparrow/scim/provider"
+	"sparrow/scim/schema"
 	"sparrow/scim/utils"
 	"strings"
 )
@@ -55,6 +56,7 @@ func Start(srvHome string) {
 	log.Debugf("Starting server...")
 
 	router := mux.NewRouter()
+	router.StrictSlash(true)
 
 	// scim requests
 	scimRouter := router.PathPrefix(API_BASE).Subrouter()
@@ -75,7 +77,9 @@ func Start(srvHome string) {
 		for _, rt := range p.RsTypes {
 			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET", "POST")
 			scimRouter.HandleFunc(rt.Endpoint+"/.search", handleResRequest).Methods("POST")
-			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET", "PUT", "PATCH", "DELETE")
+			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("PUT", "PATCH", "DELETE")
+			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET")
+			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET").Queries("attributes", "", "excludedAttributes", "")
 		}
 	}
 
@@ -85,7 +89,37 @@ func Start(srvHome string) {
 func bulkUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
-func search(w http.ResponseWriter, r *http.Request, pr *provider.Provider) {
+func search(hc *httpContext) {
+	log.Debugf(hc.Endpoint)
+	pos := strings.LastIndex(hc.Endpoint, "/")
+
+	var rtByPath *schema.ResourceType
+
+	if pos > 0 {
+		rid := hc.Endpoint[pos+1:]
+		log.Debugf("Searching for the resource with ID %s", rid)
+		rtByPath = hc.pr.RtPathMap[hc.Endpoint[0:pos]]
+
+		rs, err := hc.pr.GetResource(hc.OpContext, rid, rtByPath)
+		if err != nil {
+			writeError(hc, err)
+			return
+		}
+
+		writeCommonHeaders(hc.w, hc.pr)
+		hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
+		hc.w.WriteHeader(http.StatusOK)
+		hc.w.Write(rs.Serialize())
+		log.Debugf("Found the resource with ID %s", rid)
+		return
+	}
+
+	rtByPath = hc.pr.RtPathMap[hc.Endpoint]
+	fmt.Println(rtByPath)
+}
+
+func searchRoot(hc *httpContext) {
+
 }
 
 func createResource(hc *httpContext) {
@@ -125,7 +159,30 @@ func replaceResource(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 func modifyResource(w http.ResponseWriter, r *http.Request, pr *provider.Provider) {
 }
 
-func deleteResource(w http.ResponseWriter, r *http.Request, pr *provider.Provider) {
+func deleteResource(hc *httpContext) {
+	log.Debugf(hc.Endpoint)
+	pos := strings.LastIndex(hc.Endpoint, "/")
+	pos++
+	if pos >= len(hc.Endpoint) {
+		writeCommonHeaders(hc.w, hc.pr)
+		hc.w.WriteHeader(http.StatusBadRequest)
+		detail := "Invalid delete request, missing resource ID"
+		log.Debugf(detail)
+		err := base.NewBadRequestError(detail)
+		hc.w.Write(err.Serialize())
+		return
+	}
+
+	rid := hc.Endpoint[pos:]
+	rtByPath := hc.pr.RtPathMap[hc.Endpoint[0:pos-1]]
+	err := hc.pr.DeleteResource(hc.OpContext, rid, rtByPath)
+	if err != nil {
+		writeError(hc, err)
+		return
+	}
+
+	hc.w.WriteHeader(http.StatusOK)
+	log.Debugf("Successfully deleted the resource with ID %s", rid)
 }
 
 func getServProvConf(w http.ResponseWriter, r *http.Request) {
@@ -172,14 +229,17 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		search(w, r, pr)
+		search(hc)
 
 	case "POST":
-		if strings.Contains(r.RequestURI, "/.search") {
-			search(w, r, pr)
+		if strings.HasSuffix(hc.Endpoint, "/.search") {
+			searchRoot(hc)
 		} else {
 			createResource(hc)
 		}
+
+	case "DELETE":
+		deleteResource(hc)
 	}
 }
 
@@ -328,9 +388,10 @@ func writeError(hc *httpContext, err error) {
 	writeCommonHeaders(hc.w, hc.pr)
 	if ok {
 		hc.w.WriteHeader(se.Code())
-		hc.w.Write([]byte(se.Error()))
+		hc.w.Write(se.Serialize())
 	} else {
-		hc.w.WriteHeader(551) // unknown error
-		hc.w.Write([]byte(err.Error()))
+		hc.w.WriteHeader(http.StatusInternalServerError) // unknown error
+		unknown := base.NewInternalserverError(err.Error())
+		hc.w.Write(unknown.Serialize())
 	}
 }

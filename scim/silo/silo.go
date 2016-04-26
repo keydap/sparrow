@@ -726,9 +726,12 @@ func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *base.Resourc
 
 	if resource != nil {
 		resource.SetSchema(rt)
+	} else {
+		detail := fmt.Sprintf("%s with ID %s not found", rt.Name, rid)
+		err = base.NewNotFoundError(detail)
 	}
 
-	return resource, nil
+	return resource, err
 }
 
 func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
