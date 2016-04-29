@@ -24,9 +24,11 @@ type ResourceType struct {
 		ResourceType string
 	}
 
-	schemas   map[string]*Schema // map containing the main and extension schemas
-	Text      string             // the JSON representation of this resource type
-	UniqueAts []string           // a collection of all unique attributes
+	schemas      map[string]*Schema // map containing the main and extension schemas
+	Text         string             // the JSON representation of this resource type
+	UniqueAts    []string           // a collection of all unique attributes
+	AtsNeverRtn  map[string]int     // names of attributes that are never returned
+	AtsAlwaysRtn map[string]int     // names of attributes that are always returned
 }
 
 func LoadResourceType(name string, sm map[string]*Schema) (*ResourceType, error) {
@@ -40,9 +42,8 @@ func LoadResourceType(name string, sm map[string]*Schema) (*ResourceType, error)
 }
 
 func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) {
-	//rt := &ResourceType{}
-	var rt ResourceType
-	err := json.Unmarshal(data, &rt)
+	rt := &ResourceType{}
+	err := json.Unmarshal(data, rt)
 
 	if err != nil {
 		return nil, err
@@ -73,6 +74,8 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 	}
 
 	rt.UniqueAts = make([]string, 0)
+	rt.AtsNeverRtn = make(map[string]int)
+	rt.AtsAlwaysRtn = make(map[string]int)
 
 	if len(rt.SchemaExtensions) != 0 {
 		for _, ext := range rt.SchemaExtensions {
@@ -84,6 +87,7 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 			} else {
 				rt.schemas[ext.Schema] = sm[ext.Schema]
 				rt.UniqueAts = append(rt.UniqueAts, sm[ext.Schema].UniqueAts...)
+				copyReturnAttrs(rt, sm[ext.Schema])
 			}
 		}
 	}
@@ -93,13 +97,26 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 	}
 
 	mainSchema := rt.schemas[rt.Schema]
-	rt.UniqueAts = append(rt.UniqueAts, mainSchema.UniqueAts...)
-
 	// common attributes
 	addCommonAttrs(mainSchema)
 
+	rt.UniqueAts = append(rt.UniqueAts, mainSchema.UniqueAts...)
+	copyReturnAttrs(rt, mainSchema)
+
 	rt.Text = string(data)
-	return &rt, nil
+	return rt, nil
+}
+
+func copyReturnAttrs(rt *ResourceType, sc *Schema) {
+	sc.collectReturnAttrs()
+
+	for _, v := range sc.AtsAlwaysRtn {
+		rt.AtsAlwaysRtn[v] = 1
+	}
+
+	for _, v := range sc.AtsNeverRtn {
+		rt.AtsNeverRtn[v] = 1
+	}
 }
 
 func addCommonAttrs(mainSchema *Schema) {

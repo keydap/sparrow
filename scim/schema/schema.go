@@ -63,8 +63,10 @@ type Schema struct {
 		ResourceType string // resourceType
 	} // meta
 
-	UniqueAts   []string
-	RequiredAts []string
+	UniqueAts    []string
+	RequiredAts  []string
+	AtsNeverRtn  []string // names of attributes that are never returned
+	AtsAlwaysRtn []string // names of attributes that are always returned
 }
 
 var log logger.Logger
@@ -162,11 +164,11 @@ func (ve *ValidationErrors) add(e string) {
 // TODO avoid the need for strings.ToLower() in all IsXXX methods by replacing with lowercase values or by storing
 // the result in boolean fields
 func (attr *AttrType) IsComplex() bool {
-	return strings.ToLower(attr.Type) == "complex"
+	return attr.Type == "complex"
 }
 
 func (attr *AttrType) IsRef() bool {
-	return strings.ToLower(attr.Type) == "reference"
+	return attr.Type == "reference"
 }
 
 func (attr *AttrType) IsSimple() bool {
@@ -174,16 +176,11 @@ func (attr *AttrType) IsSimple() bool {
 }
 
 func (attr *AttrType) IsReadOnly() bool {
-	return strings.ToLower(attr.Mutability) == "readonly"
-}
-
-func (attr *AttrType) IsReference() bool {
-	return strings.ToLower(attr.Type) == "reference"
+	return attr.Mutability == "readonly"
 }
 
 func (attr *AttrType) IsUnique() bool {
-	u := strings.ToLower(attr.Uniqueness)
-	return (u == "server") || (u == "global")
+	return (attr.Uniqueness == "server") || (attr.Uniqueness == "global")
 }
 
 func (attr *AttrType) Parent() *AttrType {
@@ -226,6 +223,22 @@ func validate(sc *Schema) error {
 	return ve
 }
 
+func (sc *Schema) collectReturnAttrs() {
+	sc.AtsNeverRtn = make([]string, 0)
+	sc.AtsAlwaysRtn = make([]string, 0)
+
+	for _, attr := range sc.Attributes {
+		name := strings.ToLower(attr.Name)
+		if attr.Returned == "never" {
+			sc.AtsNeverRtn = append(sc.AtsNeverRtn, name)
+		}
+
+		if attr.Returned == "always" {
+			sc.AtsAlwaysRtn = append(sc.AtsAlwaysRtn, name)
+		}
+	}
+}
+
 func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 
 	// ATTRNAME   = ALPHA *(nameChar)
@@ -237,29 +250,29 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 		ve.add("Invalid attribute name '" + attr.Name + "'")
 	}
 
-	atType := strings.ToLower(attr.Type)
-	if !exists(atType, validTypes) {
+	attr.Type = strings.ToLower(attr.Type)
+	if !exists(attr.Type, validTypes) {
 		ve.add("Invalid type '" + attr.Type + "' for attribute " + attr.Name)
 	}
 
-	atMut := strings.ToLower(attr.Mutability)
-	if !exists(atMut, validMutability) {
+	attr.Mutability = strings.ToLower(attr.Mutability)
+	if !exists(attr.Mutability, validMutability) {
 		ve.add("Invalid mutability '" + attr.Mutability + "' for attribute " + attr.Name)
 	}
 
-	atRet := strings.ToLower(attr.Returned)
-	if !exists(atRet, validReturned) {
+	attr.Returned = strings.ToLower(attr.Returned)
+	if !exists(attr.Returned, validReturned) {
 		ve.add("Invalid returned '" + attr.Returned + "' for attribute " + attr.Name)
 	}
 
-	atUniq := strings.ToLower(attr.Uniqueness)
-	if !exists(atUniq, validUniqueness) {
+	attr.Uniqueness = strings.ToLower(attr.Uniqueness)
+	if !exists(attr.Uniqueness, validUniqueness) {
 		ve.add("Invalid uniqueness '" + attr.Uniqueness + "' for attribute " + attr.Name)
 	}
 
 	refTypeLen := len(attr.ReferenceTypes)
 
-	if attr.IsReference() && (refTypeLen == 0) {
+	if attr.IsRef() && (refTypeLen == 0) {
 		ve.add("No referenceTypes set for attribute " + attr.Name)
 	}
 
