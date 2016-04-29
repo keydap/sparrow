@@ -12,6 +12,7 @@ import (
 	"sparrow/scim/provider"
 	"sparrow/scim/schema"
 	"sparrow/scim/utils"
+	"strconv"
 	"strings"
 )
 
@@ -75,7 +76,8 @@ func Start(srvHome string) {
 	// register routes for each resourcetype endpoint
 	for _, p := range providers {
 		for _, rt := range p.RsTypes {
-			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET", "POST")
+			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("POST")
+			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("attributes", "", "excludedAttributes", "")
 			scimRouter.HandleFunc(rt.Endpoint+"/.search", handleResRequest).Methods("POST")
 			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("PUT", "PATCH", "DELETE")
 			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET")
@@ -89,16 +91,14 @@ func Start(srvHome string) {
 func bulkUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
-func search(hc *httpContext) {
-	log.Debugf(hc.Endpoint)
+func searchResource(hc *httpContext) {
+	log.Debugf("endpoint %s", hc.Endpoint)
 	pos := strings.LastIndex(hc.Endpoint, "/")
-
-	var rtByPath *schema.ResourceType
 
 	if pos > 0 {
 		rid := hc.Endpoint[pos+1:]
 		log.Debugf("Searching for the resource with ID %s", rid)
-		rtByPath = hc.pr.RtPathMap[hc.Endpoint[0:pos]]
+		rtByPath := hc.pr.RtPathMap[hc.Endpoint[0:pos]]
 
 		rs, err := hc.pr.GetResource(hc.OpContext, rid, rtByPath)
 		if err != nil {
@@ -114,12 +114,131 @@ func search(hc *httpContext) {
 		return
 	}
 
-	rtByPath = hc.pr.RtPathMap[hc.Endpoint]
-	fmt.Println(rtByPath)
+	rtByPath := hc.pr.RtPathMap[hc.Endpoint]
+	search(hc, rtByPath)
 }
 
 func searchRoot(hc *httpContext) {
+	rTypes := make([]*schema.ResourceType, len(hc.pr.RsTypes))
+	count := 0
+	for _, rt := range hc.pr.RsTypes {
+		rTypes[count] = rt
+		count++
+	}
 
+	search(hc, rTypes...)
+}
+
+func search(hc *httpContext, rTypes ...*schema.ResourceType) {
+
+	err := hc.r.ParseForm()
+	if err != nil {
+		writeError(hc, err)
+		return
+	}
+
+	sx := &base.SearchContext{}
+
+	sx.ResTypes = make([]*schema.ResourceType, len(rTypes))
+	copy(sx.ResTypes, rTypes)
+
+	paramFilter := strings.TrimSpace(hc.r.Form.Get("filter"))
+	// case where the search should be on entire set of resources of a single type, e.g /Users
+	if len(rTypes) == 1 && len(paramFilter) == 0 {
+		paramFilter = "meta.resourceType eq " + rTypes[0].Name
+	} else {
+		err := base.NewBadRequestError("Missing 'filter' parameter")
+		writeError(hc, err)
+		return
+	}
+
+	paramAttr := hc.r.Form.Get("attributes")
+	paramExcludedAttrs := hc.r.Form.Get("excludedAttributes")
+
+	if len(paramAttr) != 0 && len(paramExcludedAttrs) != 0 {
+		err := base.NewBadRequestError("The parameters 'attributes' and 'excludedAttributes' cannot be set in a signle request")
+		writeError(hc, err)
+		return
+	}
+
+	filter, err := base.ParseFilter(paramFilter)
+	if err != nil {
+		se := base.NewBadRequestError(err.Error())
+		se.ScimType = base.ST_INVALIDFILTER
+		writeError(hc, se)
+		return
+	}
+
+	var attrLst []*base.AttributeParam
+	var exclAttrLst []*base.AttributeParam
+
+	if len(paramAttr) != 0 {
+		attrSet, subAtPresent := base.SplitAttrCsv(paramAttr, rTypes)
+		if attrSet != nil {
+			// the mandatory attributes that will always be returned
+			for _, rt := range rTypes {
+				for k, _ := range rt.AtsAlwaysRtn {
+					attrSet[k] = 1
+				}
+			}
+
+			// sort the names and eliminate redundant values, for example "name, name.familyName" will be reduced to name
+			attrLst = base.ConvertToParamAttributes(attrSet, subAtPresent)
+		}
+	} else {
+		exclAttrSet, subAtPresent := base.SplitAttrCsv(paramExcludedAttrs, rTypes)
+		if exclAttrSet != nil {
+			// the mandatory attributes cannot be excluded
+			for _, rt := range rTypes {
+				for k, _ := range rt.AtsAlwaysRtn {
+					if _, ok := exclAttrSet[k]; ok {
+						delete(exclAttrSet, k)
+					}
+				}
+			}
+			exclAttrLst = base.ConvertToParamAttributes(exclAttrSet, subAtPresent)
+		}
+	}
+
+	returnAll := true
+
+	if attrLst != nil || exclAttrLst != nil {
+		returnAll = false
+	}
+
+	sc := &base.SearchContext{}
+	sc.Filter = filter
+	sc.OpContext = hc.OpContext
+	sc.ResTypes = rTypes
+
+	outPipe := make(chan *base.Resource, 0)
+
+	go hc.pr.Search(sc, outPipe)
+
+	writeCommonHeaders(hc.w, hc.pr)
+	hc.w.Write([]byte("{\"resources\":["))
+
+	count := 0
+	for rs := range outPipe {
+		var jsonData []byte
+
+		// attribute filtering
+		if returnAll {
+			jsonData = rs.Serialize()
+		} else if attrLst != nil {
+			jsonData = rs.FilterAndSerialize(attrLst, true)
+		} else {
+			jsonData = rs.FilterAndSerialize(exclAttrLst, false)
+		}
+
+		_, err := hc.w.Write(jsonData)
+		if err != nil {
+			break
+		}
+		count++
+	}
+
+	hc.w.Write([]byte("], \"totalResults\":" + strconv.Itoa(count) + "}"))
 }
 
 func createResource(hc *httpContext) {
@@ -229,7 +348,7 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		search(hc)
+		searchResource(hc)
 
 	case "POST":
 		if strings.HasSuffix(hc.Endpoint, "/.search") {
@@ -254,7 +373,7 @@ func createOpCtx(r *http.Request) *base.OpContext {
 	opCtx.ClientIP = r.RemoteAddr
 	opCtx.Tenant = strings.ToLower(tenantId)
 
-	parts := strings.Split(r.RequestURI, API_BASE)
+	parts := strings.Split(r.URL.Path, API_BASE)
 	if len(parts) == 2 { // extract the part after API_BASE
 		opCtx.Endpoint = parts[1]
 	} else {

@@ -16,13 +16,13 @@ type OpContext struct {
 
 type SearchContext struct {
 	ParamFilter    string // the given filter parameter
-	Endpoint       string // endpoint used for filtering
 	ParamAttrs     string // requested list of attributes
 	ParamExclAttrs string // requested list of attributes to be excluded
 
-	Filter   *FilterNode            // the search filter
-	ResTypes []*schema.ResourceType // the resource types
-	Attrs    []string               // attributes to sent
+	Filter     *FilterNode            // the search filter
+	ResTypes   []*schema.ResourceType // the resource types
+	Attrs      []string               // attributes to sent
+	*OpContext                        // the operation context
 }
 
 type ListResponse struct {
@@ -30,4 +30,10 @@ type ListResponse struct {
 	Resources    []*Resource
 	StartIndex   int64
 	ItemsPerPage int
+}
+
+type AttributeParam struct {
+	Name     string
+	SchemaId string
+	SubAts   []string
 }

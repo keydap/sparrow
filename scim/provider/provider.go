@@ -123,36 +123,6 @@ func (prv *Provider) GetResource(opCtx *base.OpContext, rid string, rt *schema.R
 	return prv.sl.Get(rid, rt)
 }
 
-func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
-	node, err := base.ParseFilter(sc.ParamFilter)
-	if err != nil {
-		return base.NewBadRequestError(err.Error())
-	}
-
-	sc.Filter = node
-
-	var rt *schema.ResourceType
-
-	for _, v := range prv.RsTypes {
-		if strings.Contains(sc.Endpoint, v.Endpoint) {
-			rt = v
-			break
-		}
-	}
-
-	if rt == nil { // must have been searched at server root
-		sc.ResTypes = make([]*schema.ResourceType, len(prv.RsTypes))
-		count := 0
-		for _, v := range prv.RsTypes {
-			sc.ResTypes[count] = v
-			count++
-		}
-	} else {
-		sc.ResTypes = make([]*schema.ResourceType, 1)
-		sc.ResTypes[0] = rt
-	}
-
+func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) {
 	prv.sl.Search(sc, outPipe)
-
-	return nil
 }

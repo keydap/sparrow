@@ -19,7 +19,7 @@ var (
 
 func main() {
 
-	logger.ConfigureLoggers("<root>=debug;scim.main=debug")
+	logger.ConfigureLoggers("<root>=debug;")
 	http.Start("/tmp/sparrow")
 
 	if false {

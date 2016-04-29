@@ -817,6 +817,7 @@ func (sl *Silo) storeResource(tx *bolt.Tx, res *base.Resource) {
 	}
 }
 
+//TODO add  cancel channel to stop processing when the http client is closed
 func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
 	tx, err := sl.db.Begin(false)
 
