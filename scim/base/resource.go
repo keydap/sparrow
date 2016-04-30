@@ -987,59 +987,37 @@ func (rs *Resource) FilterAndSerialize(attrs []*AttributeParam, include bool) []
 		}
 
 		atType := at.GetType()
-		parentType := atType.Parent()
 
-		if parentType != nil { // this is a sub-attribute
-			parent := rs.GetAttr(parentType.SchemaId + ":" + parentType.Name).GetComplexAt()
+		if at.IsSimple() {
 			sa := at.GetSimpleAt()
-
-			if parentType.MultiValued {
-				arr := make([]map[string]interface{}, 0)
-				for _, st := range parent.SubAts {
-					if v, ok := st[sa.Name]; ok {
-						subObj := make(map[string]interface{})
-						subObj[atType.Name] = getConvertedVal(v.Values[0], v)
-						arr = append(arr, subObj)
-					}
-				}
-				obj[parentType.Name] = arr
-			} else {
-				subObj := make(map[string]interface{})
-				subObj[atType.Name] = getConvertedVal(sa.Values[0], sa)
-				obj[parentType.Name] = subObj
-			}
+			obj[atType.Name] = sa.valToInterface()
 		} else {
-			if at.IsSimple() {
-				sa := at.GetSimpleAt()
-				obj[atType.Name] = sa.valToInterface()
-			} else {
-				ca := at.GetComplexAt()
-				if ap.SubAts != nil {
-					if atType.MultiValued {
-						arr := make([]map[string]interface{}, 0)
-						for _, st := range ca.SubAts {
-							subObj := make(map[string]interface{})
-							for _, sn := range ap.SubAts {
-								if v, ok := st[sn]; ok {
-									subObj[v.atType.Name] = getConvertedVal(v.Values[0], v)
-								}
-							}
-							arr = append(arr, subObj)
-						}
-
-						obj[atType.Name] = arr
-					} else {
+			ca := at.GetComplexAt()
+			if ap.SubAts != nil {
+				if atType.MultiValued {
+					arr := make([]map[string]interface{}, 0)
+					for _, st := range ca.SubAts {
 						subObj := make(map[string]interface{})
 						for _, sn := range ap.SubAts {
-							if v, ok := ca.SubAts[0][sn]; ok {
+							if v, ok := st[sn]; ok {
 								subObj[v.atType.Name] = getConvertedVal(v.Values[0], v)
 							}
 						}
-						obj[atType.Name] = subObj
+						arr = append(arr, subObj)
 					}
+
+					obj[atType.Name] = arr
 				} else {
-					obj[atType.Name] = ca.valToInterface()
+					subObj := make(map[string]interface{})
+					for _, sn := range ap.SubAts {
+						if v, ok := ca.SubAts[0][sn]; ok {
+							subObj[v.atType.Name] = getConvertedVal(v.Values[0], v)
+						}
+					}
+					obj[atType.Name] = subObj
 				}
+			} else {
+				obj[atType.Name] = ca.valToInterface()
 			}
 		}
 	}
