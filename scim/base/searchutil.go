@@ -13,7 +13,7 @@ func SplitAttrCsv(csv string, rTypes []*schema.ResourceType) (attrMap map[string
 outer:
 	for _, t := range tokens {
 		t = strings.TrimSpace(t)
-		if t == "." { // not a valid attribute name
+		if t == "." || strings.HasSuffix(t, ".") { // not a valid attribute name
 			continue
 		}
 
@@ -23,10 +23,10 @@ outer:
 		}
 
 		t = strings.ToLower(t)
+		colonPos := strings.LastIndex(t, ":")
 
-		if strings.ContainsRune(t, ':') {
-			pos := strings.LastIndex(t, ":")
-			urn := strings.ToLower(t[0:pos])
+		if colonPos > 0 {
+			urn := strings.ToLower(t[0:colonPos])
 
 			// the URN is case insensitive here, lookup the corresponding
 			// Schema ID from the given ResourceTypes
@@ -35,8 +35,8 @@ outer:
 				if urn == strings.ToLower(rt.Schema) {
 					// this is the core schema, we can skip the URN prefix
 					urn = ""
-					pos++
-					if pos >= tLen { // this is an invalid attribute, skip it
+					colonPos++
+					if colonPos >= tLen { // this is an invalid attribute, skip it
 						continue outer
 					}
 					break
@@ -50,12 +50,18 @@ outer:
 				}
 			}
 
-			t = urn + t[pos:]
+			t = urn + t[colonPos:]
+
+			if urn == "" {
+				// reset the colonPos so that the check (dotPos > colonPos) will be accurate in this case
+				colonPos = -1
+			}
 		}
 
 		attrMap[t] = 1 // 0 is the default value for non-existing keys, so set the value to 1
 
-		if strings.ContainsRune(t, '.') {
+		dotPos := strings.LastIndex(t, ".")
+		if dotPos > colonPos {
 			subAtPresent = true
 		}
 	}
@@ -67,6 +73,11 @@ outer:
 	return attrMap, subAtPresent
 }
 
+// Converts the given list of attributes to AttributeParam and groups the sub-attributes under
+// one parent if applicable.
+// For example if "emails.type,emails.value" are requested then an AttributeParam with
+// name "emails" will be created with two child attributes "type" and "value"
+// This will make filtering the attributes easier
 func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) []*AttributeParam {
 
 	var atpLst []*AttributeParam
@@ -88,30 +99,32 @@ func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) []*Attr
 			j := &AttributeParam{}
 			j.Name = k
 
-			pos := strings.LastIndex(k, ":")
-			if pos > 0 {
-				j.SchemaId = k[0:pos]
+			colonPos := strings.LastIndex(k, ":")
+			if colonPos > 0 {
+				j.SchemaId = k[0:colonPos]
 			}
 
-			if prev != nil {
-				pos = strings.IndexRune(k, '.')
-				if pos > 0 {
-					if strings.HasPrefix(k, prev.Name+".") {
-						pos++
-						if pos >= len(k) {
-							// invalid sub attribute
-							continue
-						}
+			dotPos := strings.IndexRune(k, '.')
+			if dotPos > 0 && (dotPos > colonPos) { // to avoid splitting attribute names that have a '.' in the URN
+				if prev == nil || !strings.HasPrefix(k, prev.Name+".") {
+					j.Name = j.SchemaId + k[0:dotPos]
+					dotPos++
+					k = k[dotPos:]
 
-						k = k[pos:]
+					j.SubAts = make([]string, 1)
+					j.SubAts[0] = k
+				} else if strings.HasPrefix(k, prev.Name+".") {
+					dotPos++
+					k = k[dotPos:]
 
-						if prev.SubAts == nil {
-							prev.SubAts = make([]string, 0)
-						}
-
+					// the below block makes sure to add sub-attributes only when
+					// the parent attribute itself is not requested, for example, "name.formatted, name.givenname"
+					// but if "name" is also present in the list then the entire "name" attribute should be listed
+					if prev.SubAts != nil {
 						prev.SubAts = append(prev.SubAts, k)
-						continue
 					}
+
+					continue
 				}
 			}
 

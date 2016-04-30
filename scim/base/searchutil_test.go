@@ -1,7 +1,6 @@
 package base
 
 import (
-	"fmt"
 	"os"
 	"sparrow/scim/schema"
 	"testing"
@@ -29,7 +28,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestParseAttributes(t *testing.T) {
-	attrMap, subAtPresent := SplitAttrCsv("userName, pAsswoRD", restypes...)
+	attrMap, subAtPresent := SplitAttrCsv("userName, pAsswoRD", restypes)
 	if !(attrMap["username"] == 1 && attrMap["password"] == 1) {
 		t.Errorf("Incorrect attribute parsing")
 	}
@@ -43,9 +42,15 @@ func TestParseAttributes(t *testing.T) {
 		t.Errorf("Incorrect AttributeParam list")
 	}
 
-	// check with sub attribute
-	attrMap, subAtPresent = SplitAttrCsv("userName, name.formatted, Name, Name.GIVEnname, namename.name", restypes...)
-	if !(attrMap["username"] == 1 && attrMap["name"] == 1 && attrMap["name.givenname"] == 1 && attrMap["name.formatted"] == 1 && attrMap["namename.name"] == 1) {
+	// the '.' in URN shouldn't be considered for presence of a sub-attribute
+	_, subAtPresent = SplitAttrCsv("urn:ietf:params:SCIM:schemas:corE:2.0:UseR:userName", restypes)
+	if subAtPresent {
+		t.Errorf("The '.' in URN is considered for detecting presence of sub-attribute")
+	}
+
+	// check sub-attribute when the parent attribute is present
+	attrMap, subAtPresent = SplitAttrCsv("userName, name.formatted, Name.GIVEnname, namename.name", restypes)
+	if !(attrMap["username"] == 1 && attrMap["name.givenname"] == 1 && attrMap["name.formatted"] == 1 && attrMap["namename.name"] == 1) {
 		t.Errorf("Incorrect sub-attribute parsing")
 	}
 
@@ -70,11 +75,39 @@ func TestParseAttributes(t *testing.T) {
 	if count != 2 {
 		t.Errorf("Incorrect children of the complex attribute %s", nameParam.Name)
 	}
+
+	// check sub-attribute grouping WITHOUT the parent attribute
+	attrMap, subAtPresent = SplitAttrCsv("id, userName, name.formatted, Name.GIVEnname, namename.name", restypes)
+	if !(attrMap["username"] == 1 && attrMap["name.givenname"] == 1 && attrMap["name.formatted"] == 1 && attrMap["namename.name"] == 1) {
+		t.Errorf("Incorrect sub-attribute parsing")
+	}
+
+	if !subAtPresent {
+		t.Errorf("The subAtPresent flag must be true")
+	}
+
+	atParams = ConvertToParamAttributes(attrMap, subAtPresent)
+	if len(atParams) != 4 {
+		t.Errorf("Incorrect AttributeParam list")
+	}
+
+	nameParam = findAtParam("name", atParams)
+
+	count = 0
+	for _, k := range nameParam.SubAts {
+		if k == "formatted" || k == "givenname" {
+			count++
+		}
+	}
+
+	if count != 2 {
+		t.Errorf("Incorrect children of the complex attribute %s", nameParam.Name)
+	}
 }
 
 func TestParseAttrsWithUrn(t *testing.T) {
-	attrMap, subAtPresent := SplitAttrCsv("urn:ietf:params:SCIM:schemas:corE:2.0:UseR:userName, urn:ietf:params:SCIM:schemas:corE:2.0:UseR:name.formatted, urn:ietf:params:SCIM:schemas:corE:2.0:UseR:Name, urn:ietf:params:SCIM:schemas:corE:2.0:UseR:Name.GIVEnname, urn:ietf:params:scim:schemas:extension:ENTERPRISE:2.0:User:employeeNumber", restypes...)
-	if !(attrMap["urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeenumber"] == 1 && attrMap["username"] == 1 && attrMap["name"] == 1 && attrMap["name.formatted"] == 1 && attrMap["name.givenname"] == 1 && attrMap["name"] == 1) {
+	attrMap, subAtPresent := SplitAttrCsv("urn:ietf:params:SCIM:schemas:corE:2.0:UseR:userName, urn:ietf:params:SCIM:schemas:corE:2.0:UseR:name.formatted, urn:ietf:params:SCIM:schemas:corE:2.0:UseR:Name, urn:ietf:params:SCIM:schemas:corE:2.0:UseR:Name.GIVEnname, urn:ietf:params:scim:schemas:extension:ENTERPRISE:2.0:User:employeeNumber", restypes)
+	if !(attrMap["urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeenumber"] == 1 && attrMap["username"] == 1 && attrMap["name"] == 1 && attrMap["name.formatted"] == 1 && attrMap["name.givenname"] == 1) {
 		t.Errorf("Incorrect extensions attribute parsing")
 	}
 
@@ -95,7 +128,7 @@ func TestParseAttrsWithUrn(t *testing.T) {
 		}
 	}
 
-	if count != 2 {
+	if count != 0 {
 		t.Errorf("Incorrect children of the complex attribute %s", nameParam.Name)
 	}
 
