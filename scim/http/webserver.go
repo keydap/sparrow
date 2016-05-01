@@ -77,11 +77,14 @@ func Start(srvHome string) {
 	for _, p := range providers {
 		for _, rt := range p.RsTypes {
 			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("POST")
-			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("attributes", "", "excludedAttributes", "")
+			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("filter", "")
+			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("attributes", "")
+			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("excludedAttributes", "")
 			scimRouter.HandleFunc(rt.Endpoint+"/.search", handleResRequest).Methods("POST")
 			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("PUT", "PATCH", "DELETE")
 			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET")
-			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET").Queries("attributes", "", "excludedAttributes", "")
+			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET").Queries("attributes", "")
+			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET").Queries("excludedAttributes", "")
 		}
 	}
 
@@ -146,7 +149,7 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 	// case where the search should be on entire set of resources of a single type, e.g /Users
 	if len(rTypes) == 1 && len(paramFilter) == 0 {
 		paramFilter = "meta.resourceType eq " + rTypes[0].Name
-	} else {
+	} else if len(rTypes) > 1 {
 		err := base.NewBadRequestError("Missing 'filter' parameter")
 		writeError(hc, err)
 		return
@@ -180,6 +183,12 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 				for k, _ := range rt.AtsAlwaysRtn {
 					attrSet[k] = 1
 				}
+
+				for k, _ := range rt.AtsNeverRtn {
+					if _, ok := attrSet[k]; ok {
+						delete(attrSet, k)
+					}
+				}
 			}
 
 			// sort the names and eliminate redundant values, for example "name, name.familyName" will be reduced to name
@@ -195,7 +204,12 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 						delete(exclAttrSet, k)
 					}
 				}
+
+				for k, _ := range rt.AtsNeverRtn {
+					exclAttrSet[k] = 1
+				}
 			}
+
 			exclAttrLst = base.ConvertToParamAttributes(exclAttrSet, subAtPresent)
 		}
 	}
