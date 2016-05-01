@@ -77,6 +77,7 @@ func Start(srvHome string) {
 	for _, p := range providers {
 		for _, rt := range p.RsTypes {
 			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("POST")
+			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET")
 			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("filter", "")
 			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("attributes", "")
 			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("excludedAttributes", "")
@@ -196,28 +197,33 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 		}
 	} else {
 		exclAttrSet, subAtPresent := base.SplitAttrCsv(paramExcludedAttrs, rTypes)
-		if exclAttrSet != nil {
-			// the mandatory attributes cannot be excluded
-			for _, rt := range rTypes {
-				for k, _ := range rt.AtsAlwaysRtn {
-					if _, ok := exclAttrSet[k]; ok {
-						delete(exclAttrSet, k)
-					}
-				}
 
-				for k, _ := range rt.AtsNeverRtn {
-					exclAttrSet[k] = 1
+		if exclAttrSet == nil {
+			// in this case compute the never return attribute list
+			exclAttrSet = make(map[string]int)
+			subAtPresent = true
+		}
+
+		// the mandatory attributes cannot be excluded
+		for _, rt := range rTypes {
+			for k, _ := range rt.AtsAlwaysRtn {
+				if _, ok := exclAttrSet[k]; ok {
+					delete(exclAttrSet, k)
 				}
 			}
 
-			exclAttrLst = base.ConvertToParamAttributes(exclAttrSet, subAtPresent)
+			for k, _ := range rt.AtsNeverRtn {
+				exclAttrSet[k] = 1
+			}
+
+			for k, _ := range rt.AtsRequestRtn {
+				if _, ok := exclAttrSet[k]; !ok {
+					exclAttrSet[k] = 1
+				}
+			}
 		}
-	}
 
-	returnAll := true
-
-	if attrLst != nil || exclAttrLst != nil {
-		returnAll = false
+		exclAttrLst = base.ConvertToParamAttributes(exclAttrSet, subAtPresent)
 	}
 
 	sc := &base.SearchContext{}
@@ -237,9 +243,7 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 		var jsonData []byte
 
 		// attribute filtering
-		if returnAll {
-			jsonData = rs.Serialize()
-		} else if attrLst != nil {
+		if attrLst != nil {
 			jsonData = rs.FilterAndSerialize(attrLst, true)
 		} else {
 			jsonData = rs.FilterAndSerialize(exclAttrLst, false)

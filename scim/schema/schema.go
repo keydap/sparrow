@@ -63,10 +63,11 @@ type Schema struct {
 		ResourceType string // resourceType
 	} // meta
 
-	UniqueAts    []string
-	RequiredAts  []string
-	AtsNeverRtn  []string // names of attributes that are never returned
-	AtsAlwaysRtn []string // names of attributes that are always returned
+	UniqueAts     []string
+	RequiredAts   []string
+	AtsNeverRtn   []string // names of attributes that are never returned
+	AtsAlwaysRtn  []string // names of attributes that are always returned
+	AtsRequestRtn []string // names of attributes that are returned if requested
 }
 
 var log logger.Logger
@@ -226,6 +227,7 @@ func validate(sc *Schema) error {
 func (sc *Schema) collectReturnAttrs() {
 	sc.AtsNeverRtn = make([]string, 0)
 	sc.AtsAlwaysRtn = make([]string, 0)
+	sc.AtsRequestRtn = make([]string, 0)
 
 	for _, attr := range sc.Attributes {
 		name := strings.ToLower(attr.Name)
@@ -235,6 +237,10 @@ func (sc *Schema) collectReturnAttrs() {
 
 		if attr.Returned == "always" {
 			sc.AtsAlwaysRtn = append(sc.AtsAlwaysRtn, name)
+		}
+
+		if attr.Returned == "request" {
+			sc.AtsRequestRtn = append(sc.AtsRequestRtn, name)
 		}
 	}
 }

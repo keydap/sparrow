@@ -24,11 +24,12 @@ type ResourceType struct {
 		ResourceType string
 	}
 
-	schemas      map[string]*Schema // map containing the main and extension schemas
-	Text         string             // the JSON representation of this resource type
-	UniqueAts    []string           // a collection of all unique attributes
-	AtsNeverRtn  map[string]int     // names of attributes that are never returned
-	AtsAlwaysRtn map[string]int     // names of attributes that are always returned
+	schemas       map[string]*Schema // map containing the main and extension schemas
+	Text          string             // the JSON representation of this resource type
+	UniqueAts     []string           // a collection of all unique attributes
+	AtsNeverRtn   map[string]int     // names of attributes that are never returned
+	AtsAlwaysRtn  map[string]int     // names of attributes that are always returned
+	AtsRequestRtn map[string]int     // names of attributes that are returned if requested
 }
 
 func LoadResourceType(name string, sm map[string]*Schema) (*ResourceType, error) {
@@ -76,6 +77,7 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 	rt.UniqueAts = make([]string, 0)
 	rt.AtsNeverRtn = make(map[string]int)
 	rt.AtsAlwaysRtn = make(map[string]int)
+	rt.AtsRequestRtn = make(map[string]int)
 
 	if len(rt.SchemaExtensions) != 0 {
 		for _, ext := range rt.SchemaExtensions {
@@ -116,6 +118,10 @@ func copyReturnAttrs(rt *ResourceType, sc *Schema) {
 
 	for _, v := range sc.AtsNeverRtn {
 		rt.AtsNeverRtn[v] = 1
+	}
+
+	for _, v := range sc.AtsRequestRtn {
+		rt.AtsRequestRtn[v] = 1
 	}
 }
 
