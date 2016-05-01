@@ -219,10 +219,27 @@ func (rt *ResourceType) GetSchema(urnId string) *Schema {
 }
 
 func (rt *ResourceType) GetAtType(atPath string) *AttrType {
-	for _, sc := range rt.schemas {
-		at := sc.GetAtType(atPath)
-		if at != nil {
-			return at
+	colonPos := strings.LastIndex(atPath, ":")
+
+	var uri string
+	uriLen := 0
+	if colonPos > 0 {
+		uri = atPath[0:colonPos]
+		colonPos++
+		uriLen = len(uri)
+	}
+
+	for id, sc := range rt.schemas {
+		if uriLen != 0 {
+			if id == uri {
+				return sc.GetAtType(atPath[colonPos:])
+			}
+		} else { // when  no schema ID is prefixed search all schemas associated with the ResourceType
+			// this is helpful in shorter attribute paths when the attribute names are unique
+			at := sc.GetAtType(atPath)
+			if at != nil {
+				return at
+			}
 		}
 	}
 
