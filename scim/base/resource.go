@@ -136,6 +136,110 @@ func (atg *AtGroup) getAttribute(name string) Attribute {
 	return at
 }
 
+func (rs *Resource) DeleteAttr(attrPath string) bool {
+	log.Debugf("deleting attribute %s", attrPath)
+	pos := strings.LastIndex(attrPath, URI_DELIM)
+	if pos > 0 {
+		var atg *AtGroup
+		uri := attrPath[:pos]                        // URI is case sensitive
+		attrPath = strings.ToLower(attrPath[pos+1:]) // attribute is not
+
+		if rs.Ext != nil {
+			atg = rs.Ext[uri]
+		}
+
+		if atg == nil {
+			// select Core only if the URI matches the main schema
+			if uri == rs.resType.Schema {
+				atg = rs.Core
+			} else {
+				log.Warningf("Unknown URI prefix given in the attribute %s", attrPath)
+				return false
+			}
+		}
+
+		return rs.deleteAttribute(attrPath, atg)
+	}
+
+	attrPath = strings.ToLower(attrPath) // here no URI exists, can be converted to lowercase
+	return rs.deleteAttribute(attrPath, rs.Core)
+}
+
+func (rs *Resource) deleteAttribute(attrPath string, atg *AtGroup) bool {
+	pos := strings.LastIndex(attrPath, ATTR_DELIM)
+	//handle the attributes with . char
+	if pos > 0 {
+		parent := attrPath[:pos]
+		at := atg.getAttribute(parent)
+		if at != nil {
+			ct := at.GetComplexAt()
+			childName := attrPath[pos+1:]
+			deleted := false
+
+			nilAtMapCount := 0
+			for i, atMap := range ct.SubAts {
+				if _, ok := atMap[childName]; ok {
+					deleted = true
+				}
+
+				delete(atMap, childName)
+
+				// resize the SubAts slice if the sub-attribute object is empty
+				if len(atMap) == 0 {
+					ct.SubAts[i] = nil
+					nilAtMapCount++
+				}
+			}
+
+			if nilAtMapCount > 0 {
+				remaining := len(ct.SubAts) - nilAtMapCount
+
+				if remaining == 0 {
+					ct.SubAts = nil
+				} else {
+					tmp := make([]map[string]*SimpleAttribute, remaining)
+					count := 0
+					for _, atMap := range ct.SubAts {
+						if atMap != nil {
+							tmp[count] = atMap
+							count++
+						}
+					}
+
+					ct.SubAts = tmp
+				}
+			}
+
+			// delete the entire attribute if there are no sub-attributes present
+			if len(ct.SubAts) == 0 {
+				// check whether this is core or extended
+				if ct.atType.SchemaId == rs.resType.Schema {
+					delete(rs.Core.ComplexAts, ct.Name)
+				} else {
+					delete(rs.Ext[ct.atType.SchemaId].ComplexAts, ct.Name)
+				}
+			}
+
+			return deleted
+		}
+
+		return false
+	} else {
+		if _, ok := atg.SimpleAts[attrPath]; ok {
+			delete(atg.SimpleAts, attrPath)
+			return true
+		} else {
+			if _, ok := atg.ComplexAts[attrPath]; ok {
+				log.Debugf("deleting complex ats for %s", attrPath)
+				delete(atg.ComplexAts, attrPath)
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // accessor methods for common attributes
 
 func (rs *Resource) GetSchemaIds() []string {
@@ -391,8 +495,8 @@ func NewResource(rt *schema.ResourceType) *Resource {
 
 func (rs *Resource) AddSA(name string, val ...string) error {
 	sa := &SimpleAttribute{}
-	sa.Name = strings.ToLower(name)
 	sa.atType = rs.resType.GetAtType(name)
+	sa.Name = strings.ToLower(sa.atType.Name)
 	if sa.atType == nil {
 		return fmt.Errorf("No attribute type found with the name %s in the resource type %s", name, rs.resType.Schema)
 	}
@@ -968,6 +1072,20 @@ func (rs *Resource) Serialize() []byte {
 }
 
 func (rs *Resource) FilterAndSerialize(attrs []*AttributeParam, include bool) []byte {
+	if !include {
+		for _, ap := range attrs {
+			if ap.SubAts != nil {
+				for _, name := range ap.SubAts {
+					rs.DeleteAttr(ap.Name + "." + name)
+				}
+			} else {
+				rs.DeleteAttr(ap.Name)
+			}
+		}
+
+		return rs.Serialize()
+	}
+
 	coreObj := make(map[string]interface{})
 
 	for _, ap := range attrs {
