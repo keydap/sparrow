@@ -250,12 +250,12 @@ func TestIndexOps(t *testing.T) {
 	}
 	readTx.Rollback()
 
-	json, _ := rs.ToJSON()
+	json := rs.ToJSON()
 	fmt.Println(json)
 
 	// a non-silo related test
 	rs.RemoveReadOnlyAt()
-	json, _ = rs.ToJSON()
+	json = rs.ToJSON()
 	fmt.Println(json)
 
 	if (len(rs.GetId()) != 0) || (rs.GetMeta() != nil) {
