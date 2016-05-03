@@ -629,20 +629,21 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 		if attr == nil {
 			continue
 		}
-		if attr.IsSimple() {
-			sa := attr.GetSimpleAt()
-			for _, val := range sa.Values {
-				err := idx.add(val, rid, tx)
-				if err != nil {
-					panic(err)
+
+		atType := attr.GetType()
+		parentType := atType.Parent()
+		if parentType != nil && parentType.MultiValued {
+			parentAt := inRes.GetAttr(strings.ToLower(parentType.Name))
+			ca := parentAt.GetComplexAt()
+			atName := strings.ToLower(atType.Name) // the sub-attribute's name
+			for _, smap := range ca.SubAts {
+				if at, ok := smap[atName]; ok {
+					addToIndex(name, at.GetSimpleAt(), rid, idx, prIdx, tx)
 				}
 			}
-
-			err := prIdx.add(name, rid, tx) // do not add sa.Name that will lose the attribute path
-			if err != nil {
-				detail := fmt.Sprintf("error while adding attribute %s into presence index %s", name, err.Error())
-				panic(base.NewInternalserverError(detail))
-			}
+		} else {
+			sa := attr.GetSimpleAt()
+			addToIndex(name, sa, rid, idx, prIdx, tx)
 		}
 	}
 
@@ -701,6 +702,22 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 		}
 	}
 	return inRes, nil
+}
+
+func addToIndex(atPath string, sa *base.SimpleAttribute, rid string, idx *Index, prIdx *Index, tx *bolt.Tx) {
+	for _, val := range sa.Values {
+		err := idx.add(val, rid, tx)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	err := prIdx.add(atPath, rid, tx) // do not add sa.Name that will lose the attribute path
+	if err != nil {
+		detail := fmt.Sprintf("error while adding attribute %s into presence index %s", atPath, err.Error())
+		panic(base.NewInternalserverError(detail))
+	}
+
 }
 
 func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *base.Resource, err error) {
