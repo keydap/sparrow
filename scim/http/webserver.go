@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	logger "github.com/juju/loggo"
@@ -25,6 +26,7 @@ var DIR_PERM os.FileMode = 0744 //rwxr--r--
 var TENANT_HEADER = "X-Sparrow-Tenant-Id"
 var SCIM_JSON_TYPE = "application/scim+json"
 var API_BASE = "/v2" // NO slash at the end
+var commaByte = []byte{','}
 
 func init() {
 	log = logger.GetLogger("sparrow.scim.http")
@@ -35,6 +37,18 @@ type httpContext struct {
 	r  *http.Request
 	pr *provider.Provider
 	*base.OpContext
+}
+
+// https://tools.ietf.org/html/rfc7644#section-3.4.3
+type searchRequest struct {
+	Schemas            []string
+	Attributes         string
+	ExcludedAttributes string
+	Filter             string
+	SortBy             string
+	SortOrder          string
+	StartIndex         int
+	Count              int
 }
 
 func Start(srvHome string) {
@@ -119,21 +133,6 @@ func searchResource(hc *httpContext) {
 	}
 
 	rtByPath := hc.pr.RtPathMap[hc.Endpoint]
-	search(hc, rtByPath)
-}
-
-func searchRoot(hc *httpContext) {
-	rTypes := make([]*schema.ResourceType, len(hc.pr.RsTypes))
-	count := 0
-	for _, rt := range hc.pr.RsTypes {
-		rTypes[count] = rt
-		count++
-	}
-
-	search(hc, rTypes...)
-}
-
-func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 
 	err := hc.r.ParseForm()
 	if err != nil {
@@ -141,25 +140,66 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 		return
 	}
 
+	sr := &searchRequest{}
+	sr.Filter = hc.r.Form.Get("filter")
+	sr.Attributes = hc.r.Form.Get("attributes")
+	sr.ExcludedAttributes = hc.r.Form.Get("excludedAttributes")
+
+	search(hc, sr, rtByPath)
+}
+
+func searchWithSearchRequest(hc *httpContext) {
+	pos := strings.LastIndex(hc.Endpoint, "/.search")
+	if pos < 0 {
+		err := base.NewBadRequestError("Invalid request")
+		writeError(hc, err)
+		return
+	}
+
+	sr := &searchRequest{}
+
+	err := json.NewDecoder(hc.r.Body).Decode(sr)
+	if err != nil {
+		e := base.NewBadRequestError("Invalid search request " + err.Error())
+		writeError(hc, e)
+		return
+	}
+
+	if pos > 0 { // endpoint is NOT server root
+		rtByPath := hc.pr.RtPathMap[hc.Endpoint[0:pos]]
+		search(hc, sr, rtByPath)
+	} else {
+		rTypes := make([]*schema.ResourceType, len(hc.pr.RsTypes))
+		count := 0
+		for _, rt := range hc.pr.RsTypes {
+			rTypes[count] = rt
+			count++
+		}
+
+		search(hc, sr, rTypes...)
+	}
+}
+
+func search(hc *httpContext, sr *searchRequest, rTypes ...*schema.ResourceType) {
+
 	sx := &base.SearchContext{}
 
 	sx.ResTypes = make([]*schema.ResourceType, len(rTypes))
 	copy(sx.ResTypes, rTypes)
 
-	paramFilter := strings.TrimSpace(hc.r.Form.Get("filter"))
+	paramFilter := strings.TrimSpace(sr.Filter)
 	// case where the search should be on entire set of resources of a single type, e.g /Users
-	if len(rTypes) == 1 && len(paramFilter) == 0 {
-		paramFilter = "meta.resourceType eq " + rTypes[0].Name
-	} else if len(rTypes) > 1 {
-		err := base.NewBadRequestError("Missing 'filter' parameter")
-		writeError(hc, err)
-		return
+	if len(paramFilter) == 0 {
+		if len(rTypes) == 1 {
+			paramFilter = "meta.resourceType eq " + rTypes[0].Name
+		} else if len(rTypes) > 1 {
+			err := base.NewBadRequestError("Missing 'filter' parameter")
+			writeError(hc, err)
+			return
+		}
 	}
 
-	paramAttr := hc.r.Form.Get("attributes")
-	paramExcludedAttrs := hc.r.Form.Get("excludedAttributes")
-
-	if len(paramAttr) != 0 && len(paramExcludedAttrs) != 0 {
+	if len(sr.Attributes) != 0 && len(sr.ExcludedAttributes) != 0 {
 		err := base.NewBadRequestError("The parameters 'attributes' and 'excludedAttributes' cannot be set in a signle request")
 		writeError(hc, err)
 		return
@@ -176,8 +216,8 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 	var attrLst []*base.AttributeParam
 	var exclAttrLst []*base.AttributeParam
 
-	if len(paramAttr) != 0 {
-		attrSet, subAtPresent := base.SplitAttrCsv(paramAttr, rTypes)
+	if len(sr.Attributes) != 0 {
+		attrSet, subAtPresent := base.SplitAttrCsv(sr.Attributes, rTypes)
 		if attrSet != nil {
 			// the mandatory attributes that will always be returned
 			for _, rt := range rTypes {
@@ -196,7 +236,7 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 			attrLst = base.ConvertToParamAttributes(attrSet, subAtPresent)
 		}
 	} else {
-		exclAttrSet, subAtPresent := base.SplitAttrCsv(paramExcludedAttrs, rTypes)
+		exclAttrSet, subAtPresent := base.SplitAttrCsv(sr.ExcludedAttributes, rTypes)
 
 		if exclAttrSet == nil {
 			// in this case compute the never return attribute list
@@ -236,11 +276,19 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 	go hc.pr.Search(sc, outPipe)
 
 	writeCommonHeaders(hc.w, hc.pr)
-	hc.w.Write([]byte("{\"resources\":["))
+	hc.w.Write([]byte(`{"schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"], "Resources":[`)) // yes, the 'R' in resources must be upper case
 
 	count := 0
 	for rs := range outPipe {
 		var jsonData []byte
+
+		// write the separator ,
+		if count > 0 {
+			_, err := hc.w.Write(commaByte)
+			if err != nil {
+				break
+			}
+		}
 
 		// attribute filtering
 		if attrLst != nil {
@@ -256,7 +304,7 @@ func search(hc *httpContext, rTypes ...*schema.ResourceType) {
 		count++
 	}
 
-	hc.w.Write([]byte("], \"totalResults\":" + strconv.Itoa(count) + "}"))
+	hc.w.Write([]byte(`], "totalResults":` + strconv.Itoa(count) + `}`))
 }
 
 func createResource(hc *httpContext) {
@@ -365,17 +413,17 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 	hc := &httpContext{w, r, pr, opCtx}
 
 	switch r.Method {
-	case "GET":
+	case http.MethodGet:
 		searchResource(hc)
 
-	case "POST":
+	case http.MethodPost:
 		if strings.HasSuffix(hc.Endpoint, "/.search") {
-			searchRoot(hc)
+			searchWithSearchRequest(hc)
 		} else {
 			createResource(hc)
 		}
 
-	case "DELETE":
+	case http.MethodDelete:
 		deleteResource(hc)
 	}
 }
