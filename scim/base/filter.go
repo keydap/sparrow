@@ -86,7 +86,7 @@ outer:
 				// see if this is NOT operator
 				if "NOT" == strings.ToUpper(t) {
 					log.Debugf("found NOT expression at pos %d", pos.tokenStart)
-					tmp := &FilterNode{Op: "NOT"}
+					tmp := &FilterNode{Op: "NOT", Count: -1}
 					var tmpRoot *FilterNode
 
 					if root == nil {
@@ -131,7 +131,7 @@ outer:
 						t = parentAt + "." + t
 					}
 
-					node = &FilterNode{}
+					node = &FilterNode{Count: -1}
 					node.Name = t
 
 					pos.state = READ_OP
@@ -152,7 +152,7 @@ outer:
 					}
 
 					if root.Op != op {
-						tmp := &FilterNode{Op: op}
+						tmp := &FilterNode{Op: op, Count: -1}
 						tmp.addChild(root)
 						root = tmp
 					}
@@ -305,7 +305,7 @@ func (fn *FilterNode) GetAtType() *schema.AttrType {
 func (fn *FilterNode) SetAtType(atType *schema.AttrType) {
 	fn.NormValue = nil
 	fn.NvBytes = nil
-	fn.Count = 0 // should be reset so that we will have accurate count when the ResourceType changes just before scanning
+	fn.Count = -1 // should be reset so that we will have accurate count when the ResourceType changes just before scanning
 	fn.atType = atType
 	fn.normalize()
 }

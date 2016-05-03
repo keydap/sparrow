@@ -11,15 +11,30 @@ import (
 )
 
 func getOptimizedResults(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
+	setAtType(node, rt)
 	scanCounts(node, rt, tx, sl)
 	return gatherCandidates(node, rt, tx, sl, candidates)
+}
+
+// set the AttributeType on all leaf nodes
+func setAtType(node *base.FilterNode, rt *schema.ResourceType) {
+	switch node.Op {
+	default:
+		atType := rt.GetAtType(node.Name)
+		node.SetAtType(atType)
+
+	case "NOT", "AND", "OR":
+		for _, child := range node.Children {
+			setAtType(child, rt)
+		}
+	}
 }
 
 // --------------- gather the candidate set -----
 
 func gatherCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
 
-	if node.Count <= 0 {
+	if node.Count == 0 {
 		return 0
 	}
 

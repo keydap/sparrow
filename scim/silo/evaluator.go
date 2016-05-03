@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"sparrow/scim/base"
+	"sparrow/scim/schema"
 	"strconv"
 	"strings"
 )
@@ -99,6 +100,30 @@ func compare(node *base.FilterNode, rs *base.Resource) bool {
 		return false // comaprison should be only on sub-attributes, not on parent
 	}
 
+	parentType := atType.Parent()
+	if parentType != nil && parentType.MultiValued {
+		parentAt := rs.GetAttr(strings.ToLower(parentType.Name))
+		if parentAt == nil {
+			return false
+		}
+
+		atName := strings.ToLower(atType.Name)
+		ca := parentAt.GetComplexAt()
+
+		for _, smap := range ca.SubAts {
+			if at, ok := smap[atName]; ok {
+				sa := at.GetSimpleAt()
+				matched := _compare(sa, node, atType)
+
+				if matched {
+					return true
+				}
+			}
+		}
+
+		return false
+	}
+
 	at := rs.GetAttr(node.Name)
 
 	if at == nil {
@@ -106,6 +131,11 @@ func compare(node *base.FilterNode, rs *base.Resource) bool {
 	}
 
 	sa := at.GetSimpleAt()
+
+	return _compare(sa, node, atType)
+}
+
+func _compare(sa *base.SimpleAttribute, node *base.FilterNode, atType *schema.AttrType) bool {
 	var matched bool
 
 	for _, val := range sa.Values {
