@@ -243,7 +243,7 @@ func containsStringCandidates(node *base.FilterNode, rt *schema.ResourceType, tx
 		log.Debugf("Found index on attribute %s of resource type %s, count for key %s != %d", node.Name, rt.Name, node.Value, count)
 		return count
 	} else {
-		log.Debugf("No index found on attribute %s of resource type %s (for NE scan), using complete DB scan", node.Name, rt.Name)
+		log.Debugf("No index found on attribute %s of resource type %s (for %s scan), using complete DB scan", node.Name, rt.Name, node.Op)
 	}
 
 	return math.MaxInt64
@@ -315,7 +315,7 @@ func compareCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.
 		log.Debugf("Found index on attribute %s of resource type %s, count for key %s != %d", node.Name, rt.Name, node.Value, count)
 		return count
 	} else {
-		log.Debugf("No index found on attribute %s of resource type %s (for NE scan), using complete DB scan", node.Name, rt.Name)
+		log.Debugf("No index found on attribute %s of resource type %s (for %s scan), using complete DB scan", node.Name, rt.Name, node.Op)
 	}
 
 	return math.MaxInt64
@@ -449,7 +449,7 @@ func containsStringScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt
 		log.Debugf("Found index on attribute %s of resource type %s, count for key %s != %d", node.Name, rt.Name, node.Value, count)
 		return count
 	} else {
-		log.Debugf("No index found on attribute %s of resource type %s (for NE scan), using complete DB scan", node.Name, rt.Name)
+		log.Debugf("No index found on attribute %s of resource type %s (for %s scan), using complete DB scan", node.Name, rt.Name, node.Op)
 	}
 
 	return math.MaxInt64
@@ -522,7 +522,7 @@ func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl
 		log.Debugf("Found index on attribute %s of resource type %s, count for key %s != %d", node.Name, rt.Name, node.Value, count)
 		return count
 	} else {
-		log.Debugf("No index found on attribute %s of resource type %s (for NE scan), using complete DB scan", node.Name, rt.Name)
+		log.Debugf("No index found on attribute %s of resource type %s (for %s scan), using complete DB scan", node.Name, rt.Name, node.Op)
 	}
 
 	return math.MaxInt64
