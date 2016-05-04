@@ -9,6 +9,7 @@ import (
 	"sparrow/scim/utils"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const URI_DELIM = ":"
@@ -750,7 +751,7 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 	defer func() {
 		e := recover()
 		if e != nil {
-			log.Debugf("panicked while parsing resource data %#v\n", err)
+			log.Debugf("panicked while parsing resource data %#v\n", e)
 			rs = nil
 			err = e.(error)
 		}
@@ -854,6 +855,8 @@ func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) string
 
 	kind := v.Kind()
 
+	log.Debugf("%s = %#v is of type %s", attrType.Name, v, kind)
+
 	switch attrType.Type {
 	case "boolean":
 		if kind != reflect.Bool {
@@ -861,16 +864,40 @@ func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) string
 		}
 		return strconv.FormatBool(v.Bool())
 	case "integer":
-		if kind != reflect.Int {
+		if kind != reflect.Float64 {
 			panic(err)
 		}
-		return string(v.Int())
+
+		str := fmt.Sprint(v.Float())
+		if strings.ContainsRune(str, '.') {
+			panic(err)
+		}
+
+		intVal, e := strconv.ParseInt(str, 10, 64)
+		if e != nil {
+			panic(err)
+		}
+
+		return strconv.FormatInt(intVal, 10)
 	case "decimal":
 		if kind != reflect.Float64 {
 			panic(err)
 		}
 		return strconv.FormatFloat(v.Float(), 'E', -1, 64)
-	case "string", "datetime", "binary", "reference":
+
+	case "datetime":
+		if kind != reflect.String {
+			panic(err)
+		}
+
+		date := v.String()
+		_, e := time.Parse(time.RFC3339, date)
+		if e != nil {
+			panic(err)
+		}
+		return date
+
+	case "string", "binary", "reference":
 		if kind != reflect.String && kind != reflect.Interface {
 			panic(err)
 		}
