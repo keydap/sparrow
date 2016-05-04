@@ -61,7 +61,7 @@ func ParseFilter(filter string) (expr *FilterNode, err error) {
 }
 
 func parse(rb []rune, pos *position) *FilterNode {
-	length := (len(rb) - 1)
+	length := len(rb)
 
 	var node *FilterNode
 	var root *FilterNode
@@ -85,7 +85,7 @@ outer:
 			case READ_ATTR_OR_NOT_NODE:
 				// see if this is NOT operator
 				if "NOT" == strings.ToUpper(t) {
-					log.Debugf("found NOT expression at pos %d", pos.tokenStart)
+					log.Tracef("found NOT expression at pos %d", pos.tokenStart)
 					tmp := &FilterNode{Op: "NOT", Count: -1}
 					var tmpRoot *FilterNode
 
@@ -112,7 +112,7 @@ outer:
 					root = tmpRoot
 					// state remains at READ_ATTR_OR_NOT_NODE
 				} else {
-					log.Debugf("read at %s", t)
+					log.Tracef("read at %s", t)
 
 					// the attribute path must be converted to lowercase
 					t = strings.ToLower(t)
@@ -138,7 +138,7 @@ outer:
 				}
 
 			case READ_OP:
-				log.Debugf("read op %s", t)
+				log.Tracef("read op %s", t)
 				op := toOperator(t)
 
 				if isLogical(op) {
@@ -172,7 +172,7 @@ outer:
 				}
 
 			case READ_VAL:
-				log.Debugf("read val %s", t)
+				log.Tracef("read val %s", t)
 				node.Value = stripQuotes(t)
 				if root != nil && isLogical(root.Op) {
 					root.addChild(node)
@@ -181,7 +181,7 @@ outer:
 			}
 
 		case ' ':
-			log.Debugf("SPace delimiter")
+			log.Tracef("SPace delimiter")
 
 		case '(':
 			// beginning of a group, parse this entirely as a node
@@ -195,7 +195,7 @@ outer:
 			}
 
 		case ')':
-			log.Debugf("terminal )")
+			log.Tracef("terminal )")
 			break outer
 
 		case ']':
@@ -203,12 +203,19 @@ outer:
 				panic(fmt.Errorf("Invalid filter, found ] without a complex attribute definition"))
 			}
 			complexAtBegin = false
-			log.Debugf("terminal ]")
+			log.Tracef("terminal ]")
 		}
 
 		pos.index++
 
 		if pos.index >= length {
+			if pos.state == READ_VAL {
+				// bad filter
+				detail := fmt.Sprintf("Invalid filter, missing token at position %d (started at position %d)", pos.index+1, pos.tokenStart+1)
+				err := NewBadRequestError(detail)
+				panic(err)
+			}
+
 			break
 		}
 	}
@@ -229,7 +236,7 @@ func readToken(rb []rune, start int, pos *position) (token string, err error) {
 
 	for ; pos.index < len(rb); pos.index++ {
 		c := rb[pos.index]
-		log.Debugf("parsing token %c", c)
+		log.Tracef("parsing token %c", c)
 		switch c {
 		case ' ':
 			if start == pos.index {
@@ -267,6 +274,7 @@ func readToken(rb []rune, start int, pos *position) (token string, err error) {
 		return "", fmt.Errorf("No ending \" found at the end of the token stream starting at position %d", beginAt)
 	}
 
+	log.Tracef("Returning token from [start:end] [%d:%d] total len %d", start, pos.index, len(rb))
 	return string(rb[start:pos.index]), nil
 }
 
