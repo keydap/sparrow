@@ -1,0 +1,14 @@
+{
+    "schemas":[
+        "urn:ietf:params:scim:schemas:core:2.0:ResourceType"
+    ],
+    "id":"Device",
+    "name":"Device",
+    "endpoint":"/Devices",
+    "description":"Device",
+    "schema":"urn:ietf:params:scim:schemas:core:2.0:Device",
+    "meta":{
+        "location":"v2/ResourceTypes/Device",
+        "resourceType":"ResourceType"
+    }
+}

@@ -1,0 +1,61 @@
+{
+    "id":"urn:ietf:params:scim:schemas:core:2.0:Device",
+    "name":"Device",
+    "description":"An IoT Device",
+    "attributes":[
+        {
+            "name":"manufacturer",
+            "type":"string",
+            "multiValued":false,
+            "description":"Device manufacturer",
+            "required":true,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"serialNumber",
+            "type":"string",
+            "multiValued":false,
+            "description":"Device serial number",
+            "required":true,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"server"
+        },
+        {
+            "name":"rating",
+            "type":"integer",
+            "multiValued":false,
+            "description":"Device fictional rating",
+            "required":true,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"price",
+            "type":"decimal",
+            "multiValued":false,
+            "description":"Device fictional price",
+            "required":true,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"installedDate",
+            "type":"dateTime",
+            "multiValued":false,
+            "description":"Device installed date",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        }
+ ]}
