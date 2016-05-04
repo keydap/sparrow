@@ -343,21 +343,23 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 
 	newIndices := make([]string, 0)
 
-	for _, rc := range config.Resources {
+	for _, rt := range rtypes {
 
-		var rt *schema.ResourceType
-		for _, v := range rtypes {
-			if v.Name == rc.Name {
-				rt = v
+		var rc *conf.ResourceConf
+		for _, v := range config.Resources {
+			if v.Name == rt.Name {
+				rc = &v
 				break
 			}
 		}
 
-		if rt == nil {
-			return nil, fmt.Errorf("Unknown resource name %s found in config", rc.Name)
+		if rc == nil {
+			log.Infof("No additional configuration is present for ResourceType %s, configuring it with defaults", rt.Name)
+		} else {
+			log.Infof("Using additional configuration of ResourceType %s", rc.Name)
 		}
 
-		err = sl.createResourceBucket(rc)
+		err = sl.createResourceBucket(rt)
 		if err != nil {
 			return nil, err
 		}
@@ -365,17 +367,21 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 		// the unique attributes should always be indexed
 		// this helps in faster insertion time checks on uniqueness of attributes
 		// we should not allow attribute name collisions in schemas
-		rc.IndexFields = append(rc.IndexFields, rt.UniqueAts...)
+		indexFields := rt.UniqueAts
 
-		for _, idxName := range rc.IndexFields {
+		if rc != nil {
+			indexFields = append(indexFields, rc.IndexFields...)
+		}
+
+		for _, idxName := range indexFields {
 			at := rt.GetAtType(idxName)
 			if at == nil {
 				log.Warningf("There is no attribute with the name %s, index is not created", idxName)
 				continue
 			}
 
-			resIdxMap := sl.indices[rc.Name]
-			isNewIndex, idx, err := sl.createIndexBucket(rc.Name, idxName, at, false, resIdxMap)
+			resIdxMap := sl.indices[rt.Name]
+			isNewIndex, idx, err := sl.createIndexBucket(rt.Name, idxName, at, false, resIdxMap)
 			if err != nil {
 				return nil, err
 			}
@@ -386,14 +392,14 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 		}
 
 		// create presence system index
-		sysIdxMap := sl.sysIndices[rc.Name]
+		sysIdxMap := sl.sysIndices[rt.Name]
 
 		prAt := &schema.AttrType{Description: "Virtual attribute type for presence index"}
 		prAt.CaseExact = false
 		prAt.MultiValued = true
 		prAt.Type = "string"
 
-		_, _, err := sl.createIndexBucket(rc.Name, "presence", prAt, true, sysIdxMap)
+		_, _, err := sl.createIndexBucket(rt.Name, "presence", prAt, true, sysIdxMap)
 		if err != nil {
 			return nil, err
 		}
@@ -442,7 +448,7 @@ func (sl *Silo) Close() {
 	sl.db.Close()
 }
 
-func (sl *Silo) createResourceBucket(rc conf.ResourceConf) error {
+func (sl *Silo) createResourceBucket(rc *schema.ResourceType) error {
 	data := []byte(rc.Name)
 
 	err := sl.db.Update(func(tx *bolt.Tx) error {
