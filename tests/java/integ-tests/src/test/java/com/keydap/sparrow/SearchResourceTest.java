@@ -6,18 +6,28 @@
  */
 package com.keydap.sparrow;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
+import java.util.TimeZone;
 
+import org.apache.http.HttpStatus;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.keydap.sparrow.scim.Device;
+import com.keydap.sparrow.scim.Group;
 import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Address;
 import com.keydap.sparrow.scim.User.Email;
+import com.keydap.sparrow.scim.User.EnterpriseUser;
 import com.keydap.sparrow.scim.User.Name;
 
 /**
@@ -31,15 +41,19 @@ public class SearchResourceTest extends TestBase {
     private static User assange;
     private static User stallman;
     
+    private static Device thermostat;
+    private static Device watch;
+    private static Device mobile;
+    
+    private static String tDate = "1947-08-14T18:30:00Z";
+    private static String wDate = "2016-05-04T14:19:14Z";
+    private static String mDate = "2015-09-19T01:30:00Z";
+    
     @BeforeClass
-    public static void cleanAndInject() {
-//        SearchResponse<User> resp = client.searchResource("id pr", User.class, "id");
-//        List<User> existing = resp.getResources();
-//        if(existing != null) {
-//            for(User u : existing) {
-//                client.deleteResource(u.getId(), User.class);
-//            }
-//        }
+    public static void cleanAndInject() throws Exception {
+//        deleteAll(User.class);
+//        deleteAll(Device.class);
+        //deleteAll(Group.class);
         
         snowden = new User();
         snowden.setUserName("snowden");
@@ -75,7 +89,6 @@ public class SearchResourceTest extends TestBase {
         
         snowden.setPassword("Secret001");
         snowden.setNickName("hero");
-        client.addResource(snowden);
 
         assange = new User();
         assange.setUserName("assange");
@@ -103,7 +116,6 @@ public class SearchResourceTest extends TestBase {
         
         assange.setPassword("Secret002");
         assange.setNickName("pioneer");
-        client.addResource(assange);
         
         bhagat = new User();
         bhagat.setUserName("bhagat");
@@ -131,7 +143,6 @@ public class SearchResourceTest extends TestBase {
         
         bhagat.setPassword("Secret003");
         bhagat.setNickName("martyr");
-        client.addResource(bhagat);
         
         stallman = new User();
         stallman.setUserName("stallman");
@@ -159,71 +170,133 @@ public class SearchResourceTest extends TestBase {
         
         stallman.setPassword("Secret004");
         stallman.setNickName("pioneer");
-        client.addResource(stallman);
+
+        EnterpriseUser stallmanEu = new EnterpriseUser();
+        stallmanEu.setCostCenter("GCC");
+        stallmanEu.setDivision("GNU");
+        stallmanEu.setEmployeeNumber("1");
+        stallmanEu.setOrganization("FSF");
+        stallman.setEnterpriseUser(stallmanEu);
+
+//        client.addResource(snowden);
+//        client.addResource(assange);
+//        client.addResource(bhagat);
+//        client.addResource(stallman);
+        
+        thermostat = new Device();
+        thermostat.setManufacturer("Samsung");
+        thermostat.setPrice(900.07);
+        thermostat.setRating(2);
+        thermostat.setSerialNumber("011");
+        thermostat.setInstalledDate(utcDf.parse(tDate));
+        
+        watch = new Device();
+        watch.setManufacturer("Fossil");
+        watch.setPrice(8000);
+        watch.setRating(9);
+        watch.setSerialNumber("002");
+        watch.setInstalledDate(utcDf.parse(wDate));
+        
+        mobile = new  Device();
+        mobile.setManufacturer("Apple");
+        mobile.setPrice(53500);
+        mobile.setRating(10);
+        mobile.setSerialNumber("007");
+        mobile.setInstalledDate(utcDf.parse(mDate));
+        
+//        client.addResource(thermostat);
+//        client.addResource(watch);
+//        client.addResource(mobile);
     }
     
     @Test
-    public void testArithmeticOperators() {
+    public void testStringComparison() {
         SearchResponse<User> resp = client.searchResource("username eq \"snowden\"", User.class);
-        checkResults(resp, 1, snowden);
+        checkResults(resp, snowden);
         User found = resp.getResources().get(0);
         assertNull(found.getPassword()); // password should never be returned
         
         resp = client.searchResource("emails.type eq \"work\"", User.class);
-        checkResults(resp, 1, snowden);
+        checkResults(resp, snowden);
         
         resp = client.searchResource("username ne \"snowden\"", User.class);
-        checkResults(resp, 3, assange, bhagat, stallman);
+        checkResults(resp, assange, bhagat, stallman);
 
         resp = client.searchResource("name.formatted co \"l\"", User.class);
-        checkResults(resp, 2, stallman, assange);
+        checkResults(resp, stallman, assange);
 
         resp = client.searchResource("name.formatted co \"L\"", User.class);
-        checkResults(resp, 2, stallman, assange);
+        checkResults(resp, stallman, assange);
 
         resp = client.searchResource("name.familyName sw \"J\"", User.class);
-        checkResults(resp, 1, assange);
+        checkResults(resp, assange);
 
         resp = client.searchResource("name.familyName sw \"j\"", User.class);
-        checkResults(resp, 1, assange);
+        checkResults(resp, assange);
 
         resp = client.searchResource("emails.value ew \".org\"", User.class);
-        checkResults(resp, 4, stallman, assange, snowden, bhagat);
+        checkResults(resp, stallman, assange, snowden, bhagat);
 
         resp = client.searchResource("emails.value ew \".com\"", User.class);
-        checkResults(resp, 1, snowden);
+        checkResults(resp, snowden);
         
         resp = client.searchResource("emails.value ew \".COM\"", User.class);
-        checkResults(resp, 1, snowden);
+        checkResults(resp, snowden);
+        
+        resp = client.searchResource("costCenter pr", User.class);
+        checkResults(resp, stallman);
     }
 
     @Test
+    public void testArithmeticOperators() {
+//        SearchResponse<User> uresp = client.searchResource("username gt \"snowden\"", User.class);
+//        System.out.println(uresp.getHttpBody());
+//        checkResults(uresp, 1, stallman);
+
+        SearchResponse<Device> dresp = client.searchResource("rating gt  ", Device.class);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, dresp.getHttpCode());
+        
+        dresp = client.searchResource("rating gt  9", Device.class);
+        checkResults(dresp, mobile);
+
+        dresp = client.searchResource("rating ge 9", Device.class);
+        checkResults(dresp, watch, mobile);
+
+        dresp = client.searchResource("price lt 900.10", Device.class);
+        checkResults(dresp, thermostat);
+        
+        dresp = client.searchResource("price le 8000.10", Device.class);
+        checkResults(dresp, thermostat, watch);
+
+        dresp = client.searchResource("installedDate le \"2016-05-04T14:19:14Z\"", Device.class);
+        checkResults(dresp, thermostat, watch, mobile);
+    }
+        
+    @Test
     public void testLogicalOperators() {
         SearchResponse<User> resp = client.searchResource("emails[type eq \"work\" or value co \"org\"]", User.class);
-        assertEquals(200, resp.getHttpCode());
-        assertEquals(4, resp.getResources().size());
+        checkResults(resp, snowden, assange, bhagat, stallman);
 
         resp = client.searchResource("emails[type eq \"work\" and value co \"org\"]", User.class);
-        assertEquals(200, resp.getHttpCode());
-        assertEquals(1, resp.getResources().size());
+        checkResults(resp, snowden);
 
         resp = client.searchResource("emails.type eq \"work\" and emails.value co \"com\"", User.class);
-        checkResults(resp, 1, snowden);
+        checkResults(resp, snowden);
         
         resp = client.searchResource("unknownAttribute eq \"work\" and emails.value co \"com\"", User.class);
-        checkResults(resp, 0);
+        checkResults(resp);
+        
+        resp = client.searchResource("not costCenter pr", User.class);
+        checkResults(resp, snowden, assange, bhagat);
     }
 
-    private void checkResults(SearchResponse<User> resp, int expectedCount, User... ids) {
-        assertEquals(200, resp.getHttpCode());
+    private void checkResults(SearchResponse<User> resp, User... ids) {
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
         List<User> received = resp.getResources();
-        if (expectedCount == 0) {
-            assertNull(received);
-            return;
-        }
         
-        assertEquals(expectedCount, received.size());
-        if(ids != null) {
+        if(ids != null && ids.length > 0) {
+            int expectedCount = ids.length;
+            assertEquals(expectedCount, received.size());
             for(User r : received) {
                 for(User i : ids) {
                     if (i.getUserName().equals(r.getUserName())) {
@@ -233,9 +306,33 @@ public class SearchResourceTest extends TestBase {
             }
             
             if(expectedCount != 0) {
-                fail("All the expected usernames are not present in the Response");
+                fail("All the expected users are not present in the Response");
             }
+        } else {
+            assertNull(received);
         }
+    }
+
+    private void checkResults(SearchResponse<Device> resp, Device... ids) {
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        List<Device> received = resp.getResources();
         
+        if(ids != null && ids.length > 0) {
+            int expectedCount = ids.length;
+            assertEquals(expectedCount, received.size());
+            for(Device r : received) {
+                for(Device i : ids) {
+                    if (i.getSerialNumber().equals(r.getSerialNumber())) {
+                        expectedCount--;
+                    }
+                }
+            }
+            
+            if(expectedCount != 0) {
+                fail("All the expected devices are not present in the Response");
+            }
+        } else {
+            assertNull(received);
+        }
     }
 }

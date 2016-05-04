@@ -17,8 +17,13 @@ import static org.junit.Assert.assertTrue;
 import java.util.Collections;
 
 import org.apache.http.HttpStatus;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.google.gson.JsonObject;
+import com.keydap.sparrow.scim.Device;
 import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Email;
 import com.keydap.sparrow.scim.User.Name;
@@ -29,6 +34,22 @@ import com.keydap.sparrow.scim.User.Name;
  */
 public class AddResourceTest extends TestBase {
 
+    private static Device thermostat;
+    
+    @BeforeClass
+    public static void clean() throws Exception {
+        deleteAll(User.class);
+        deleteAll(Device.class);
+        //deleteAll(Group.class);
+        
+        thermostat = new Device();
+        thermostat.setManufacturer("GMBH");
+        thermostat.setPrice(900.07);
+        thermostat.setRating(2);
+        thermostat.setSerialNumber("00000");
+        thermostat.setInstalledDate(utcDf.parse("1947-08-14T18:30:00Z"));
+    }
+    
     @Test
     public void testAddResource() {
         User u = new User();
@@ -79,7 +100,6 @@ public class AddResourceTest extends TestBase {
         assertEquals(UNIQUENESS.value(), error.getScimType());
         
         System.out.println(created.getId());
-        //client.deleteResource(created.getId(), u.getClass());
     }
     
     @Test
@@ -111,4 +131,46 @@ public class AddResourceTest extends TestBase {
     public void testAddGroup() {
         
     }
+
+    @Test
+    public void testDeviceAddition() throws Exception {
+        Response<Device> resp = client.addResource(thermostat);
+        
+        assertEquals(HttpStatus.SC_CREATED, resp.getHttpCode());
+        Device d = resp.getResource();
+        assertEquals(thermostat.getManufacturer(), d.getManufacturer());
+        assertEquals(thermostat.getInstalledDate(), d.getInstalledDate());
+        assertTrue(thermostat.getPrice() == d.getPrice());
+        assertTrue(thermostat.getRating() == d.getRating());
+        assertEquals(thermostat.getSerialNumber(), d.getSerialNumber());
+    }
+
+    @Test
+    public void testInvalidTime() throws Exception {
+        JsonObject json = client.serialize(thermostat);
+        json.remove("installedDate");
+        json.addProperty("installedDate", "1947-08-14T18:30:00");
+        
+        HttpPost post = new HttpPost(baseApiUrl + "/Devices");
+        post.setEntity(new StringEntity(json.toString(), ScimClient.MIME_TYPE));
+        
+        Response<Device> resp = client.sendRawRequest(post, Device.class);
+        
+        assertEquals(HttpStatus.SC_BAD_REQUEST, resp.getHttpCode());
+    }
+
+    @Test
+    public void testInvalidInteger() throws Exception {
+        JsonObject json = client.serialize(thermostat);
+        json.remove("rating");
+        json.addProperty("rating", "2.7");
+        
+        HttpPost post = new HttpPost(baseApiUrl + "/Devices");
+        post.setEntity(new StringEntity(json.toString(), ScimClient.MIME_TYPE));
+        
+        Response<Device> resp = client.sendRawRequest(post, Device.class);
+        
+        assertEquals(HttpStatus.SC_BAD_REQUEST, resp.getHttpCode());
+    }
+
 }
