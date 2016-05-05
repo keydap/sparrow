@@ -7,7 +7,7 @@
 package com.keydap.sparrow;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.*;
 import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
@@ -302,6 +302,58 @@ public class SearchResourceTest extends TestBase {
         checkResults(resp, snowden, assange, bhagat);
     }
 
+    @Test
+    public void testFilterWithNestedOperators() {
+        SearchResponse<User> resp = client.searchResource("not emails[type eq \"work\" or value co \"org\"]", User.class);
+        checkResults(resp);
+
+        resp = client.searchResource("not emails[type eq \"work\"] and username co \"ss\"", User.class);
+        checkResults(resp, assange, snowden, bhagat, stallman);
+
+        resp = client.searchResource("(not emails[type eq \"work\"]) and username co \"ss\"", User.class);
+        checkResults(resp, assange);
+        
+        resp = client.searchResource("schemas eq \"" + User.SCHEMA + "\"", User.class);
+        checkResults(resp, assange, snowden, bhagat, stallman);
+    }
+
+    @Test
+    public void testWithSearchRequest() {
+        SearchRequest req = new SearchRequest();
+        req.setFilter("emails.type eq \"work\"");
+        req.setAttributes("username");
+        
+        SearchResponse<User> resp = client.searchResource(req, User.class);
+        checkResults(resp, snowden);
+        // only the ID, schemas and username fields should be present
+        User fetched = resp.getResources().get(0);
+        assertNull(fetched.getEmails());
+        assertNull(fetched.getDisplayName());
+        
+        req = new SearchRequest();
+        req.setFilter("emails.type eq \"work\"");
+        req.setExcludedAttributes("emails");
+        
+        resp = client.searchResource(req, User.class);
+        checkResults(resp, snowden);
+        // only the emails should NOT present
+        fetched = resp.getResources().get(0);
+        assertNull(fetched.getEmails());
+        assertNotNull(fetched.getDisplayName());
+    }
+    
+    @Test
+    public void testAtRoot() {
+        SearchRequest req = new SearchRequest();
+        req.setFilter("id pr");
+
+        SearchResponse<Object> resp = client.searchAll(req);
+        System.out.println(resp.getHttpBody());
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        List<Object> received = resp.getResources();
+        assertEquals(7, received.size());
+    }
+    
     private void checkResults(SearchResponse<User> resp, User... ids) {
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
         List<User> received = resp.getResources();
