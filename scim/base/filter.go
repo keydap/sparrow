@@ -7,6 +7,7 @@ import (
 	"sparrow/scim/utils"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -349,6 +350,16 @@ func (fn *FilterNode) normalize() {
 		}
 		fn.NormValue = f
 		fn.NvBytes = utils.Ftob(f)
+
+	case "datetime":
+		t, err := time.Parse(time.RFC3339, fn.Value)
+		if err != nil {
+			panic(err)
+		}
+
+		millis := t.UnixNano() / 1000000
+		fn.NormValue = millis
+		fn.NvBytes = utils.Itob(millis)
 	}
 }
 

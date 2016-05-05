@@ -318,13 +318,13 @@ func (rs *Resource) AddMeta() *ComplexAttribute {
 	createdAt := &SimpleAttribute{Name: "created"}
 	createdAt.atType = parentAt.SubAttrMap[createdAt.Name]
 	createdAt.Values = make([]string, 1)
-	createdAt.Values[0] = utils.DateTime()
+	createdAt.Values[0] = utils.DateTimeMillis()
 	atMap[createdAt.Name] = createdAt
 
 	lastModAt := &SimpleAttribute{Name: "lastmodified"}
 	lastModAt.atType = parentAt.SubAttrMap[lastModAt.Name]
 	lastModAt.Values = make([]string, 1)
-	lastModAt.Values[0] = utils.DateTime()
+	lastModAt.Values[0] = utils.DateTimeMillis()
 	atMap[lastModAt.Name] = lastModAt
 
 	locationAt := &SimpleAttribute{Name: "location"}
@@ -891,11 +891,14 @@ func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) string
 		}
 
 		date := v.String()
-		_, e := time.Parse(time.RFC3339, date)
+		t, e := time.Parse(time.RFC3339, date)
 		if e != nil {
 			panic(err)
 		}
-		return date
+
+		millis := t.UnixNano() / 1000000
+
+		return strconv.FormatInt(millis, 10)
 
 	case "string", "binary", "reference":
 		if kind != reflect.String && kind != reflect.Interface {
@@ -1060,12 +1063,22 @@ func getConvertedVal(v string, sa *SimpleAttribute) interface{} {
 	case "boolean":
 		cv, _ := strconv.ParseBool(v)
 		return cv
+
 	case "decimal":
 		cv, _ := strconv.ParseFloat(v, 64)
 		return cv
+
 	case "integer":
 		cv, _ := strconv.ParseInt(v, 10, 64)
 		return cv
+
+	case "datetime":
+		millis, _ := strconv.ParseInt(v, 10, 64)
+		// by default the TZ will be set to Local, so calling UTC() is a must
+		t := time.Unix(0, millis*int64(time.Millisecond)).UTC()
+		str := t.Format(time.RFC3339)
+		return str
+
 	default:
 		return v
 	}

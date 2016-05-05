@@ -165,28 +165,15 @@ func _compare(sa *base.SimpleAttribute, node *base.FilterNode, atType *schema.At
 				matched = strings.HasSuffix(val, nval)
 			}
 
+		case "datetime":
+			millis, _ := strconv.ParseInt(val, 10, 64)
+			nMillis := node.NormValue.(int64)
+			matched = _compareInt(node, millis, nMillis)
+
 		case "integer":
 			i, _ := strconv.ParseInt(val, 10, 64)
 			nint := node.NormValue.(int64)
-			switch node.Op {
-			case "EQ":
-				matched = (i == nint)
-
-			case "NE":
-				matched = (i != nint)
-
-			case "GT":
-				matched = (i > nint)
-
-			case "LT":
-				matched = (i < nint)
-
-			case "GE":
-				matched = (i >= nint)
-
-			case "LE":
-				matched = (i <= nint)
-			}
+			matched = _compareInt(node, i, nint)
 
 		case "decimal":
 			f, _ := strconv.ParseFloat(val, 64)
@@ -215,6 +202,32 @@ func _compare(sa *base.SimpleAttribute, node *base.FilterNode, atType *schema.At
 		if matched {
 			break
 		}
+	}
+
+	return matched
+}
+
+func _compareInt(node *base.FilterNode, i int64, nint int64) bool {
+	matched := false
+
+	switch node.Op {
+	case "EQ":
+		matched = (i == nint)
+
+	case "NE":
+		matched = (i != nint)
+
+	case "GT":
+		matched = (i > nint)
+
+	case "LT":
+		matched = (i < nint)
+
+	case "GE":
+		matched = (i >= nint)
+
+	case "LE":
+		matched = (i <= nint)
 	}
 
 	return matched

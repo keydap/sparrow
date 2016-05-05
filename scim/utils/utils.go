@@ -6,6 +6,7 @@ import (
 	logger "github.com/juju/loggo"
 	"math"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -80,6 +81,11 @@ func encodeUint(v uint64) []byte {
 func DateTime() string {
 	t := time.Now().UTC()
 	return t.Format(time.RFC3339)
+}
+
+func DateTimeMillis() string {
+	t := time.Now().UnixNano() / 1000000
+	return strconv.FormatInt(t, 10)
 }
 
 func CheckAndCreate(dirName string) {

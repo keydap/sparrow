@@ -11,6 +11,7 @@ import (
 	"sparrow/scim/utils"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/boltdb/bolt"
 	logger "github.com/juju/loggo"
@@ -287,9 +288,13 @@ func (idx *Index) convert(val string) []byte {
 		vData = utils.Itob(i)
 
 	case "datetime":
-		//i, _ := strconv.ParseInt(val, 10, 64)
-		//vData = utils.Itob(i)
-		panic(fmt.Errorf("Yet to support converting datetime to int64"))
+		t, err := time.Parse(time.RFC3339, val)
+		if err != nil {
+			panic(err)
+		}
+
+		millis := t.UnixNano() / 1000000
+		vData = utils.Itob(millis)
 
 	case "decimal":
 		f, _ := strconv.ParseFloat(val, 64)
