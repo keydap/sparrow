@@ -163,6 +163,18 @@ func _compare(sa *base.SimpleAttribute, node *base.FilterNode, atType *schema.At
 
 			case "EW":
 				matched = strings.HasSuffix(val, nval)
+
+			case "GT":
+				matched = val > nval
+
+			case "LT":
+				matched = val < nval
+
+			case "GE":
+				matched = val >= nval
+
+			case "LE":
+				matched = val <= nval
 			}
 
 		case "datetime":
