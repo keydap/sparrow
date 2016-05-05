@@ -173,4 +173,18 @@ public class AddResourceTest extends TestBase {
         assertEquals(HttpStatus.SC_BAD_REQUEST, resp.getHttpCode());
     }
 
+    @Test
+    public void testInvalidDecimal() throws Exception {
+        JsonObject json = client.serialize(thermostat);
+        json.remove("price");
+        json.addProperty("price", "2.0");
+        
+        HttpPost post = new HttpPost(baseApiUrl + "/Devices");
+        post.setEntity(new StringEntity(json.toString(), ScimClient.MIME_TYPE));
+        
+        Response<Device> resp = client.sendRawRequest(post, Device.class);
+        
+        assertEquals(HttpStatus.SC_BAD_REQUEST, resp.getHttpCode());
+    }
+    
 }

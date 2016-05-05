@@ -10,20 +10,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
-import java.util.TimeZone;
 
 import org.apache.http.HttpStatus;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.keydap.sparrow.scim.Device;
-import com.keydap.sparrow.scim.Group;
 import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Address;
 import com.keydap.sparrow.scim.User.Email;
@@ -51,8 +46,8 @@ public class SearchResourceTest extends TestBase {
     
     @BeforeClass
     public static void cleanAndInject() throws Exception {
-//        deleteAll(User.class);
-//        deleteAll(Device.class);
+        deleteAll(User.class);
+        deleteAll(Device.class);
         //deleteAll(Group.class);
         
         snowden = new User();
@@ -178,10 +173,10 @@ public class SearchResourceTest extends TestBase {
         stallmanEu.setOrganization("FSF");
         stallman.setEnterpriseUser(stallmanEu);
 
-//        client.addResource(snowden);
-//        client.addResource(assange);
-//        client.addResource(bhagat);
-//        client.addResource(stallman);
+        client.addResource(snowden);
+        client.addResource(assange);
+        client.addResource(bhagat);
+        client.addResource(stallman);
         
         thermostat = new Device();
         thermostat.setManufacturer("Samsung");
@@ -204,9 +199,9 @@ public class SearchResourceTest extends TestBase {
         mobile.setSerialNumber("007");
         mobile.setInstalledDate(utcDf.parse(mDate));
         
-//        client.addResource(thermostat);
-//        client.addResource(watch);
-//        client.addResource(mobile);
+        client.addResource(thermostat);
+        client.addResource(watch);
+        client.addResource(mobile);
     }
     
     @Test
@@ -249,13 +244,30 @@ public class SearchResourceTest extends TestBase {
 
     @Test
     public void testArithmeticOperators() {
-//        SearchResponse<User> uresp = client.searchResource("username gt \"snowden\"", User.class);
-//        System.out.println(uresp.getHttpBody());
-//        checkResults(uresp, 1, stallman);
+        SearchResponse<User> uresp = client.searchResource("username gt \"snowden\"", User.class);
+        checkResults(uresp, stallman);
+
+        uresp = client.searchResource("not username gt \"snowden\"", User.class);
+        checkResults(uresp, assange, bhagat, snowden);
+        
+        uresp = client.searchResource("username ge \"snowden\"", User.class);
+        checkResults(uresp, stallman, snowden);
+        
+        uresp = client.searchResource("not username ge \"snowden\"", User.class);
+        checkResults(uresp, assange, bhagat);
+        
+        uresp = client.searchResource("username lt \"snowden\"", User.class);
+        checkResults(uresp, assange, bhagat);  
+
+        uresp = client.searchResource("username le \"snowden\"", User.class);
+        checkResults(uresp, assange, snowden, bhagat);        
 
         SearchResponse<Device> dresp = client.searchResource("rating gt  ", Device.class);
         assertEquals(HttpStatus.SC_BAD_REQUEST, dresp.getHttpCode());
         
+        dresp = client.searchResource("rating eq 9", Device.class);
+        checkResults(dresp, watch);
+
         dresp = client.searchResource("rating gt  9", Device.class);
         checkResults(dresp, mobile);
 
