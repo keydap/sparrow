@@ -106,7 +106,7 @@ func TestDeleteAttribute(t *testing.T) {
 		t.Error("Unknown attriute cannot be deleted")
 	}
 
-	fmt.Println(rs.ToJSON())
+	//fmt.Println(rs.ToJSON())
 
 	del = rs.DeleteAttr("urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber")
 	if !del {
