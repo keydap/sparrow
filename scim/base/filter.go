@@ -41,6 +41,7 @@ type position struct {
 	index      int // current position in the rune array
 	tokenStart int // position of the beginning of the token, used for information purpose
 	state      int // the state required to interpret the current token
+	parenCount int // the count of open parentheses
 }
 
 func ParseFilter(filter string) (expr *FilterNode, err error) {
@@ -58,7 +59,37 @@ func ParseFilter(filter string) (expr *FilterNode, err error) {
 
 	filter = strings.TrimSpace(filter)
 
-	return parse([]rune(filter), pos), nil
+	xpr := parse([]rune(filter), pos)
+
+	if pos.parenCount != 0 {
+		// bad filter
+		detail := fmt.Sprintf("Invalid filter, parentheses mismatch")
+		err := NewBadRequestError(detail)
+		return nil, err
+	}
+
+	numCh := len(xpr.Children)
+	if isLogical(xpr.Op) {
+		if numCh != 2 {
+			// bad filter
+			detail := fmt.Sprintf("Invalid filter, wrong number of operands %d for the operation %s", numCh, xpr.Op)
+			err := NewBadRequestError(detail)
+			return nil, err
+		}
+	} else if xpr.Op == "NOT" {
+		if numCh != 1 {
+			// bad filter
+			detail := fmt.Sprintf("Invalid filter, wrong number of operands %d for the operation %s", numCh, xpr.Op)
+			err := NewBadRequestError(detail)
+			return nil, err
+		}
+	} else if xpr.Op == "" {
+		detail := fmt.Sprintf("Invalid filter")
+		err := NewBadRequestError(detail)
+		return nil, err
+	}
+
+	return xpr, nil
 }
 
 func parse(rb []rune, pos *position) *FilterNode {
@@ -152,11 +183,9 @@ outer:
 						panic(fmt.Errorf("Invalid %s node, missing child", op))
 					}
 
-					if root.Op != op {
-						tmp := &FilterNode{Op: op, Count: -1}
-						tmp.addChild(root)
-						root = tmp
-					}
+					tmp := &FilterNode{Op: op, Count: -1}
+					tmp.addChild(root)
+					root = tmp
 
 					pos.state = READ_ATTR_OR_NOT_NODE
 				} else if op == "PR" { // either end of the stream or start of a logical operator must follow this
@@ -186,16 +215,19 @@ outer:
 
 		case '(':
 			// beginning of a group, parse this entirely as a node
-			if root != nil {
-				tmp := parse(rb, pos)
-				if isLogical(root.Op) {
-					root.addChild(tmp)
-				} else {
-					panic(fmt.Errorf("Invalid filter grouping"))
-				}
+			pos.index++
+			pos.parenCount++
+			tmp := parse(rb, pos)
+
+			if root != nil && isLogical(root.Op) {
+				root.addChild(tmp)
+			} else {
+				root = tmp
+				//panic(fmt.Errorf("Invalid filter grouping"))
 			}
 
 		case ')':
+			pos.parenCount--
 			log.Tracef("terminal )")
 			break outer
 
@@ -212,9 +244,7 @@ outer:
 		if pos.index >= length {
 			if pos.state == READ_VAL {
 				// bad filter
-				detail := fmt.Sprintf("Invalid filter, missing token at position %d (started at position %d)", pos.index+1, pos.tokenStart+1)
-				err := NewBadRequestError(detail)
-				panic(err)
+				panic(fmt.Errorf("Invalid filter, missing token at position %d (started at position %d)", pos.index+1, pos.tokenStart+1))
 			}
 
 			break
@@ -261,10 +291,18 @@ func readToken(rb []rune, start int, pos *position) (token string, err error) {
 				return string(rb[start : pos.index+1]), nil
 			}
 
-		case '(', ']', ')': // terminals
+		case ']': // attribute terminal
 			if !startQuote {
 				// do not add 1 to the index, this is required to exclude ], ( or ) chars from token
 				return string(rb[start:pos.index]), nil
+			}
+
+		case '(', ')': // grouping terminals
+			if !startQuote {
+				// do not add 1 to the index, this is required to exclude ], ( or ) chars from token
+				t := string(rb[start:pos.index])
+				pos.index--
+				return t, nil
 			}
 		}
 

@@ -2,8 +2,8 @@ package base
 
 import (
 	"bytes"
-	"fmt"
-	//	logger "github.com/juju/loggo"
+	//	"fmt"
+	//logger "github.com/juju/loggo"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	//	logger.ConfigureLoggers("<root>=debug")
+	//logger.ConfigureLoggers("<root>=debug")
 }
 
 func TestSimpleFilter(t *testing.T) {
@@ -61,7 +61,7 @@ func TestSimpleFilter(t *testing.T) {
 func TestNodeHierarchy(t *testing.T) {
 	s := `userName eq "bjensen" and (emails eq "k@example.com" and (im eq "z" and id eq "1" ))`
 	xpr, err := ParseFilter(s)
-	fmt.Println("parsed filter : ", xpr)
+	//fmt.Println("parsed filter : ", xpr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -97,6 +97,60 @@ func TestNodeHierarchy(t *testing.T) {
 	child222 := child22.Children[1]
 	if child222.Op != "EQ" || child222.Name != "id" {
 		t.Errorf("wrong second child's AND node's right child")
+	}
+}
+
+func TestParentheses(t *testing.T) {
+	s := "(emails.type co \"home\" and username co \"ss\" )and displayname sw \"j\""
+	xpr, err := ParseFilter(s)
+
+	if xpr.Children[1].Name != "displayname" {
+		t.Errorf("Incorrect parse tree when parentheses are present [%#v]", err)
+	}
+
+	s = "(emails.type co \"home\" and (username co \"ss\")) and displayname sw \"j\""
+	xpr, err = ParseFilter(s)
+
+	if xpr.Children[1].Name != "displayname" {
+		t.Errorf("Incorrect parse tree when parentheses are present [%#v]", err)
+	}
+
+	s = "(emails.type co \"home\" and username co \"ss\") and (displayname sw \"j\" or email.value co \"org\")"
+	xpr, err = ParseFilter(s)
+
+	if xpr.Children[1].Children[0].Name != "displayname" || xpr.Children[1].Children[1].Name != "email.value" {
+		t.Errorf("Incorrect parse tree when parentheses are present [%#v]", err)
+	}
+
+	// same as above but with multiple (())
+	s = "((emails.type co \"home\") and (username co \"ss\")) and (((displayname sw \"j\") or (email.value co \"org\")))"
+	xpr, err = ParseFilter(s)
+
+	if xpr.Children[1].Children[0].Name != "displayname" || xpr.Children[1].Children[1].Name != "email.value" {
+		t.Errorf("Incorrect parse tree when parentheses are present [%#v]", err)
+	}
+
+	// incorrect parentheses
+	s = "((emails.type co \"home\" and (username co \"ss\")) and displayname sw \"j\""
+	xpr, err = ParseFilter(s)
+
+	if err == nil {
+		t.Errorf("Incorrect parse tree %#v", err)
+	}
+
+	xpr, err = ParseFilter("(and)")
+	if err == nil {
+		t.Errorf("Incorrect and filter %#v", err)
+	}
+
+	xpr, err = ParseFilter("(username eq)")
+	if err == nil {
+		t.Errorf("Incorrect equality filter %#v", err)
+	}
+
+	xpr, err = ParseFilter("(username pr)")
+	if err != nil {
+		t.Errorf("Incorrect presence filter %#v", err)
 	}
 }
 
