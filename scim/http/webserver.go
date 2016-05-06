@@ -366,7 +366,7 @@ func deleteResource(hc *httpContext) {
 		return
 	}
 
-	hc.w.WriteHeader(http.StatusOK)
+	hc.w.WriteHeader(http.StatusNoContent)
 	log.Debugf("Successfully deleted the resource with ID %s", rid)
 }
 
