@@ -315,6 +315,15 @@ public class SearchResourceTest extends TestBase {
         
         resp = client.searchResource("schemas eq \"" + User.SCHEMA + "\"", User.class);
         checkResults(resp, assange, snowden, bhagat, stallman);
+
+        // emails.value is indexed
+        resp = client.searchResource("emails.value co \"org\" and (username co \"ss\" and displayname sw \"j\")", User.class);
+        checkResults(resp, assange);
+
+        // now try to fetch the same result but using a non indexed emails sub-attribute
+        resp = client.searchResource("(emails.type co \"home\" and (((username co \"ss\" ))))and displayname sw \"j\"", User.class);
+        System.out.println(resp.getHttpBody());
+        checkResults(resp, assange);
     }
 
     @Test
@@ -348,7 +357,6 @@ public class SearchResourceTest extends TestBase {
         req.setFilter("id pr");
 
         SearchResponse<Object> resp = client.searchAll(req);
-        System.out.println(resp.getHttpBody());
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
         List<Object> received = resp.getResources();
         assertEquals(7, received.size());
