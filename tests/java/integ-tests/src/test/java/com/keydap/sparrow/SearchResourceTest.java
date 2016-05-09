@@ -18,6 +18,8 @@ import org.apache.http.HttpStatus;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.keydap.sparrow.scim.Device;
 import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Address;
@@ -360,6 +362,25 @@ public class SearchResourceTest extends TestBase {
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
         List<Object> received = resp.getResources();
         assertEquals(7, received.size());
+    }
+
+    @Test
+    public void testFilterWithPrefixedAts() {
+        SearchResponse<User> uresp = client.searchResource(EnterpriseUser.SCHEMA + ":employeeNumber pr", User.class);
+        checkResults(uresp, stallman);
+        JsonObject json = (JsonObject) new JsonParser().parse(uresp.getHttpBody());
+        JsonObject rs = (JsonObject) json.get("Resources").getAsJsonArray().get(0);
+        assertNotNull(rs.get(EnterpriseUser.SCHEMA));
+
+        uresp = client.searchResource(EnterpriseUser.SCHEMA + ":employeeNumber pr", User.class, "employeeNumber", "username");
+        checkResults(uresp, stallman);
+        json = (JsonObject) new JsonParser().parse(uresp.getHttpBody());
+        rs = (JsonObject) json.get("Resources").getAsJsonArray().get(0);
+        assertNotNull(rs.get(EnterpriseUser.SCHEMA));
+
+        uresp = client.searchResource(User.SCHEMA.toLowerCase() + ":emails pr", User.class, "employeeNumber", "username");
+        System.out.println(uresp.getHttpBody());
+        checkResults(uresp, stallman, assange, snowden, bhagat);
     }
     
     private void checkResults(SearchResponse<User> resp, User... ids) {
