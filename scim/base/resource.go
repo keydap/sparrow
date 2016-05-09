@@ -426,7 +426,7 @@ func (rs *Resource) GetAttr(attrPath string) Attribute {
 			if uri == rs.resType.Schema {
 				atg = rs.Core
 			} else {
-				log.Warningf("Unknown URI prefix given in the attribute %s", attrPath)
+				log.Debugf("No extended attribute %s found with URI prefix %s", attrPath, uri)
 				return nil
 			}
 		}
@@ -674,7 +674,6 @@ func ParseResource(resTypes map[string]*schema.ResourceType, sm map[string]*sche
 		// make sure the values are all primitives
 		v := rv.Index(i)
 		kind = v.Kind()
-		fmt.Println(v, kind)
 		if kind != reflect.String && kind != reflect.Interface {
 			msg := "Value given for the 'schemas' attribute is invalid"
 			log.Debugf(msg)
@@ -1136,15 +1135,13 @@ func (rs *Resource) FilterAndSerialize(attrs []*AttributeParam, include bool) []
 
 		obj := coreObj
 
-		if ap.SchemaId != "" { // core attributes will have empty schema ID
-			obj = coreObj[ap.SchemaId].(map[string]interface{})
-			if obj == nil {
+		atType := at.GetType()
+		if atType.SchemaId != rs.resType.Schema {
+			if coreObj[atType.SchemaId] == nil {
 				obj = make(map[string]interface{})
-				coreObj[ap.SchemaId] = obj
+				coreObj[atType.SchemaId] = obj
 			}
 		}
-
-		atType := at.GetType()
 
 		if at.IsSimple() {
 			sa := at.GetSimpleAt()
