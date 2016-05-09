@@ -1,6 +1,7 @@
 package base
 
 import (
+	"fmt"
 	"sort"
 	"sparrow/scim/schema"
 	"strings"
@@ -104,7 +105,7 @@ func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) []*Attr
 				j.SchemaId = k[0:colonPos]
 			}
 
-			dotPos := strings.IndexRune(k, '.')
+			dotPos := strings.LastIndex(k, ".")    // call LastIndex() to avoid the possible '.' char in URN
 			if dotPos > 0 && (dotPos > colonPos) { // to avoid splitting attribute names that have a '.' in the URN
 				if prev == nil || !strings.HasPrefix(k, prev.Name+".") {
 					j.Name = j.SchemaId + k[0:dotPos]
@@ -148,4 +149,46 @@ func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) []*Attr
 	}
 
 	return atpLst
+}
+
+func FixSchemaUris(node *FilterNode, rTypes []*schema.ResourceType) error {
+	colonPos := strings.LastIndex(node.Name, ":")
+
+	if colonPos > 0 {
+		t := node.Name
+		urn := strings.ToLower(t[0:colonPos])
+
+		// the URN is case insensitive here, lookup the corresponding
+		// Schema ID from the given ResourceTypes
+	schemacheck:
+		for _, rt := range rTypes {
+			if urn == strings.ToLower(rt.Schema) {
+				// this is the core schema, we can skip the URN prefix
+				urn = ""
+				colonPos++
+				if colonPos >= len(t) { // this is an invalid attribute, skip it
+					return fmt.Errorf("Invalid attribute %s in filter ", node.Name)
+				}
+			} else {
+				for _, se := range rt.SchemaExtensions {
+					if urn == strings.ToLower(se.Schema) {
+						urn = se.Schema
+						break schemacheck
+					}
+				}
+			}
+		}
+
+		t = urn + t[colonPos:]
+
+		node.Name = t
+	}
+
+	if node.Children != nil {
+		for _, ch := range node.Children {
+			FixSchemaUris(ch, rTypes)
+		}
+	}
+
+	return nil
 }
