@@ -90,6 +90,8 @@ func Start(srvHome string) {
 	// register routes for each resourcetype endpoint
 	for _, p := range providers {
 		for _, rt := range p.RsTypes {
+			scimRouter.HandleFunc("/ResourceTypes/"+rt.Name, getResTypes).Methods("GET")
+
 			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("POST")
 			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET")
 			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("filter", "")
@@ -100,6 +102,10 @@ func Start(srvHome string) {
 			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET")
 			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET").Queries("attributes", "")
 			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET").Queries("excludedAttributes", "")
+		}
+
+		for _, sc := range p.Schemas {
+			scimRouter.HandleFunc("/Schemas/"+sc.Id, getSchemas).Methods("GET")
 		}
 	}
 
@@ -206,6 +212,14 @@ func search(hc *httpContext, sr *searchRequest, rTypes ...*schema.ResourceType) 
 	}
 
 	filter, err := base.ParseFilter(paramFilter)
+	if err != nil {
+		se := base.NewBadRequestError(err.Error())
+		se.ScimType = base.ST_INVALIDFILTER
+		writeError(hc, se)
+		return
+	}
+
+	err = base.FixSchemaUris(filter, rTypes)
 	if err != nil {
 		se := base.NewBadRequestError(err.Error())
 		se.ScimType = base.ST_INVALIDFILTER
@@ -384,20 +398,55 @@ func getServProvConf(w http.ResponseWriter, r *http.Request) {
 }
 
 func getResTypes(w http.ResponseWriter, r *http.Request) {
-	pr := getProv(createOpCtx(r))
-	log.Debugf("Sending resource types of the domain %s", pr.Name)
+	oc := createOpCtx(r)
+	pr := getProv(oc)
 
-	data := pr.GetResTypeJsonArray()
+	var data string
+	tokens := strings.SplitAfter(oc.Endpoint, "ResourceTypes/")
+	if len(tokens) == 2 {
+		log.Debugf("Sending resource type %s of the domain %s", tokens[1], pr.Name)
+		rt := pr.RsTypes[tokens[1]]
+		if rt == nil {
+			se := base.NewNotFoundError("ResourceType " + tokens[1] + " does not exist")
+			writeCommonHeaders(w, pr)
+			w.WriteHeader(se.Code())
+			w.Write(se.Serialize())
+			return
+		}
+
+		data = rt.Text
+	} else {
+		log.Debugf("Sending resource types of the domain %s", pr.Name)
+		data = pr.GetResTypeJsonArray()
+	}
 
 	writeCommonHeaders(w, pr)
 	w.Write([]byte(data))
 }
 
 func getSchemas(w http.ResponseWriter, r *http.Request) {
-	pr := getProv(createOpCtx(r))
-	log.Debugf("Sending schemas of the domain %s", pr.Name)
+	oc := createOpCtx(r)
+	pr := getProv(oc)
 
-	data := pr.GetSchemaJsonArray()
+	var data string
+	tokens := strings.SplitAfter(oc.Endpoint, "Schemas/")
+	if len(tokens) == 2 {
+		log.Debugf("Sending schema %s of the domain %s", tokens[1], pr.Name)
+		sc := pr.Schemas[tokens[1]]
+		if sc == nil {
+			se := base.NewNotFoundError("Schema " + tokens[1] + " does not exist")
+			writeCommonHeaders(w, pr)
+			w.WriteHeader(se.Code())
+			w.Write(se.Serialize())
+			return
+		}
+
+		data = sc.Text
+	} else {
+		log.Debugf("Sending schemas of the domain %s", pr.Name)
+		data = pr.GetSchemaJsonArray()
+	}
+
 	writeCommonHeaders(w, pr)
 	w.Write([]byte(data))
 }
