@@ -39,18 +39,6 @@ type httpContext struct {
 	*base.OpContext
 }
 
-// https://tools.ietf.org/html/rfc7644#section-3.4.3
-type searchRequest struct {
-	Schemas            []string
-	Attributes         string
-	ExcludedAttributes string
-	Filter             string
-	SortBy             string
-	SortOrder          string
-	StartIndex         int
-	Count              int
-}
-
 func Start(srvHome string) {
 	log.Debugf("Checking server home directory %s", srvHome)
 	utils.CheckAndCreate(srvHome)
@@ -146,7 +134,7 @@ func searchResource(hc *httpContext) {
 		return
 	}
 
-	sr := &searchRequest{}
+	sr := &base.SearchRequest{}
 	sr.Filter = hc.r.Form.Get("filter")
 	sr.Attributes = hc.r.Form.Get("attributes")
 	sr.ExcludedAttributes = hc.r.Form.Get("excludedAttributes")
@@ -162,7 +150,7 @@ func searchWithSearchRequest(hc *httpContext) {
 		return
 	}
 
-	sr := &searchRequest{}
+	sr := &base.SearchRequest{}
 
 	err := json.NewDecoder(hc.r.Body).Decode(sr)
 	if err != nil {
@@ -186,7 +174,7 @@ func searchWithSearchRequest(hc *httpContext) {
 	}
 }
 
-func search(hc *httpContext, sr *searchRequest, rTypes ...*schema.ResourceType) {
+func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceType) {
 
 	sx := &base.SearchContext{}
 

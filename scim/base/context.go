@@ -37,3 +37,31 @@ type AttributeParam struct {
 	SchemaId string
 	SubAts   []string
 }
+
+// https://tools.ietf.org/html/rfc7644#section-3.4.3
+type SearchRequest struct {
+	Schemas            []string `json:"schemas"`
+	Attributes         string   `json:"attributes"`
+	ExcludedAttributes string   `json:"excludedAttributes"`
+	Filter             string   `json:"filter"`
+	SortBy             string   `json:"sortBy"`
+	SortOrder          string   `json:"sortOrder"`
+	StartIndex         int      `json:"startIndex"`
+	Count              int      `json:"count"`
+}
+
+func NewSearchRequest(filter string, attrs string, include bool) *SearchRequest {
+	req := &SearchRequest{}
+	req.Schemas = []string{"urn:ietf:params:scim:api:messages:2.0:SearchRequest"}
+	req.Filter = filter
+
+	if len(attrs) > 0 {
+		if include {
+			req.Attributes = attrs
+		} else {
+			req.ExcludedAttributes = attrs
+		}
+	}
+
+	return req
+}
