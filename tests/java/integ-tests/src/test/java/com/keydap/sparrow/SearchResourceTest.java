@@ -324,7 +324,6 @@ public class SearchResourceTest extends TestBase {
 
         // now try to fetch the same result but using a non indexed emails sub-attribute
         resp = client.searchResource("(emails.type co \"home\" and (((username co \"ss\" ))))and displayname sw \"j\"", User.class);
-        System.out.println(resp.getHttpBody());
         checkResults(resp, assange);
     }
 
@@ -357,6 +356,19 @@ public class SearchResourceTest extends TestBase {
         req.setFilter("username pr");
         resp = client.searchResource(req, User.class);
         checkResults(resp, snowden, stallman, bhagat, assange);
+
+        req = new SearchRequest();
+        // use the pr operator on an indexed field
+        req.setFilter("emails[type eq \"home\" and name[formatted pr]");
+        resp = client.searchResource(req, User.class);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, resp.getHttpCode());
+        assertNotNull(resp.getError());
+
+        req = new SearchRequest();
+        // use the pr operator on an indexed field
+        req.setFilter("name[formatted pr]");
+        resp = client.searchResource(req, User.class);
+        checkResults(resp, snowden, stallman, bhagat, assange);
     }
     
     @Test
@@ -385,7 +397,6 @@ public class SearchResourceTest extends TestBase {
         assertNotNull(rs.get(EnterpriseUser.SCHEMA));
 
         uresp = client.searchResource(User.SCHEMA.toLowerCase() + ":emails pr", User.class, "employeeNumber", "username");
-        System.out.println(uresp.getHttpBody());
         checkResults(uresp, stallman, assange, snowden, bhagat);
     }
     
