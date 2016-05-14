@@ -539,7 +539,8 @@ func presenceScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, s
 
 	idx := sl.indices[rt.Name][node.Name]
 	if idx != nil {
-		count := sl.sysIndices[rt.Name]["presence"].keyCount(node.Value, tx)
+		// use the name of the attribute as the value
+		count := sl.sysIndices[rt.Name]["presence"].keyCount(node.Name, tx)
 		log.Debugf("The attribute %s of resource type %s is indexed, presence count for key %s = %d", node.Name, rt.Name, node.Value, count)
 		return count
 	} else {

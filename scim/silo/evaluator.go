@@ -5,7 +5,6 @@ import (
 	"sort"
 	"sparrow/scim/base"
 	"sparrow/scim/schema"
-	"strconv"
 	"strings"
 )
 
@@ -138,10 +137,11 @@ func compare(node *base.FilterNode, rs *base.Resource) bool {
 func _compare(sa *base.SimpleAttribute, node *base.FilterNode, atType *schema.AttrType) bool {
 	var matched bool
 
-	for _, val := range sa.Values {
+	for _, iVal := range sa.Values {
 
 		switch atType.Type {
 		case "string":
+			val := iVal.(string)
 			if !atType.CaseExact {
 				val = strings.ToLower(val)
 			}
@@ -178,17 +178,17 @@ func _compare(sa *base.SimpleAttribute, node *base.FilterNode, atType *schema.At
 			}
 
 		case "datetime":
-			millis, _ := strconv.ParseInt(val, 10, 64)
+			millis := iVal.(int64)
 			nMillis := node.NormValue.(int64)
 			matched = _compareInt(node, millis, nMillis)
 
 		case "integer":
-			i, _ := strconv.ParseInt(val, 10, 64)
+			i := iVal.(int64)
 			nint := node.NormValue.(int64)
 			matched = _compareInt(node, i, nint)
 
 		case "decimal":
-			f, _ := strconv.ParseFloat(val, 64)
+			f := iVal.(float64)
 			nfloat := node.NormValue.(float64)
 			switch node.Op {
 			case "EQ":

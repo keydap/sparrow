@@ -289,7 +289,7 @@ func TestSearch(t *testing.T) {
 	rs2 := createTestUser()
 	rs2, _ = sl.Insert(rs2)
 
-	filter, _ := base.ParseFilter("userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
+	filter, _ := base.ParseFilter("userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0].(string) + "\"")
 	sc := &base.SearchContext{}
 	sc.Filter = filter
 	sc.ResTypes = []*schema.ResourceType{restypes[userResName]}
@@ -316,7 +316,7 @@ func TestSearch(t *testing.T) {
 	}
 
 	// search using AND filter
-	filter, _ = base.ParseFilter("id pr and userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0] + "\"")
+	filter, _ = base.ParseFilter("id pr and userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0].(string) + "\"")
 	sc.Filter = filter
 
 	outPipe = make(chan *base.Resource)

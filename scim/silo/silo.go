@@ -9,9 +9,7 @@ import (
 	"sparrow/scim/conf"
 	"sparrow/scim/schema"
 	"sparrow/scim/utils"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/boltdb/bolt"
 	logger "github.com/juju/loggo"
@@ -112,7 +110,7 @@ func (idx *Index) keyCount(key string, tx *bolt.Tx) int64 {
 }
 
 // Inserts the given <attribute value, resource ID> tuple in the index
-func (idx *Index) add(val string, rid string, tx *bolt.Tx) error {
+func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 	log.Debugf("adding value %s of resource %s to index %s", val, rid, idx.Name)
 	vData := idx.convert(val)
 	buck := tx.Bucket(idx.BnameBytes)
@@ -121,7 +119,7 @@ func (idx *Index) add(val string, rid string, tx *bolt.Tx) error {
 	if idx.AllowDupKey {
 		dupBuck := buck.Bucket(vData)
 
-		countKey := []byte(strings.ToLower(val) + "_count")
+		countKey := []byte(strings.ToLower(fmt.Sprint(val)) + "_count")
 		var count int64
 		firstCount := false
 
@@ -171,7 +169,7 @@ func (idx *Index) add(val string, rid string, tx *bolt.Tx) error {
 	return err
 }
 
-func (idx *Index) remove(val string, rid string, tx *bolt.Tx) error {
+func (idx *Index) remove(val interface{}, rid string, tx *bolt.Tx) error {
 	log.Debugf("removing value %s of resource %s from index %s", val, rid, idx.Name)
 	vData := idx.convert(val)
 	buck := tx.Bucket(idx.BnameBytes)
@@ -181,7 +179,7 @@ func (idx *Index) remove(val string, rid string, tx *bolt.Tx) error {
 		dupBuck := buck.Bucket(vData)
 
 		if dupBuck != nil {
-			countKey := []byte(strings.ToLower(val) + "_count")
+			countKey := []byte(strings.ToLower(fmt.Sprint(val)) + "_count")
 
 			cb := buck.Get(countKey)
 			count := utils.Btoi(cb)
@@ -262,43 +260,41 @@ func (idx *Index) GetRids(valKey []byte, tx *bolt.Tx) []string {
 	return rids
 }
 
-func (idx *Index) HasVal(val string, tx *bolt.Tx) bool {
+func (idx *Index) HasVal(val interface{}, tx *bolt.Tx) bool {
 	key := idx.convert(val)
 	return len(idx.GetRid(key, tx)) != 0
 }
 
-func (idx *Index) convert(val string) []byte {
+func (idx *Index) convert(val interface{}) []byte {
 	var vData []byte
 	switch idx.ValType {
 	case "string":
+		str := val.(string)
 		if !idx.CaseSensitive {
-			val = strings.ToLower(val)
+			str = strings.ToLower(str)
 		}
-		vData = []byte(val)
+		vData = []byte(str)
 
 	case "boolean":
-		val = strings.ToLower(val)
-		vData = []byte(val)
-
-	case "binary", "reference":
-		vData = []byte(val)
-
-	case "integer":
-		i, _ := strconv.ParseInt(val, 10, 64)
-		vData = utils.Itob(i)
-
-	case "datetime":
-		t, err := time.Parse(time.RFC3339, val)
-		if err != nil {
-			panic(err)
+		b := val.(bool)
+		if b {
+			vData = []byte{1}
+		} else {
+			vData = []byte{0}
 		}
 
-		millis := t.UnixNano() / 1000000
-		vData = utils.Itob(millis)
+	case "binary", "reference":
+		vData = []byte(val.(string))
+
+	case "integer":
+		vData = utils.Itob(val.(int64))
+
+	case "datetime":
+		// the time will be in milliseconds stored in int64
+		vData = utils.Itob(val.(int64))
 
 	case "decimal":
-		f, _ := strconv.ParseFloat(val, 64)
-		vData = utils.Ftob(f)
+		vData = utils.Ftob(val.(float64))
 
 	default:
 		panic(fmt.Errorf("Invalid index datat type %s given for index %s", idx.ValType, idx.Name))
@@ -667,14 +663,14 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 			for _, subAtMap := range ca.SubAts {
 				value := subAtMap["value"]
 				if value != nil {
-					refId := value.Values[0]
+					refId := value.Values[0].(string)
 					// TODO what should be done if the ref doesn't contain above "value" field's value
 					//ref := subAtMap["$ref"]
 					refType := subAtMap["$ref"]
 
 					refTypeVal := "Group" // default value
 					if refType != nil {
-						refTypeVal = refType.Values[0]
+						refTypeVal = refType.Values[0].(string)
 					} else {
 						log.Debugf("No reference type is mentioned, assuming the default value %s", refTypeVal)
 					}

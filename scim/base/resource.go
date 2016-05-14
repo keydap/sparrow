@@ -28,7 +28,7 @@ type Attribute interface {
 type SimpleAttribute struct {
 	atType *schema.AttrType
 	Name   string
-	Values []string
+	Values []interface{}
 }
 
 type MultiSubAttribute struct {
@@ -242,20 +242,20 @@ func (rs *Resource) deleteAttribute(attrPath string, atg *AtGroup) bool {
 }
 
 // accessor methods for common attributes
-
+/*
 func (rs *Resource) GetSchemaIds() []string {
 	sa := rs.Core.SimpleAts["schemas"]
-	return sa.Values
-	/*if rs.schemaIds == nil {
-		rs.schemaIds = make([]string, 1)
-		rs.schemaIds[0] = rs.resType.Schema
-		for _, v := range rs.resType.SchemaExtensions {
-			rs.schemaIds = append(rs.schemaIds, v.Schema)
-		}
-	}
-
-	return rs.schemaIds*/
-}
+	return sa.Values.([]string)
+//	if rs.schemaIds == nil {
+//		rs.schemaIds = make([]string, 1)
+//		rs.schemaIds[0] = rs.resType.Schema
+//		for _, v := range rs.resType.SchemaExtensions {
+//			rs.schemaIds = append(rs.schemaIds, v.Schema)
+//		}
+//	}
+//
+//	return rs.schemaIds
+}*/
 
 func (rs *Resource) GetId() string {
 	sa := rs.Core.SimpleAts["id"]
@@ -263,7 +263,7 @@ func (rs *Resource) GetId() string {
 		return ""
 	}
 
-	return sa.Values[0]
+	return sa.Values[0].(string)
 }
 
 func (rs *Resource) SetId(id string) {
@@ -277,7 +277,7 @@ func (rs *Resource) SetId(id string) {
 		rs.Core.SimpleAts[sa.Name] = sa
 	}
 
-	sa.Values = make([]string, 1)
+	sa.Values = make([]interface{}, 1)
 	sa.Values[0] = id
 }
 
@@ -287,7 +287,8 @@ func (rs *Resource) GetExternalId() *string {
 		return nil
 	}
 
-	return &sa.Values[0]
+	str := sa.Values[0].(string)
+	return &str
 }
 
 func (rs *Resource) GetMeta() *ComplexAttribute {
@@ -311,31 +312,31 @@ func (rs *Resource) AddMeta() *ComplexAttribute {
 	// this will save some disk space
 	resTypeAt := &SimpleAttribute{Name: "resourcetype"}
 	resTypeAt.atType = parentAt.SubAttrMap[resTypeAt.Name]
-	resTypeAt.Values = make([]string, 1)
+	resTypeAt.Values = make([]interface{}, 1)
 	resTypeAt.Values[0] = rs.resType.Name
 	atMap[resTypeAt.Name] = resTypeAt
 
 	createdAt := &SimpleAttribute{Name: "created"}
 	createdAt.atType = parentAt.SubAttrMap[createdAt.Name]
-	createdAt.Values = make([]string, 1)
+	createdAt.Values = make([]interface{}, 1)
 	createdAt.Values[0] = utils.DateTimeMillis()
 	atMap[createdAt.Name] = createdAt
 
 	lastModAt := &SimpleAttribute{Name: "lastmodified"}
 	lastModAt.atType = parentAt.SubAttrMap[lastModAt.Name]
-	lastModAt.Values = make([]string, 1)
+	lastModAt.Values = make([]interface{}, 1)
 	lastModAt.Values[0] = utils.DateTimeMillis()
 	atMap[lastModAt.Name] = lastModAt
 
 	locationAt := &SimpleAttribute{Name: "location"}
 	locationAt.atType = parentAt.SubAttrMap[locationAt.Name]
-	locationAt.Values = make([]string, 1)
+	locationAt.Values = make([]interface{}, 1)
 	locationAt.Values[0] = rs.resType.Endpoint + "/" + rs.GetId()
 	atMap[locationAt.Name] = locationAt
 
 	versionAt := &SimpleAttribute{Name: "version"}
 	versionAt.atType = parentAt.SubAttrMap[versionAt.Name]
-	versionAt.Values = make([]string, 1)
+	versionAt.Values = make([]interface{}, 1)
 	versionAt.Values[0] = lastModAt.Values[0]
 	atMap[versionAt.Name] = versionAt
 
@@ -494,7 +495,7 @@ func NewResource(rt *schema.ResourceType) *Resource {
 	return rs
 }
 
-func (rs *Resource) AddSA(name string, val ...string) error {
+func (rs *Resource) AddSA(name string, val ...interface{}) error {
 	sa := &SimpleAttribute{}
 	sa.atType = rs.resType.GetAtType(name)
 	sa.Name = strings.ToLower(sa.atType.Name)
@@ -507,8 +508,8 @@ func (rs *Resource) AddSA(name string, val ...string) error {
 	}
 
 	if !sa.atType.MultiValued {
-		sa.Values = make([]string, 1)
-		sa.Values[0] = val[0]
+		sa.Values = make([]interface{}, 1)
+		sa.Values[0] = val[0] //checkValueTypeAndConvert(reflect.ValueOf(val[0]), sa.atType)
 	} else {
 		sa.Values = val
 	}
@@ -829,7 +830,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 			panic(NewBadRequestError(msg))
 		}
 
-		arr := make([]string, rv.Len())
+		arr := make([]interface{}, rv.Len())
 		for i := 0; i < rv.Len(); i++ {
 			// make sure the values are all primitives
 			v := rv.Index(i)
@@ -844,11 +845,11 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 	}
 
 	strVal := checkValueTypeAndConvert(rv, attrType)
-	sa.Values = []string{strVal}
+	sa.Values = []interface{}{strVal}
 	return sa
 }
 
-func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) string {
+func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) interface{} {
 	msg := fmt.Sprintf("Invalid value '%#v' in attribute %s", v, attrType.Name)
 	err := NewBadRequestError(msg)
 
@@ -861,7 +862,7 @@ func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) string
 		if kind != reflect.Bool {
 			panic(err)
 		}
-		return strconv.FormatBool(v.Bool())
+		return v.Bool()
 	case "integer":
 		if kind != reflect.Float64 {
 			panic(err)
@@ -877,12 +878,12 @@ func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) string
 			panic(err)
 		}
 
-		return strconv.FormatInt(intVal, 10)
+		return intVal
 	case "decimal":
 		if kind != reflect.Float64 {
 			panic(err)
 		}
-		return strconv.FormatFloat(v.Float(), 'E', -1, 64)
+		return v.Float()
 
 	case "datetime":
 		if kind != reflect.String {
@@ -897,7 +898,7 @@ func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) string
 
 		millis := t.UnixNano() / 1000000
 
-		return strconv.FormatInt(millis, 10)
+		return millis
 
 	case "string", "binary", "reference":
 		if kind != reflect.String && kind != reflect.Interface {
@@ -1057,22 +1058,10 @@ func (atg *AtGroup) ToMap() map[string]interface{} {
 	return obj
 }
 
-func getConvertedVal(v string, sa *SimpleAttribute) interface{} {
+func getConvertedVal(v interface{}, sa *SimpleAttribute) interface{} {
 	switch sa.atType.Type {
-	case "boolean":
-		cv, _ := strconv.ParseBool(v)
-		return cv
-
-	case "decimal":
-		cv, _ := strconv.ParseFloat(v, 64)
-		return cv
-
-	case "integer":
-		cv, _ := strconv.ParseInt(v, 10, 64)
-		return cv
-
 	case "datetime":
-		millis, _ := strconv.ParseInt(v, 10, 64)
+		millis, _ := v.(int64)
 		// by default the TZ will be set to Local, so calling UTC() is a must
 		t := time.Unix(0, millis*int64(time.Millisecond)).UTC()
 		str := t.Format(time.RFC3339)
