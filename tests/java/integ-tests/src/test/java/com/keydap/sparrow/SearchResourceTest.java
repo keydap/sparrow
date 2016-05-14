@@ -351,6 +351,12 @@ public class SearchResourceTest extends TestBase {
         fetched = resp.getResources().get(0);
         assertNull(fetched.getEmails());
         assertNotNull(fetched.getDisplayName());
+        
+        req = new SearchRequest();
+        // use the pr operator on an indexed field
+        req.setFilter("username pr");
+        resp = client.searchResource(req, User.class);
+        checkResults(resp, snowden, stallman, bhagat, assange);
     }
     
     @Test
