@@ -184,6 +184,10 @@ func (attr *AttrType) IsUnique() bool {
 	return (attr.Uniqueness == "server") || (attr.Uniqueness == "global")
 }
 
+func (attr *AttrType) IsImmutable() bool {
+	return attr.Mutability == "immutable"
+}
+
 func (attr *AttrType) Parent() *AttrType {
 	return attr.parent
 }
