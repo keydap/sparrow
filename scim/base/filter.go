@@ -21,6 +21,7 @@ var op_map = map[string]int{"EQ": 0, "NE": 1, "CO": 2, "SW": 3, "EW": 4, "GT": 5
 var log logger.Logger
 
 func init() {
+	logger.ConfigureLoggers("<root>=debug;")
 	log = logger.GetLogger("sparrow.scim.base")
 }
 
