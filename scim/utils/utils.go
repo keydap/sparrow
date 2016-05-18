@@ -6,7 +6,6 @@ import (
 	logger "github.com/juju/loggo"
 	"math"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -83,9 +82,19 @@ func DateTime() string {
 	return t.Format(time.RFC3339)
 }
 
-func DateTimeMillis() string {
+func DateTimeMillis() int64 {
 	t := time.Now().UnixNano() / 1000000
-	return strconv.FormatInt(t, 10)
+	return t
+}
+
+func GetTimeMillis(rfc3339Date string) int64 {
+	t, err := time.Parse(time.RFC3339, rfc3339Date)
+	if err != nil {
+		panic(err)
+	}
+
+	millis := t.UnixNano() / 1000000
+	return millis
 }
 
 func CheckAndCreate(dirName string) {
