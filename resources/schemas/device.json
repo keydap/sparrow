@@ -1,5 +1,5 @@
 {
-    "id":"urn:ietf:params:scim:schemas:core:2.0:Device",
+    "id":"urn:keydap:params:scim:schemas:core:2.0:Device",
     "name":"Device",
     "description":"An IoT Device",
     "attributes":[
@@ -22,6 +22,17 @@
             "required":true,
             "caseExact":false,
             "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"server"
+        },
+        {
+            "name":"macId",
+            "type":"string",
+            "multiValued":false,
+            "description":"Device MAC number",
+            "required":false,
+            "caseExact":false,
+            "mutability":"immutable",
             "returned":"default",
             "uniqueness":"server"
         },
@@ -57,5 +68,110 @@
             "mutability":"readWrite",
             "returned":"default",
             "uniqueness":"none"
+        },
+        {
+            "name":"repairDates",
+            "type":"dateTime",
+            "multiValued":true,
+            "description":"Device repair dates",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"location",
+            "type":"complex",
+            "multiValued":false,
+            "description":"The components of the device's location.",
+            "required":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none",
+            "subAttributes":[
+                {
+                    "name":"lat",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"The latitude",
+                    "required":false,
+                    "caseExact":false,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"long",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"The longitude",
+                    "required":false,
+                    "caseExact":false,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                }
+             ]
+         },
+         {
+            "name":"photos",
+            "type":"complex",
+            "multiValued":true,
+            "description":"URLs of photos of the Device.",
+            "required":false,
+            "subAttributes":[
+                {
+                    "name":"value",
+                    "type":"reference",
+                    "referenceTypes":[
+                        "external"
+                    ],
+                    "multiValued":false,
+                    "description":"URL of a photo of the Device.",
+                    "required":false,
+                    "caseExact":false,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"display",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"A human-readable name, primarily used for display purposes.",
+                    "required":false,
+                    "caseExact":false,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"type",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"A label indicating the attribute's function, i.e., 'photo' or 'thumbnail'.",
+                    "required":false,
+                    "caseExact":false,
+                    "canonicalValues":[
+                        "photo",
+                        "thumbnail"
+                    ],
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"primary",
+                    "type":"boolean",
+                    "multiValued":false,
+                    "description":"A Boolean value indicating the 'primary' or preferred attribute value for this attribute, e.g., the preferred photo or thumbnail.  The primary attribute value 'true' MUST appear no more than once.",
+                    "required":false,
+                    "mutability":"readWrite",
+                    "returned":"default"
+                }
+            ],
+            "mutability":"readWrite",
+            "returned":"default"
         }
  ]}
