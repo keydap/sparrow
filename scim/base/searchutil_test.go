@@ -7,6 +7,8 @@ import (
 )
 
 var restypes []*schema.ResourceType
+var schemas map[string]*schema.Schema
+var rTypesMap map[string]*schema.ResourceType
 
 func TestMain(m *testing.M) {
 	resDir, _ := os.Getwd()
@@ -15,8 +17,8 @@ func TestMain(m *testing.M) {
 	schemaDir := resDir + "/schemas"
 	rtDir := resDir + "/types"
 
-	schemas, _ := LoadSchemas(schemaDir)
-	rTypesMap, _, _ := LoadResTypes(rtDir, schemas)
+	schemas, _ = LoadSchemas(schemaDir)
+	rTypesMap, _, _ = LoadResTypes(rtDir, schemas)
 
 	restypes = make([]*schema.ResourceType, 0)
 	for _, v := range rTypesMap {

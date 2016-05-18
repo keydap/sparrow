@@ -1,6 +1,7 @@
 package base
 
 import (
+	"bytes"
 	"fmt"
 	"sparrow/scim/schema"
 	"testing"
@@ -111,5 +112,155 @@ func TestDeleteAttribute(t *testing.T) {
 	del = rs.DeleteAttr("urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber")
 	if !del {
 		t.Error("Could not deleted extended attribute employeenumber")
+	}
+}
+
+func TestNullValue(t *testing.T) {
+	device := `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],
+			  "manufacturer":"keydap",
+			  "serialNumber":"11",
+			  "price":null,
+			  "repairDates": null,
+			  "photos": null}`
+
+	reader := bytes.NewReader([]byte(device))
+	rs, err := ParseResource(rTypesMap, schemas, reader)
+	if err != nil {
+		t.Errorf("Parsing resource with null values should not fail %s", err)
+	}
+
+	at := rs.GetAttr("price")
+	if at != nil {
+		t.Errorf("price should be null")
+	}
+
+	at = rs.GetAttr("repairdates")
+	if at != nil {
+		t.Errorf("repairDates should be null")
+	}
+
+	at = rs.GetAttr("photos")
+	if at != nil {
+		t.Errorf("photos should be null")
+	}
+
+	// check with empty array values, those attributes should be ignored
+	device = `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],
+			  "manufacturer":"keydap",
+			  "serialNumber":"11",
+			  "repairDates": [],
+			  "photos": []}`
+
+	reader = bytes.NewReader([]byte(device))
+	rs, _ = ParseResource(rTypesMap, schemas, reader)
+
+	at = rs.GetAttr("repairdates")
+	if at != nil {
+		t.Errorf("repairDates should be null when empty array value was present")
+	}
+
+	at = rs.GetAttr("photos")
+	if at != nil {
+		t.Errorf("photos should be null when empty array value was present")
+	}
+}
+
+func TestExtendedObjParsing(t *testing.T) {
+	user := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User", "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"],
+			  "userName":"bjensen@example.com",
+			  "displayName":"Babs Jensen",
+			"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": null}`
+
+	reader := bytes.NewReader([]byte(user))
+	rs, err := ParseResource(rTypesMap, schemas, reader)
+	if err != nil {
+		t.Errorf("Parsing resource with null values should not fail %s", err)
+	}
+
+	schemasAt := rs.GetAttr("schemas").GetSimpleAt()
+	if len(schemasAt.Values) != 1 {
+		t.Errorf("invalid number of schemas present in the resource")
+	}
+
+	user = `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User", "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"],
+			  "userName":"bjensen@example.com",
+			  "displayName":"Babs Jensen",
+    		  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {}}`
+
+	reader = bytes.NewReader([]byte(user))
+	rs, err = ParseResource(rTypesMap, schemas, reader)
+	if err != nil {
+		t.Errorf("Parsing resource with empty object value should not fail %s", err)
+	}
+
+	schemasAt = rs.GetAttr("schemas").GetSimpleAt()
+	if len(schemasAt.Values) != 1 {
+		t.Errorf("invalid number of schemas present in the resource")
+	}
+
+	user = `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User", "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"],     
+			  "userName":"bjensen@example.com",
+			  "displayName":"Babs Jensen",
+    		  "urn:ietf:params:scim:schemas:bad-extension:uri:2.0:User": {}}`
+
+	reader = bytes.NewReader([]byte(user))
+	rs, err = ParseResource(rTypesMap, schemas, reader)
+	if err == nil {
+		t.Errorf("Parsing resource with unknown extended schema URI must fail")
+	}
+}
+
+func TestMultiplePrimaryValues(t *testing.T) {
+	device := `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],     
+			  "manufacturer":"keydap",
+			  "serialNumber":"11",
+			  "photos": [{"value": "abc.jpg", "primary": true}, {"value": "xyz.jpg", "primary": true}]}`
+
+	reader := bytes.NewReader([]byte(device))
+	_, err := ParseResource(rTypesMap, schemas, reader)
+	if err == nil {
+		t.Errorf("Parsing resource with two primary sub-attribute values should fail")
+	}
+}
+
+func TestEquals(t *testing.T) {
+	device1 := `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],     
+			  "manufacturer":"keydap",
+			  "serialNumber":"11",
+			  "rating": 1,
+			  "price": 7.2,
+			  "installedDate": "2016-05-17T14:19:14Z",
+			  "repairDates": ["2016-05-15T14:19:14Z", "2016-05-16T14:19:14Z"],
+			  "location": {"lat": "17°10'45.4\"N", "long": "78°13'02.8\"E"}}`
+
+	device2 := `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],     
+			  "manufacturer":"keydap",
+			  "serialNumber":"16",
+			  "rating": 2,
+			  "price": 9.2,
+			  "installedDate": "2016-05-17T14:19:14Z",
+			  "repairDates": ["2016-05-15T14:19:14Z", "2016-05-16T14:19:14Z"],
+			  "location": {"lat": "17°10'45.4\"N", "long": "78°13'02.8\"E"}}`
+
+	reader := bytes.NewReader([]byte(device1))
+	rs1, _ := ParseResource(rTypesMap, schemas, reader)
+
+	reader = bytes.NewReader([]byte(device2))
+	rs2, _ := ParseResource(rTypesMap, schemas, reader)
+
+	checkEquals("manufacturer", rs1, rs2, true, t)
+	checkEquals("serialNumber", rs1, rs2, false, t)
+	checkEquals("rating", rs1, rs2, false, t)
+	checkEquals("price", rs1, rs2, false, t)
+	checkEquals("installedDate", rs1, rs2, true, t)
+	checkEquals("repairDates", rs1, rs2, true, t)
+}
+
+func checkEquals(attrName string, rs1 *Resource, rs2 *Resource, expected bool, t *testing.T) {
+	sa1 := rs1.GetAttr(attrName).GetSimpleAt()
+	sa2 := rs2.GetAttr(attrName).GetSimpleAt()
+
+	if sa1.Equals(sa2) != expected {
+		t.Errorf("%s attributes' equality is not matching with the expected value", sa1.Name)
 	}
 }

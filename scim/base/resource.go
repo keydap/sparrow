@@ -53,6 +53,10 @@ type Resource struct {
 	Ext      map[string]*AtGroup
 }
 
+type postParsingHints struct {
+	updateSchemas bool
+}
+
 // Attribute contract
 
 func (sa *SimpleAttribute) IsSimple() bool {
@@ -88,7 +92,7 @@ func (ca *ComplexAttribute) GetComplexAt() *ComplexAttribute {
 }
 
 func (ca *ComplexAttribute) AddSubAts(subAtMap map[string]interface{}) {
-	subAt := parseSubAtList(subAtMap, ca.atType)
+	subAt, _ := parseSubAtList(subAtMap, ca.atType)
 	if ca.SubAts == nil {
 		ca.SubAts = make([]map[string]*SimpleAttribute, 1)
 	}
@@ -408,6 +412,71 @@ func _checkMissingReqAts(sc *schema.Schema, rs *Resource) error {
 	return nil
 }
 
+func (sa *SimpleAttribute) Equals(other *SimpleAttribute) bool {
+	if other == nil {
+		return false
+	}
+
+	if sa.atType != other.atType {
+		return false
+	}
+
+	if len(sa.Values) != len(other.Values) {
+		return false
+	}
+
+	for _, saVal := range sa.Values {
+		matches := false
+		for _, otherVal := range other.Values {
+			matches = Compare(sa.atType, saVal, otherVal)
+			if matches {
+				break
+			}
+		}
+
+		if !matches {
+			return false
+		}
+	}
+
+	return true
+}
+
+func Compare(atType *schema.AttrType, saVal interface{}, otherVal interface{}) bool {
+	switch atType.Type {
+	case "boolean":
+		return saVal.(bool) == otherVal.(bool)
+
+	case "integer", "datetime":
+		return saVal.(int64) == otherVal.(int64)
+
+	case "decimal":
+		return saVal.(float64) == otherVal.(float64)
+
+	case "string", "binary", "reference":
+		// does a case-sensitive comparison irrespective of the attribute type's
+		// caseExact setting
+		return saVal.(string) == otherVal.(string)
+	}
+
+	panic(fmt.Errorf("Unknown attribute type comparison"))
+}
+
+func (rs *Resource) UpdateLastModTime() {
+	rs.Core.ComplexAts["meta"].SubAts[0]["lastmodified"].Values[0] = utils.DateTimeMillis()
+}
+
+func (rs *Resource) UpdateSchemas() {
+	schemaIds := make([]interface{}, 1)
+	schemaIds[0] = rs.resType.Schema
+	for scId, _ := range rs.Ext {
+		schemaIds = append(schemaIds, scId)
+	}
+
+	schemas := rs.Core.SimpleAts["schemas"]
+	schemas.Values = schemaIds
+}
+
 // ---------------- attribute accessors -------------
 
 func (rs *Resource) GetAttr(attrPath string) Attribute {
@@ -481,7 +550,7 @@ func (rs *Resource) GetType() *schema.ResourceType {
 	return rs.resType
 }
 
-func newAtGroup() *AtGroup {
+func NewAtGroup() *AtGroup {
 	return &AtGroup{SimpleAts: make(map[string]*SimpleAttribute), ComplexAts: make(map[string]*ComplexAttribute)}
 }
 
@@ -489,7 +558,7 @@ func NewResource(rt *schema.ResourceType) *Resource {
 	rs := &Resource{}
 	rs.resType = rt
 	rs.TypeName = rt.Name
-	rs.Core = newAtGroup()
+	rs.Core = NewAtGroup()
 	rs.Ext = make(map[string]*AtGroup)
 
 	return rs
@@ -544,6 +613,10 @@ func (rs *Resource) AddCA(name string, val ...map[string]interface{}) (err error
 		ca = parseComplexAttr(atType, val[0])
 	}
 
+	if ca == nil {
+		return fmt.Errorf("Failed to add the complex attribute %s, check the JSON data", name)
+	}
+
 	rs.addComplexAt(ca)
 	return nil
 }
@@ -557,7 +630,7 @@ func (rs *Resource) addSimpleAt(sa *SimpleAttribute) {
 
 	atg := rs.Ext[scId]
 	if atg == nil {
-		atg = newAtGroup()
+		atg = NewAtGroup()
 		rs.Ext[scId] = atg
 	}
 
@@ -573,7 +646,7 @@ func (rs *Resource) addComplexAt(ca *ComplexAttribute) {
 
 	atg := rs.Ext[scId]
 	if atg == nil {
-		atg = newAtGroup()
+		atg = NewAtGroup()
 		rs.Ext[scId] = atg
 	}
 
@@ -745,7 +818,7 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 	rs = &Resource{}
 	rs.resType = rt
 	rs.TypeName = rt.Name
-	rs.Core = newAtGroup()
+	rs.Core = NewAtGroup()
 	rs.Ext = make(map[string]*AtGroup)
 
 	defer func() {
@@ -758,11 +831,19 @@ func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[s
 	}()
 
 	sc := rt.GetMainSchema()
-	parseJsonObject(obj, rt, sc, rs)
+
+	pph := &postParsingHints{}
+
+	parseJsonObject(obj, rt, sc, rs, pph)
+
+	if pph.updateSchemas {
+		rs.UpdateSchemas()
+	}
+
 	return rs, nil
 }
 
-func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *schema.Schema, rs *Resource) {
+func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *schema.Schema, rs *Resource, pph *postParsingHints) {
 	//log.Debugf("resource schema %#v", sc.AttrMap["username"])
 	if sc == nil {
 		msg := fmt.Sprintf("Schema of resourcetype %s cannot be null", rs.TypeName)
@@ -777,7 +858,7 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 
 			extSc := rs.resType.GetSchema(k)
 			if extSc == nil {
-				msg := fmt.Sprintf("Schema %s is not declared in the extension schemas of resourcetype %s", k, rs.TypeName)
+				msg := fmt.Sprintf("Unknown schema, %s is not found in the extension schemas of resourcetype %s", k, rs.TypeName)
 				panic(NewBadRequestError(msg))
 			}
 
@@ -786,12 +867,23 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 			switch v.(type) {
 			case map[string]interface{}:
 				vObj = v.(map[string]interface{})
+				if len(vObj) == 0 {
+					log.Debugf("Skipping empty extended object")
+					pph.updateSchemas = true
+					continue
+				}
+
+			case nil:
+				log.Debugf("Skipping null extended object")
+				pph.updateSchemas = true
+				continue
+
 			default:
 				msg := fmt.Sprintf("Invalid value of key %s", k)
 				panic(NewBadRequestError(msg))
 			}
 
-			parseJsonObject(vObj, rt, extSc, rs)
+			parseJsonObject(vObj, rt, extSc, rs, pph)
 			continue
 		}
 
@@ -807,16 +899,27 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 
 		if atType.IsSimple() {
 			sa := parseSimpleAttr(atType, v)
-			rs.addSimpleAt(sa)
+			if sa != nil {
+				rs.addSimpleAt(sa)
+			}
 		} else if atType.IsComplex() {
 			ca := parseComplexAttr(atType, v)
-			rs.addComplexAt(ca)
+			if ca != nil {
+				rs.addComplexAt(ca)
+			}
 		}
 	}
 }
 
 func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribute {
 	rv := reflect.ValueOf(iVal)
+
+	kind := rv.Kind()
+
+	if kind == reflect.Invalid {
+		log.Debugf("Null value is received for the simple attribute %s, skipping attribute", attrType.Name)
+		return nil
+	}
 
 	sa := &SimpleAttribute{}
 	sa.Name = strings.ToLower(attrType.Name)
@@ -825,15 +928,27 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 	log.Debugf("Parsing simple attribute %s\n", sa.Name)
 	if attrType.MultiValued {
 		//fmt.Println("rv kind ", rv.Kind())
-		if (rv.Kind() != reflect.Slice) && (rv.Kind() != reflect.Array) {
+		if (kind != reflect.Slice) && (kind != reflect.Array) {
 			msg := fmt.Sprintf("Value of the attribute %s must be an array", attrType.Name)
 			panic(NewBadRequestError(msg))
 		}
 
-		arr := make([]interface{}, rv.Len())
-		for i := 0; i < rv.Len(); i++ {
+		arrLen := rv.Len()
+		if arrLen == 0 {
+			log.Debugf("Empty array is received for the simple attribute %s, skipping attribute", attrType.Name)
+			return nil
+		}
+
+		arr := make([]interface{}, arrLen)
+		for i := 0; i < arrLen; i++ {
 			// make sure the values are all primitives
 			v := rv.Index(i)
+			kind = v.Kind()
+			if kind == reflect.Invalid {
+				detail := fmt.Sprintf("Null value is present in the values of multivalued simple attribute %s, skipping value", attrType.Name)
+				log.Debugf(detail)
+				panic(NewBadRequestError(detail))
+			}
 
 			strVal := checkValueTypeAndConvert(v, attrType)
 			arr[i] = strVal
@@ -886,11 +1001,17 @@ func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) interf
 		return v.Float()
 
 	case "datetime":
-		if kind != reflect.String {
+		if kind != reflect.String && kind != reflect.Interface {
 			panic(err)
 		}
 
-		date := v.String()
+		var date string
+		if kind == reflect.Interface {
+			date = fmt.Sprint(v.Interface())
+		} else {
+			date = v.String()
+		}
+
 		t, e := time.Parse(time.RFC3339, date)
 		if e != nil {
 			panic(err)
@@ -920,20 +1041,50 @@ func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) interf
 func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttribute {
 	rv := reflect.ValueOf(iVal)
 
+	kind := rv.Kind()
+
+	if kind == reflect.Invalid {
+		log.Debugf("Null value is received for the complex attribute %s, skipping attribute", attrType.Name)
+		return nil
+	}
+
 	ca := &ComplexAttribute{}
 	ca.Name = strings.ToLower(attrType.Name)
 	ca.atType = attrType
 
 	if attrType.MultiValued {
-		if (rv.Kind() != reflect.Slice) && (rv.Kind() != reflect.Array) {
+		if (kind != reflect.Slice) && (kind != reflect.Array) {
 			msg := fmt.Sprintf("Value of the attribute %s must be an array", attrType.Name)
 			panic(NewBadRequestError(msg))
 		}
 
-		subAtArrMap := make([]map[string]*SimpleAttribute, rv.Len())
-		for i := 0; i < rv.Len(); i++ {
+		arrLen := rv.Len()
+		if arrLen == 0 {
+			log.Debugf("Empty array is received for the complex attribute %s, skipping attribute", attrType.Name)
+			return nil
+		}
+
+		subAtArrMap := make([]map[string]*SimpleAttribute, arrLen)
+		primaryAlreadySet := false
+		for i := 0; i < arrLen; i++ {
 			v := rv.Index(i)
-			simpleAtMap := parseSubAtList(v.Interface(), attrType)
+			kind = v.Kind()
+			if kind == reflect.Invalid {
+				detail := fmt.Sprintf("Null value is present in the values of multivalued complex attribute %s, skipping value", attrType.Name)
+				log.Debugf(detail)
+				panic(NewBadRequestError(detail))
+			}
+
+			simpleAtMap, prm := parseSubAtList(v.Interface(), attrType)
+			if prm {
+				if primaryAlreadySet {
+					detail := fmt.Sprintf("More than one sub attribute is marked as primary in the complex attribute %s", attrType.Name)
+					log.Debugf(detail)
+					panic(NewBadRequestError(detail))
+				} else {
+					primaryAlreadySet = true
+				}
+			}
 			subAtArrMap[i] = simpleAtMap
 		}
 
@@ -942,13 +1093,13 @@ func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 		return ca
 	}
 
-	simpleAtMap := parseSubAtList(iVal, attrType)
+	simpleAtMap, _ := parseSubAtList(iVal, attrType)
 	ca.SubAts = []map[string]*SimpleAttribute{simpleAtMap}
 
 	return ca
 }
 
-func parseSubAtList(v interface{}, attrType *schema.AttrType) map[string]*SimpleAttribute {
+func parseSubAtList(v interface{}, attrType *schema.AttrType) (subAtMap map[string]*SimpleAttribute, primary bool) {
 	var vObj map[string]interface{}
 
 	switch v.(type) {
@@ -972,10 +1123,17 @@ func parseSubAtList(v interface{}, attrType *schema.AttrType) map[string]*Simple
 		}
 
 		subAt := parseSimpleAttr(subAtType, v)
-		arr[subAt.Name] = subAt
+		if subAt != nil {
+			if subAt.Name == "primary" {
+				if p, ok := subAt.Values[0].(bool); ok && p {
+					primary = true
+				}
+			}
+			arr[subAt.Name] = subAt
+		}
 	}
 
-	return arr
+	return arr, primary
 }
 
 func isPrimitive(knd reflect.Kind) bool {
