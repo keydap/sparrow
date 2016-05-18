@@ -24,7 +24,7 @@ var schemas map[string]*schema.Schema
 var restypes map[string]*schema.ResourceType
 
 func TestMain(m *testing.M) {
-	logger.ConfigureLoggers("<root>=debug;scim.main=debug")
+	logger.ConfigureLoggers("<root>=warn;scim.main=debug")
 
 	resDir += "/../../"
 	resDir = resDir + "/resources/"
@@ -126,7 +126,7 @@ func TestInsert(t *testing.T) {
 
 	rs, err := sl.Insert(user)
 
-	fmt.Println(rs.ToJSON())
+	//fmt.Println(rs.ToJSON())
 
 	rid := rs.GetId()
 
@@ -202,6 +202,9 @@ func TestIndexOps(t *testing.T) {
 	}
 
 	assertPrCount(rs, readTx, 1, t)
+	if !sl.getSysIndex(userResName, "presence").HasVal("emails.value", readTx) {
+		t.Error("emails.value should exist in presence index")
+	}
 
 	readTx.Rollback()
 
@@ -250,13 +253,13 @@ func TestIndexOps(t *testing.T) {
 	}
 	readTx.Rollback()
 
-	json := rs.ToJSON()
-	fmt.Println(json)
+	//json := rs.ToJSON()
+	//fmt.Println(json)
 
 	// a non-silo related test
 	rs.RemoveReadOnlyAt()
-	json = rs.ToJSON()
-	fmt.Println(json)
+	//json = rs.ToJSON()
+	//fmt.Println(json)
 
 	if (len(rs.GetId()) != 0) || (rs.GetMeta() != nil) {
 		t.Error("RemoveReadOnlyAt() didn't remove readonly attributes")
@@ -325,7 +328,7 @@ func TestSearch(t *testing.T) {
 
 	results = readResults(outPipe)
 
-	fmt.Println(results[rs1.GetId()].ToJSON())
+	//fmt.Println(results[rs1.GetId()].ToJSON())
 
 	if len(results) != 1 {
 		t.Errorf("Expected %d but received %d", 1, len(results))
@@ -333,10 +336,10 @@ func TestSearch(t *testing.T) {
 }
 
 func readResults(outPipe chan *base.Resource) map[string]*base.Resource {
-	fmt.Println("reading from pipe")
+	//fmt.Println("reading from pipe")
 	results := make(map[string]*base.Resource)
 	for rs := range outPipe {
-		fmt.Println("received RS ", rs.GetId())
+		//fmt.Println("received RS ", rs.GetId())
 		results[rs.GetId()] = rs
 	}
 

@@ -261,6 +261,10 @@ func (idx *Index) GetRids(valKey []byte, tx *bolt.Tx) []string {
 }
 
 func (idx *Index) HasVal(val interface{}, tx *bolt.Tx) bool {
+	if idx.AllowDupKey {
+		return idx.keyCount(fmt.Sprint(val), tx) > 0
+	}
+
 	key := idx.convert(val)
 	return len(idx.GetRid(key, tx)) != 0
 }
@@ -728,21 +732,31 @@ func addToIndex(atPath string, sa *base.SimpleAttribute, rid string, idx *Index,
 }
 
 func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *base.Resource, err error) {
+	tx, err := sl.db.Begin(false)
+	if err != nil {
+		detail := fmt.Sprintf("Could not begin a transaction for fetching the resource [%s]", err.Error())
+		log.Criticalf(detail)
+		err = base.NewInternalserverError(detail)
+		return nil, err
+	}
+
+	defer tx.Rollback()
+
+	return sl.getUsingTx(rid, rt, tx)
+}
+
+func (sl *Silo) getUsingTx(rid string, rt *schema.ResourceType, tx *bolt.Tx) (resource *base.Resource, err error) {
 	ridBytes := []byte(rid)
 	rtNameBytes := sl.resources[rt.Name]
 
-	err = sl.db.View(func(tx *bolt.Tx) error {
-		buck := tx.Bucket(rtNameBytes)
+	buck := tx.Bucket(rtNameBytes)
 
-		resData := buck.Get(ridBytes)
-		if resData != nil {
-			reader := bytes.NewReader(resData)
-			decoder := gob.NewDecoder(reader)
-			err = decoder.Decode(&resource)
-		}
-
-		return err
-	})
+	resData := buck.Get(ridBytes)
+	if resData != nil {
+		reader := bytes.NewReader(resData)
+		decoder := gob.NewDecoder(reader)
+		err = decoder.Decode(&resource)
+	}
 
 	if err != nil {
 		return nil, err
@@ -838,6 +852,281 @@ func (sl *Silo) storeResource(tx *bolt.Tx, res *base.Resource) {
 	err = resBucket.Put([]byte(res.GetId()), buf.Bytes())
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
+	err = inRes.CheckMissingRequiredAts()
+	if err != nil {
+		return nil, err
+	}
+
+	//inRes.RemoveReadOnlyAt()
+
+	rid := inRes.GetId()
+
+	if len(rid) == 0 {
+		return nil, base.NewBadRequestError("id attribute is missing")
+	}
+
+	// validate the uniqueness constraints based on the schema
+	rt := inRes.GetType()
+
+	tx, err := sl.db.Begin(true)
+
+	if err != nil {
+		detail := fmt.Sprintf("Could not begin a transaction for replacing the resource [%s]", err.Error())
+		log.Criticalf(detail)
+		err = base.NewInternalserverError(detail)
+		return nil, err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+			tx.Rollback()
+			res = nil
+			log.Debugf("failed to replace %s resource [%s]", rt.Name, err)
+		} else {
+			tx.Commit()
+			res = inRes
+			log.Debugf("Successfully replaced resource with id %s", rid)
+		}
+	}()
+
+	existing, err := sl.getUsingTx(rid, rt, tx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	prIdx := sl.getSysIndex(rt.Name, "presence")
+
+	sl.replaceAtGroup(rt.Name, rid, tx, prIdx, inRes.Core, existing.Core)
+
+	if len(inRes.Ext) == 0 {
+		for _, exExt := range existing.Ext {
+			// drop all the attributes of this extended schema object from indices
+			sl.deleteFromAtGroup(rt.Name, rid, tx, prIdx, nil, exExt)
+		}
+		// finally make the Ext map empty
+		existing.Ext = make(map[string]*base.AtGroup)
+	} else {
+		for scId, inExt := range inRes.Ext {
+			exExt := existing.Ext[scId]
+			if exExt == nil {
+				exExt = base.NewAtGroup()
+				existing.Ext[scId] = exExt
+			}
+			// now index all the attributes in this extended schema object
+			sl.replaceAtGroup(rt.Name, rid, tx, prIdx, inExt, exExt)
+		}
+
+		// now delete those extensions that are not present in the incoming resource
+		for scId, exExt := range existing.Ext {
+			if _, ok := inRes.Ext[scId]; !ok {
+				sl.deleteFromAtGroup(rt.Name, rid, tx, prIdx, nil, exExt)
+			}
+
+			delete(existing.Ext, scId)
+		}
+	}
+
+	// delete the non-asserted Core attributes
+	sl.deleteFromAtGroup(rt.Name, rid, tx, prIdx, inRes.Core, existing.Core)
+
+	// update last modified time
+	existing.UpdateLastModTime()
+	existing.UpdateSchemas()
+
+	sl.storeResource(tx, existing)
+
+	return inRes, nil
+}
+
+func (sl *Silo) deleteFromAtGroup(resName string, rid string, tx *bolt.Tx, prIdx *Index, inAtg *base.AtGroup, exAtg *base.AtGroup) {
+	for name, sa := range exAtg.SimpleAts {
+		atType := sa.GetType()
+
+		if atType.IsReadOnly() || atType.IsImmutable() {
+			continue
+		}
+
+		var inAt *base.SimpleAttribute
+		if inAtg != nil {
+			inAt = inAtg.SimpleAts[name]
+		}
+		if inAt == nil {
+			delete(exAtg.SimpleAts, name)
+			idx := sl.getIndex(resName, name)
+			if idx != nil {
+				prIdx.remove(name, rid, tx)
+				for _, val := range sa.Values {
+					err := idx.remove(val, rid, tx)
+					if err != nil {
+						panic(err)
+					}
+				}
+			}
+
+		}
+	}
+
+	for name, ca := range exAtg.ComplexAts {
+		atType := ca.GetType()
+
+		if atType.IsReadOnly() || atType.IsImmutable() {
+			continue
+		}
+
+		var inAt *base.ComplexAttribute
+		if inAtg != nil {
+			inAt = inAtg.ComplexAts[name]
+		}
+
+		if inAt == nil {
+			delete(exAtg.ComplexAts, name)
+
+			for _, saMap := range ca.SubAts {
+				for _, sa := range saMap {
+					atPath := name + "." + sa.Name
+					idx := sl.getIndex(resName, atPath)
+					if idx != nil {
+						err := prIdx.remove(atPath, rid, tx)
+						if err != nil {
+							panic(err)
+						}
+
+						for _, val := range sa.Values {
+							err := idx.remove(val, rid, tx)
+							if err != nil {
+								panic(err)
+							}
+
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func (sl *Silo) replaceAtGroup(resName string, rid string, tx *bolt.Tx, prIdx *Index, inAtg *base.AtGroup, exAtg *base.AtGroup) {
+	for name, sa := range inAtg.SimpleAts {
+		atType := sa.GetType()
+
+		if atType.IsReadOnly() {
+			continue
+		}
+
+		exAt := exAtg.SimpleAts[name]
+
+		var replaced *base.SimpleAttribute
+
+		if atType.IsImmutable() {
+			if exAt != nil {
+				if !sa.Equals(exAt) {
+					detail := fmt.Sprintf("Incoming value doesn't match with the existing value of immutable attribute %s", name)
+					se := base.NewBadRequestError(detail)
+					se.ScimType = base.ST_MUTABILITY
+					panic(se)
+				}
+			} else {
+				// add the immutable
+				replaced = exAtg.SimpleAts[name]
+				exAtg.SimpleAts[name] = sa
+			}
+		} else {
+			if !sa.Equals(exAt) {
+				replaced = exAtg.SimpleAts[name]
+				exAtg.SimpleAts[name] = sa
+			}
+		}
+
+		idx := sl.getIndex(resName, sa.Name)
+		if idx != nil {
+			if replaced != nil {
+				for _, val := range replaced.Values {
+					err := prIdx.remove(sa.Name, rid, tx)
+					if err != nil {
+						panic(err)
+					}
+
+					err = idx.remove(val, rid, tx)
+					if err != nil {
+						panic(err)
+					}
+
+				}
+			}
+
+			for _, val := range sa.Values {
+				err := prIdx.add(sa.Name, rid, tx)
+				if err != nil {
+					panic(err)
+				}
+
+				err = idx.add(val, rid, tx)
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
+	}
+
+	for name, ca := range inAtg.ComplexAts {
+		atType := ca.GetType()
+
+		if atType.IsReadOnly() || atType.IsImmutable() {
+			continue
+		}
+
+		exAt := exAtg.ComplexAts[name]
+
+		// there is no way to identify the equality when it is multivalued, just overwrite it
+		if exAt != nil {
+			// drop the old values from index
+			for _, saMap := range exAt.SubAts {
+				for _, sa := range saMap {
+					atPath := name + "." + sa.Name
+					idx := sl.getIndex(resName, atPath)
+					if idx != nil {
+						err := prIdx.remove(atPath, rid, tx)
+						if err != nil {
+							panic(err)
+						}
+
+						// the SimpleAttributes here will always be single valued
+						err = idx.remove(sa.Values[0], rid, tx)
+						if err != nil {
+							panic(err)
+						}
+					}
+				}
+			}
+		}
+
+		exAtg.ComplexAts[name] = ca
+		// index them now
+		for _, saMap := range ca.SubAts {
+			for _, sa := range saMap {
+				atPath := name + "." + sa.Name
+				idx := sl.getIndex(resName, atPath)
+				if idx != nil {
+					err := prIdx.add(atPath, rid, tx)
+					if err != nil {
+						panic(err)
+					}
+
+					// the SimpleAttributes here will always be single valued
+					err = idx.add(sa.Values[0], rid, tx)
+					if err != nil {
+						panic(err)
+					}
+				}
+			}
+		}
 	}
 }
 
