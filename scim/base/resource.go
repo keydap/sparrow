@@ -341,7 +341,7 @@ func (rs *Resource) AddMeta() *ComplexAttribute {
 	versionAt := &SimpleAttribute{Name: "version"}
 	versionAt.atType = parentAt.SubAttrMap[versionAt.Name]
 	versionAt.Values = make([]interface{}, 1)
-	versionAt.Values[0] = lastModAt.Values[0]
+	versionAt.Values[0] = fmt.Sprint(lastModAt.Values[0])
 	atMap[versionAt.Name] = versionAt
 
 	return ca
@@ -463,7 +463,10 @@ func Compare(atType *schema.AttrType, saVal interface{}, otherVal interface{}) b
 }
 
 func (rs *Resource) UpdateLastModTime() {
-	rs.Core.ComplexAts["meta"].SubAts[0]["lastmodified"].Values[0] = utils.DateTimeMillis()
+	meta := rs.Core.ComplexAts["meta"].SubAts[0]
+	millis := utils.DateTimeMillis()
+	meta["lastmodified"].Values[0] = millis
+	meta["version"].Values[0] = fmt.Sprint(millis)
 }
 
 func (rs *Resource) UpdateSchemas() {
