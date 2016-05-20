@@ -570,7 +570,7 @@ func NewResource(rt *schema.ResourceType) *Resource {
 func (rs *Resource) AddSA(name string, val ...interface{}) error {
 	sa := &SimpleAttribute{}
 	sa.atType = rs.resType.GetAtType(name)
-	sa.Name = strings.ToLower(sa.atType.Name)
+	sa.Name = sa.atType.NormName
 	if sa.atType == nil {
 		return fmt.Errorf("No attribute type found with the name %s in the resource type %s", name, rs.resType.Schema)
 	}
@@ -681,18 +681,18 @@ func (rs *Resource) SetSchema(rt *schema.ResourceType) {
 func (atg *AtGroup) setSchema(sc *schema.Schema) {
 	if len(atg.SimpleAts) > 0 {
 		for k, v := range atg.SimpleAts {
-			atType := sc.AttrMap[strings.ToLower(k)]
+			atType := sc.AttrMap[k]
 			v.atType = atType
 		}
 	}
 
 	if len(atg.ComplexAts) > 0 {
 		for k, v := range atg.ComplexAts {
-			parentType := sc.AttrMap[strings.ToLower(k)]
+			parentType := sc.AttrMap[k]
 			v.atType = parentType
 			for _, saArr := range v.SubAts {
 				for _, sa := range saArr {
-					subType := parentType.SubAttrMap[strings.ToLower(sa.Name)]
+					subType := parentType.SubAttrMap[sa.Name]
 					sa.atType = subType
 				}
 			}
@@ -925,7 +925,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 	}
 
 	sa := &SimpleAttribute{}
-	sa.Name = strings.ToLower(attrType.Name)
+	sa.Name = attrType.NormName
 	sa.atType = attrType
 
 	log.Debugf("Parsing simple attribute %s\n", sa.Name)
@@ -1052,7 +1052,7 @@ func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 	}
 
 	ca := &ComplexAttribute{}
-	ca.Name = strings.ToLower(attrType.Name)
+	ca.Name = attrType.NormName
 	ca.atType = attrType
 
 	if attrType.MultiValued {
