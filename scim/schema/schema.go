@@ -47,6 +47,7 @@ type AttrType struct {
 	CanonicalValues []string    // canonicalValues
 	SubAttrMap      map[string]*AttrType
 	SchemaId        string    // schema's ID
+	NormName        string    // the lowercase name of the attribute
 	parent          *AttrType // parent Attribute, should be non-exportable, otherwise stackoverflow occurs during marshalling
 }
 
@@ -293,6 +294,7 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 	}
 
 	attr.SchemaId = sc.Id
+	attr.NormName = strings.ToLower(attr.Name)
 
 	if attr.IsComplex() {
 		if attr.SubAttrMap == nil {
@@ -305,9 +307,8 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 				log.Tracef("validating sub-type %s of %s", sa.Name, attr.Name)
 				validateAttrType(sa, sc, ve)
 				sa.parent = attr
-				name := strings.ToLower(sa.Name)
-				attr.SubAttrMap[name] = sa
-				name = strings.ToLower(attr.Name + ATTR_DELIM + name)
+				attr.SubAttrMap[sa.NormName] = sa
+				name := attr.NormName + ATTR_DELIM + sa.NormName
 				if sa.IsUnique() {
 					sc.UniqueAts = append(sc.UniqueAts, name)
 				}
@@ -329,24 +330,29 @@ func addDefSubAttrs(attr *AttrType) {
 
 	typeAttr := newAttrType()
 	typeAttr.Name = "type"
+	typeAttr.NormName = typeAttr.Name
 	defArr[0] = typeAttr
 
 	primaryAttr := newAttrType()
 	primaryAttr.Name = "primary"
+	primaryAttr.NormName = primaryAttr.Name
 	primaryAttr.Type = "boolean"
 	defArr[1] = primaryAttr
 
 	displayAttr := newAttrType()
 	displayAttr.Name = "display"
+	displayAttr.NormName = displayAttr.Name
 	displayAttr.Mutability = "immutable"
 	defArr[2] = displayAttr
 
 	valueAttr := newAttrType()
 	valueAttr.Name = "value"
+	valueAttr.NormName = valueAttr.Name
 	defArr[3] = valueAttr
 
 	refAttr := newAttrType()
 	refAttr.Name = "$ref"
+	refAttr.NormName = refAttr.Name
 	defArr[4] = refAttr
 
 	for _, a := range defArr {
@@ -392,7 +398,7 @@ func (sc *Schema) GetAtType(name string) *AttrType {
 		atType = parent.SubAttrMap[arr[1]]
 
 		if atType == nil {
-			panic("Sub-attribute type " + arr[1] + " not found")
+			//panic("Sub-attribute type " + arr[1] + " not found")
 		}
 	} else {
 		atType = sc.AttrMap[normName]
