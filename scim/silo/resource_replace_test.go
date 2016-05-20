@@ -18,7 +18,7 @@ func TestReplace(t *testing.T) {
 			  "price": 7.2,
 			  "installedDate": "2016-05-17T14:19:14Z",
 			  "repairDates": ["2016-05-10T14:19:14Z", "2016-05-11T14:19:14Z"],
-			  "location": {"lat": "19°10'45.4\"N", "long": "78°13'02.8\"E"},
+			  "location": {"latitude": "19°10'45.4\"N", "longitude": "78°13'02.8\"E"},
 			  "photos": [{"value": "abc.jpg", "primary": true}, {"value": "xyz.jpg", "primary": false}]}`
 
 	upDevice := `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],     
@@ -28,7 +28,7 @@ func TestReplace(t *testing.T) {
 			  "price": 9.2,
 			  "macId": "abcd1",
 			  "repairDates": ["2016-05-15T14:19:14Z", "2016-05-16T14:19:14Z"],
-			  "location": {"lat": "17°10'45.4\"N", "long": "78°13'02.8\"E"},
+			  "location": {"latitude": "17°10'45.4\"N", "longitude": "78°13'02.8\"E"},
 			  "photos": [{"value": "device1.jpg", "primary": false}, {"value": "device2.jpg", "primary": true}]}`
 
 	reader := bytes.NewReader([]byte(origDevice))
@@ -87,11 +87,11 @@ func TestReplace(t *testing.T) {
 	assertIndexVal(resName, "repairDates", utils.GetTimeMillis("2016-05-15T14:19:14Z"), true, t) // 1st value after replacing
 	assertIndexVal(resName, "repairDates", utils.GetTimeMillis("2016-05-16T14:19:14Z"), true, t) // 2nd value after replacing
 
-	assertEquals(t, "location.lat", newRs, "17°10'45.4\"N")
-	assertIndexVal(resName, "location.lat", "19°10'45.4\"N", false, t) // value before replacing
-	assertIndexVal(resName, "location.lat", "17°10'45.4\"N", true, t)  // value after replacing
+	assertEquals(t, "location.latitude", newRs, "17°10'45.4\"N")
+	assertIndexVal(resName, "location.latitude", "19°10'45.4\"N", false, t) // value before replacing
+	assertIndexVal(resName, "location.latitude", "17°10'45.4\"N", true, t)  // value after replacing
 
-	assertEquals(t, "location.long", newRs, "78°13'02.8\"E")
+	assertEquals(t, "location.longitude", newRs, "78°13'02.8\"E")
 	assertEquals(t, "macid", newRs, "abcd1")
 
 	assertEquals(t, "photos.value", newRs, "device1.jpg", "device2.jpg")

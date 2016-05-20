@@ -231,7 +231,7 @@ func TestEquals(t *testing.T) {
 			  "price": 7.2,
 			  "installedDate": "2016-05-17T14:19:14Z",
 			  "repairDates": ["2016-05-15T14:19:14Z", "2016-05-16T14:19:14Z"],
-			  "location": {"lat": "17°10'45.4\"N", "long": "78°13'02.8\"E"}}`
+			  "location": {"latitude": "17°10'45.4\"N", "longitude": "78°13'02.8\"E"}}`
 
 	device2 := `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],     
 			  "manufacturer":"keydap",
@@ -240,7 +240,7 @@ func TestEquals(t *testing.T) {
 			  "price": 9.2,
 			  "installedDate": "2016-05-17T14:19:14Z",
 			  "repairDates": ["2016-05-15T14:19:14Z", "2016-05-16T14:19:14Z"],
-			  "location": {"lat": "17°10'45.4\"N", "long": "78°13'02.8\"E"}}`
+			  "location": {"latitude": "17°10'45.4\"N", "longitude": "78°13'02.8\"E"}}`
 
 	reader := bytes.NewReader([]byte(device1))
 	rs1, _ := ParseResource(rTypesMap, schemas, reader)

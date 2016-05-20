@@ -91,7 +91,7 @@
             "uniqueness":"none",
             "subAttributes":[
                 {
-                    "name":"lat",
+                    "name":"latitude",
                     "type":"string",
                     "multiValued":false,
                     "description":"The latitude",
@@ -102,7 +102,7 @@
                     "uniqueness":"none"
                 },
                 {
-                    "name":"long",
+                    "name":"longitude",
                     "type":"string",
                     "multiValued":false,
                     "description":"The longitude",
