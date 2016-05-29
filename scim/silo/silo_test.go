@@ -18,10 +18,12 @@ var config = conf.DefaultConfig()
 var resDir, _ = os.Getwd()
 var sl *Silo
 var uCount int
-var userResName = "User"
+var userResName string
 
 var schemas map[string]*schema.Schema
 var restypes map[string]*schema.ResourceType
+var deviceType *schema.ResourceType
+var userType *schema.ResourceType
 
 func TestMain(m *testing.M) {
 	logger.ConfigureLoggers("<root>=warn;scim.main=debug")
@@ -33,6 +35,10 @@ func TestMain(m *testing.M) {
 
 	schemas, _ = base.LoadSchemas(schemaDir)
 	restypes, _, _ = base.LoadResTypes(rtDir, schemas)
+
+	deviceType = restypes["Device"]
+	userType = restypes["User"]
+	userResName = userType.Name
 
 	os.Remove(dbFilePath)
 

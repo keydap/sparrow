@@ -54,6 +54,16 @@ type Index struct {
 	db            *bolt.DB
 }
 
+type modifyHints struct {
+	modified bool
+}
+
+func (mh *modifyHints) markDirty() {
+	if !mh.modified { // set only if not already marked
+		mh.modified = true
+	}
+}
+
 func (sl *Silo) getIndex(resName string, atName string) *Index {
 	return sl.indices[resName][strings.ToLower(atName)]
 }
@@ -110,6 +120,7 @@ func (idx *Index) keyCount(key string, tx *bolt.Tx) int64 {
 }
 
 // Inserts the given <attribute value, resource ID> tuple in the index
+// FIXME check for the presence of key before insertion otherwise insertion of the same key will increment count
 func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 	log.Debugf("adding value %s of resource %s to index %s", val, rid, idx.Name)
 	vData := idx.convert(val)
@@ -715,6 +726,7 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 	return inRes, nil
 }
 
+// FIXME there is a method duplicating this functionality in addSAtoIndex() in silo_patch.go
 func addToIndex(atPath string, sa *base.SimpleAttribute, rid string, idx *Index, prIdx *Index, tx *bolt.Tx) {
 	for _, val := range sa.Values {
 		err := idx.add(val, rid, tx)
@@ -1085,48 +1097,11 @@ func (sl *Silo) replaceAtGroup(resName string, rid string, tx *bolt.Tx, prIdx *I
 		exAt := exAtg.ComplexAts[name]
 
 		// there is no way to identify the equality when it is multivalued, just overwrite it
-		if exAt != nil {
-			// drop the old values from index
-			for _, saMap := range exAt.SubAts {
-				for _, sa := range saMap {
-					atPath := name + "." + sa.Name
-					idx := sl.getIndex(resName, atPath)
-					if idx != nil {
-						err := prIdx.remove(atPath, rid, tx)
-						if err != nil {
-							panic(err)
-						}
-
-						// the SimpleAttributes here will always be single valued
-						err = idx.remove(sa.Values[0], rid, tx)
-						if err != nil {
-							panic(err)
-						}
-					}
-				}
-			}
-		}
+		sl.dropCAtFromIndex(exAt, prIdx, resName, rid, tx)
 
 		exAtg.ComplexAts[name] = ca
 		// index them now
-		for _, saMap := range ca.SubAts {
-			for _, sa := range saMap {
-				atPath := name + "." + sa.Name
-				idx := sl.getIndex(resName, atPath)
-				if idx != nil {
-					err := prIdx.add(atPath, rid, tx)
-					if err != nil {
-						panic(err)
-					}
-
-					// the SimpleAttributes here will always be single valued
-					err = idx.add(sa.Values[0], rid, tx)
-					if err != nil {
-						panic(err)
-					}
-				}
-			}
-		}
+		sl.addCAtoIndex(ca, prIdx, resName, rid, tx)
 	}
 }
 
