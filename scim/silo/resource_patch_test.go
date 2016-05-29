@@ -103,16 +103,38 @@ func TestPatchAddSimpleAts(t *testing.T) {
 }
 
 func TestModifyUniqueSimpleAt(t *testing.T) {
-	//	initSilo()
-	//
-	//	rs := insertRs(patchDevice)
-	//	rid := rs.GetId()
-	//	pr := getPr(`{"Operations":[{"op":"add", "value":{"serialNumber": "11"}]}`)
-	//
-	//	updatedRs, err := sl.Patch(rid, pr, deviceType)
-	//	if err != nil {
-	//		t.Errorf("Failed to apply patch req with unique attribute")
-	//	}
+	initSilo()
+
+	var device1 = `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],     
+			  "manufacturer":"keydap",
+			  "serialNumber":"20",
+			  "rating": 1,
+			  "price": 7.2,
+			  "installedDate": "2016-05-17T14:19:14Z",
+			  "repairDates": ["2016-05-10T14:19:14Z", "2016-05-11T14:19:14Z"],
+			  "location": {"latitude": "1.1", "longitude": "2.2"},
+			  "photos": [{"value": "abc.jpg", "primary": true}, {"value": "xyz.jpg", "primary": false}]}`
+
+	// insert device1 first
+	insertRs(device1)
+
+	// next device to be patched
+	rs := insertRs(patchDevice)
+	rid := rs.GetId()
+
+	// now define a patch operation which tries to change value of serialNumber to be that of device1
+	pr := getPr(`{"Operations":[{"op":"add", "value":{"serialNumber": "20"}}]}`)
+
+	// it must fail
+	_, err := sl.Patch(rid, pr, deviceType)
+	if err == nil {
+		t.Errorf("Patch operation must fail due to uniqueness violation")
+	}
+
+	se := err.(*base.ScimError)
+	if se.ScimType != base.ST_UNIQUENESS {
+		t.Error("ScimType must be set to uniqueness")
+	}
 }
 
 func TestPatchAddComplexAT(t *testing.T) {
