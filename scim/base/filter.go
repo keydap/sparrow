@@ -204,7 +204,7 @@ outer:
 
 			case READ_VAL:
 				log.Tracef("read val %s", t)
-				node.Value = stripQuotes(t)
+				node.Value = StripQuotes(t)
 				if root != nil && isLogical(root.Op) {
 					root.addChild(node)
 				}
@@ -337,7 +337,7 @@ func isLogical(op string) bool {
 	return op_map[op] >= 11
 }
 
-func stripQuotes(token string) string {
+func StripQuotes(token string) string {
 	if token[0:1] == "\"" {
 		token = token[1 : len(token)-1]
 		token = strings.Replace(token, "\\\"", "\"", -1)
