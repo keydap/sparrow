@@ -92,7 +92,7 @@ func (ca *ComplexAttribute) GetComplexAt() *ComplexAttribute {
 }
 
 func (ca *ComplexAttribute) AddSubAts(subAtMap map[string]interface{}) {
-	subAt, _ := parseSubAtList(subAtMap, ca.atType)
+	subAt, _ := ParseSubAtList(subAtMap, ca.atType)
 	if ca.SubAts == nil {
 		ca.SubAts = make([]map[string]*SimpleAttribute, 1)
 	}
@@ -117,6 +117,42 @@ func (ca *ComplexAttribute) GetValue(subAtName string) interface{} {
 	}
 
 	return nil
+}
+
+func (ca *ComplexAttribute) HasPrimarySet() bool {
+	if !ca.atType.MultiValued {
+		return false
+	}
+
+	for _, sMap := range ca.SubAts {
+		for _, sa := range sMap {
+			if sa.Name == "primary" {
+				primary := sa.Values[0].(bool)
+				if primary {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+func (ca *ComplexAttribute) UnsetPrimaryFlag() {
+	if !ca.atType.MultiValued {
+		return
+	}
+
+	for _, sMap := range ca.SubAts {
+		for _, sa := range sMap {
+			if sa.Name == "primary" {
+				primary := sa.Values[0].(bool)
+				if primary {
+					sa.Values[0] = false
+				}
+			}
+		}
+	}
 }
 
 func (atg *AtGroup) getAttribute(name string) Attribute {
@@ -586,7 +622,7 @@ func (rs *Resource) AddSA(name string, val ...interface{}) error {
 		sa.Values = val
 	}
 
-	rs.addSimpleAt(sa)
+	rs.AddSimpleAt(sa)
 
 	return nil
 }
@@ -611,9 +647,9 @@ func (rs *Resource) AddCA(name string, val ...map[string]interface{}) (err error
 
 	var ca *ComplexAttribute
 	if atType.MultiValued {
-		ca = parseComplexAttr(atType, val)
+		ca = ParseComplexAttr(atType, val)
 	} else {
-		ca = parseComplexAttr(atType, val[0])
+		ca = ParseComplexAttr(atType, val[0])
 	}
 
 	if ca == nil {
@@ -624,7 +660,7 @@ func (rs *Resource) AddCA(name string, val ...map[string]interface{}) (err error
 	return nil
 }
 
-func (rs *Resource) addSimpleAt(sa *SimpleAttribute) {
+func (rs *Resource) AddSimpleAt(sa *SimpleAttribute) {
 	scId := sa.atType.SchemaId
 	if scId == rs.resType.Schema {
 		rs.Core.SimpleAts[sa.Name] = sa
@@ -813,10 +849,10 @@ func ParseResource(resTypes map[string]*schema.ResourceType, sm map[string]*sche
 	}
 
 	log.Debugf("converting to resource")
-	return toResource(rt, sm, obj)
+	return ToResource(rt, sm, obj)
 }
 
-func toResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[string]interface{}) (rs *Resource, err error) {
+func ToResource(rt *schema.ResourceType, sm map[string]*schema.Schema, obj map[string]interface{}) (rs *Resource, err error) {
 
 	rs = &Resource{}
 	rs.resType = rt
@@ -901,12 +937,12 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 		}
 
 		if atType.IsSimple() {
-			sa := parseSimpleAttr(atType, v)
+			sa := ParseSimpleAttr(atType, v)
 			if sa != nil {
-				rs.addSimpleAt(sa)
+				rs.AddSimpleAt(sa)
 			}
 		} else if atType.IsComplex() {
-			ca := parseComplexAttr(atType, v)
+			ca := ParseComplexAttr(atType, v)
 			if ca != nil {
 				rs.addComplexAt(ca)
 			}
@@ -914,7 +950,7 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 	}
 }
 
-func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribute {
+func ParseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribute {
 	rv := reflect.ValueOf(iVal)
 
 	kind := rv.Kind()
@@ -953,7 +989,7 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 				panic(NewBadRequestError(detail))
 			}
 
-			strVal := checkValueTypeAndConvert(v, attrType)
+			strVal := CheckValueTypeAndConvert(v, attrType)
 			arr[i] = strVal
 		}
 
@@ -962,12 +998,12 @@ func parseSimpleAttr(attrType *schema.AttrType, iVal interface{}) *SimpleAttribu
 		return sa
 	}
 
-	strVal := checkValueTypeAndConvert(rv, attrType)
+	strVal := CheckValueTypeAndConvert(rv, attrType)
 	sa.Values = []interface{}{strVal}
 	return sa
 }
 
-func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) interface{} {
+func CheckValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) interface{} {
 	msg := fmt.Sprintf("Invalid value '%#v' in attribute %s", v, attrType.Name)
 	err := NewBadRequestError(msg)
 
@@ -1041,7 +1077,7 @@ func checkValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) interf
 	panic(err)
 }
 
-func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttribute {
+func ParseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttribute {
 	rv := reflect.ValueOf(iVal)
 
 	kind := rv.Kind()
@@ -1078,7 +1114,7 @@ func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 				panic(NewBadRequestError(detail))
 			}
 
-			simpleAtMap, prm := parseSubAtList(v.Interface(), attrType)
+			simpleAtMap, prm := ParseSubAtList(v.Interface(), attrType)
 			if prm {
 				if primaryAlreadySet {
 					detail := fmt.Sprintf("More than one sub attribute is marked as primary in the complex attribute %s", attrType.Name)
@@ -1096,13 +1132,13 @@ func parseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 		return ca
 	}
 
-	simpleAtMap, _ := parseSubAtList(iVal, attrType)
+	simpleAtMap, _ := ParseSubAtList(iVal, attrType)
 	ca.SubAts = []map[string]*SimpleAttribute{simpleAtMap}
 
 	return ca
 }
 
-func parseSubAtList(v interface{}, attrType *schema.AttrType) (subAtMap map[string]*SimpleAttribute, primary bool) {
+func ParseSubAtList(v interface{}, attrType *schema.AttrType) (subAtMap map[string]*SimpleAttribute, primary bool) {
 	var vObj map[string]interface{}
 
 	switch v.(type) {
@@ -1125,7 +1161,7 @@ func parseSubAtList(v interface{}, attrType *schema.AttrType) (subAtMap map[stri
 			log.Debugf("found sub-atType %s.%s\n", attrType.Name, subAtName)
 		}
 
-		subAt := parseSimpleAttr(subAtType, v)
+		subAt := ParseSimpleAttr(subAtType, v)
 		if subAt != nil {
 			if subAt.Name == "primary" {
 				if p, ok := subAt.Values[0].(bool); ok && p {
