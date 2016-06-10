@@ -15,6 +15,7 @@ func TestParsingInvalidPatchReq(t *testing.T) {
 		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"xyz", "path":"emails", "value":null}]}`,
 		// invalid paths
 		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"remove", "path":"emails["}]}`,
+		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"remove", "path":"emails]"}]}`,
 		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"remove", "path":"emails[type ]"}]}`,
 		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"remove", "path":"emails[type eq]"}]}`,
 		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"remove", "path":"emails[type eq"}]}`,
