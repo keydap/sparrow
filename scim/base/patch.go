@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"reflect"
 	"sparrow/scim/schema"
 	"strings"
 )
@@ -26,8 +25,8 @@ type ParsedPath struct {
 	ParentType *schema.AttrType // name of the sub-attribute's parent
 	AtType     *schema.AttrType // name of the (sub-)attribute
 	Schema     string           // the schema of the attribute
-	SlctrType  *schema.AttrType // name of the selector sub-attribute
-	SlctrVal   interface{}      // value of the selector sub-attribute
+	Slctr      Selector         // the selection filter present in the path
+	Text       string
 }
 
 func ParsePatchReq(body io.Reader, rt *schema.ResourceType) (*PatchReq, error) {
@@ -68,7 +67,9 @@ func ParsePatchReq(body io.Reader, rt *schema.ResourceType) (*PatchReq, error) {
 			if pLen == 0 {
 				detail := fmt.Sprintf("Invalid patch request, missing path in the %d operation", i)
 				log.Debugf(detail)
-				return nil, NewBadRequestError(detail)
+				se := NewBadRequestError(detail)
+				se.ScimType = ST_NOTARGET
+				return nil, se
 			}
 
 		default:
@@ -120,12 +121,15 @@ func parsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error)
 			return nil, NewBadRequestError(detail)
 		}
 
-		selector = strings.ToLower(path[slctrStrtPos+1 : slctrEndPos])
+		selector = path[:slctrEndPos]
 
 		if len(selector) == 0 {
 			detail := fmt.Sprintf("Invalid attribute path, empty selector present", path)
 			return nil, NewBadRequestError(detail)
 		}
+
+		// now append ]
+		selector += "]"
 
 		runningPath = path[:slctrStrtPos]
 		slctrEndPos++
@@ -199,52 +203,13 @@ func parsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error)
 	}
 
 	if len(selector) > 0 {
-		slctrName, selector := readSlctrToken(selector)
-
-		if len(slctrName) == 0 {
-			detail := fmt.Sprintf("Missing attribute name in the path %s", path)
-			return nil, NewBadRequestError(detail)
+		slctrNode, err := ParseFilter(selector)
+		if err != nil {
+			return nil, err
 		}
-
-		selector = strings.TrimSpace(selector) // trim again before reading
-		slctrOp := ""
-		slctrOp, selector = readSlctrToken(selector)
-		slctrOp = strings.TrimSpace(slctrOp)
-
-		if strings.ToLower(slctrOp) != "eq" {
-			detail := fmt.Sprintf("Unknown operator name %s in the path %s", slctrOp, path)
-			return nil, NewBadRequestError(detail)
-		}
-
-		slctrName = strings.ToLower(pp.ParentType.NormName + "." + slctrName)
-		pp.SlctrType = rt.GetAtType(slctrName)
-		if pp.SlctrType == nil {
-			detail := fmt.Sprintf("Unknown selector attribute %s in the path %s", slctrName, path)
-			return nil, NewBadRequestError(detail)
-		}
-
-		// remaining in the selector is selector's value, trim and store it
-		selector = StripQuotes(strings.TrimSpace(selector))
-		pp.SlctrVal = CheckValueTypeAndConvert(reflect.ValueOf(selector), pp.SlctrType)
+		pp.Text = selector
+		pp.Slctr = buildSelector(slctrNode, rt)
 	}
 
 	return pp, nil
-}
-
-func readSlctrToken(slctr string) (token string, remSlctr string) {
-	spacePos := strings.IndexRune(slctr, ' ')
-
-	if spacePos == -1 {
-		return "", slctr
-	}
-
-	token = slctr[:spacePos]
-
-	spacePos++
-
-	if spacePos < len(slctr) {
-		remSlctr = slctr[spacePos:]
-	}
-
-	return token, remSlctr
 }

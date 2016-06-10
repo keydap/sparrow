@@ -137,6 +137,10 @@ func TestModifyUniqueSimpleAt(t *testing.T) {
 	}
 }
 
+func TestPatchReadOnlyAT(t *testing.T) {
+
+}
+
 func TestPatchAddComplexAT(t *testing.T) {
 	initSilo()
 
@@ -245,7 +249,7 @@ func TestPatchAddMultiValComplexAT(t *testing.T) {
 
 	updatedRs, err = sl.Patch(rid, pr, deviceType)
 	if err != nil {
-		t.Errorf("Patch request failed on a complex multi-valued attribute")
+		t.Errorf("Patch request failed on a complex multi-valued attribute %#v", err)
 	}
 
 	photos = updatedRs.GetAttr("photos").GetComplexAt()

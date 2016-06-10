@@ -43,6 +43,12 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 		switch po.Op {
 		case "add":
 			sl.handleAdd(po, res, rid, mh, tx)
+
+		case "remove":
+			sl.handleRemove(po, res, rid, mh, tx)
+
+		case "replace":
+			sl.handleReplace(po, res, rid, mh, tx)
 		}
 	}
 
@@ -54,13 +60,249 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 	return res, nil
 }
 
+func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, mh *modifyHints, tx *bolt.Tx) {
+	rt := res.GetType()
+	prIdx := sl.getSysIndex(rt.Name, "presence")
+
+	pp := po.ParsedPath
+
+	if pp == nil { // no path is provided
+		var addRs *base.Resource
+		var err error
+		if obj, ok := po.Value.(map[string]interface{}); ok {
+			addRs, err = base.ToResource(res.GetType(), sl.schemas, obj)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			detail := fmt.Sprintf("Invalid value type given in the patch operation %#v", po.Value)
+			log.Debugf(detail)
+			panic(base.NewBadRequestError(detail))
+		}
+
+		for _, sa := range addRs.Core.SimpleAts {
+			sl.replaceAttrIn(res, sa, tx, prIdx, mh)
+		}
+
+		for _, ca := range addRs.Core.ComplexAts {
+			sl.replaceAttrIn(res, ca, tx, prIdx, mh)
+		}
+
+		for _, ext := range addRs.Ext {
+			for _, sa := range ext.SimpleAts {
+				sl.replaceAttrIn(res, sa, tx, prIdx, mh)
+			}
+
+			for _, ca := range ext.ComplexAts {
+				sl.replaceAttrIn(res, ca, tx, prIdx, mh)
+			}
+		}
+
+		// to avoid a lengthy else block below
+		return
+	}
+
+	if pp.AtType.IsComplex() {
+		tAt := res.GetAttr(pp.AtType.NormName)
+		if tAt == nil {
+			// just add it
+			ca := base.ParseComplexAttr(pp.AtType, po.Value)
+			sl.addAttrTo(res, ca, tx, prIdx, mh)
+		} else {
+			tCa := tAt.GetComplexAt()
+			// TODO an additional case here is to use selector and find the target object
+			if pp.Slctr != nil {
+				//				/
+			}
+
+			if pp.AtType.MultiValued {
+				// po.Value can be array of subAtMapS too right?
+				rv := reflect.ValueOf(po.Value)
+				kind := rv.Kind()
+				arrLen := rv.Len()
+
+				if (kind == reflect.Slice) || (kind == reflect.Array) {
+					prmSet := false
+					for i := 0; i < arrLen; i++ {
+						val := rv.Index(i).Interface()
+						subAtMap, p := base.ParseSubAtList(val, pp.AtType)
+						if p {
+							if !prmSet {
+								prmSet = true
+								// reset any other sub-list's primary flag if set
+								tCa.UnsetPrimaryFlag()
+							} else {
+								detail := fmt.Sprintf("More than one sub-attribute object has the primary flag set in the %d operation", po.Index)
+								panic(base.NewBadRequestError(detail))
+							}
+						}
+
+						tCa.SubAts = append(tCa.SubAts, subAtMap)
+						sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
+					}
+				} else {
+					subAtMap, primary := base.ParseSubAtList(po.Value, pp.AtType)
+					if primary {
+						// reset any other sub-list's primary flag if set
+						tCa.UnsetPrimaryFlag()
+					}
+
+					tCa.SubAts = append(tCa.SubAts, subAtMap)
+					// index the subAtMap
+					sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
+				}
+			} else { // merge them
+				subAtMap, _ := base.ParseSubAtList(po.Value, pp.AtType)
+				mergeSubAtMap(tCa.SubAts[0], subAtMap, mh)
+			}
+		}
+	} else { // handle SimpleAttributes
+		if pp.ParentType != nil {
+			var offsets []int
+			tCa := res.GetAttr(pp.ParentType.NormName).GetComplexAt()
+			if pp.Slctr != nil {
+				offsets = findSelectedObj(po, tCa)
+			} else {
+				offsets = []int{0}
+			}
+
+			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
+
+			if sa.Name == "primary" {
+				if sa.Values[0].(bool) {
+					tCa.UnsetPrimaryFlag()
+				}
+			}
+
+			for _, o := range offsets {
+				tSaMap := tCa.SubAts[o]
+				tSa := tSaMap[pp.AtType.NormName]
+
+				atPath := pp.ParentType.NormName + "." + sa.Name
+
+				if tSa == nil {
+					tSaMap[pp.AtType.NormName] = sa
+					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
+					mh.markDirty()
+				} else if !sa.Equals(tSa) {
+					//re-index
+					sl.dropSAtFromIndex(tSa, atPath, prIdx, rt.Name, rid, tx)
+					tSaMap[pp.AtType.NormName] = sa
+					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
+					mh.markDirty()
+				}
+			}
+
+		} else {
+			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
+			tAt := res.GetAttr(pp.AtType.NormName)
+			if tAt == nil {
+				res.AddSimpleAt(sa)
+				//index
+				sl.addSAtoIndex(sa, sa.Name, prIdx, rt.Name, rid, tx)
+				mh.markDirty()
+			} else {
+				tSa := tAt.GetSimpleAt()
+				if !sa.Equals(tSa) {
+					//re-index
+					sl.dropSAtFromIndex(tSa, sa.Name, prIdx, rt.Name, rid, tx)
+					tSa.Values = sa.Values
+					sl.addSAtoIndex(sa, sa.Name, prIdx, rt.Name, rid, tx)
+					mh.markDirty()
+				}
+			}
+		}
+	}
+}
+
+func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, mh *modifyHints, tx *bolt.Tx) {
+	rt := res.GetType()
+	prIdx := sl.getSysIndex(rt.Name, "presence")
+
+	pp := po.ParsedPath
+
+	if pp.AtType.IsReadOnly() || pp.AtType.IsImmutable() || pp.AtType.Required {
+		mutability := pp.AtType.Mutability
+		if pp.AtType.Required {
+			mutability = "required"
+		}
+
+		detail := fmt.Sprintf("Cannot remove %s attribute %s from resource %s", mutability, pp.AtType.Name, rid)
+		log.Debugf(detail)
+		se := base.NewBadRequestError(detail)
+		se.ScimType = base.ST_MUTABILITY
+		panic(se)
+	}
+
+	if pp.ParentType != nil {
+		ca := res.GetAttr(pp.ParentType.Name).GetComplexAt()
+		if pp.Slctr != nil {
+			offsets := findSelectedObj(po, ca)
+			for _, pos := range offsets {
+				tSaMap := ca.SubAts[pos]
+				deleteAtFromSubAtMap(sl, pp, tSaMap, pos, ca, prIdx, res, rid, tx, mh)
+			}
+		} else {
+			if pp.ParentType.MultiValued {
+				// delete the sub-attribute from all values
+				removedAtMap := false
+				for i, subAtMap := range ca.SubAts {
+					if sa, ok := subAtMap[pp.AtType.Name]; ok {
+						delete(subAtMap, sa.Name)
+						sl.dropSAtFromIndex(sa, ca.Name+"."+sa.Name, prIdx, rt.Name, rid, tx)
+						if len(subAtMap) == 0 {
+							ca.SubAts[i] = nil
+							removedAtMap = true
+						}
+
+						mh.markDirty()
+					}
+				}
+
+				if removedAtMap {
+					newSubAts := make([]map[string]*base.SimpleAttribute, 0)
+					for _, subAtMap := range ca.SubAts {
+						if subAtMap != nil {
+							newSubAts = append(newSubAts, subAtMap)
+						}
+					}
+
+					if len(newSubAts) == 0 {
+						res.DeleteAttr(ca.Name)
+					} else {
+						ca.SubAts = newSubAts
+					}
+				}
+
+			} else {
+				tSaMap := ca.SubAts[0]
+				deleteAtFromSubAtMap(sl, pp, tSaMap, 0, ca, prIdx, res, rid, tx, mh)
+			}
+		}
+
+	} else {
+		at := res.DeleteAttr(pp.AtType.Name)
+		if at != nil {
+			if at.IsSimple() {
+				sa := at.GetSimpleAt()
+				sl.dropSAtFromIndex(sa, sa.Name, prIdx, rt.Name, rid, tx)
+			} else {
+				ca := at.GetComplexAt()
+				// removed CA
+				sl.dropCAtFromIndex(ca, prIdx, rt.Name, rid, tx)
+			}
+			mh.markDirty()
+		}
+	}
+}
+
 func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *modifyHints, tx *bolt.Tx) {
-	existsPath := (po.ParsedPath != nil)
+	pp := po.ParsedPath
 
 	rt := res.GetType()
 	prIdx := sl.getSysIndex(rt.Name, "presence")
 
-	if !existsPath {
+	if pp == nil {
 		var addRs *base.Resource
 		var err error
 		if obj, ok := po.Value.(map[string]interface{}); ok {
@@ -96,8 +338,6 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 		return
 	}
 
-	pp := po.ParsedPath
-
 	if pp.AtType.IsComplex() {
 		tAt := res.GetAttr(pp.AtType.NormName)
 		if tAt == nil {
@@ -120,15 +360,12 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 						if p {
 							if !prmSet {
 								prmSet = true
+								// reset any other sub-list's primary flag if set
+								tCa.UnsetPrimaryFlag()
 							} else {
 								detail := fmt.Sprintf("More than one sub-attribute object has the primary flag set in the %d operation", po.Index)
 								panic(base.NewBadRequestError(detail))
 							}
-						}
-
-						if prmSet {
-							// reset any other sub-list's primary flag if set
-							tCa.UnsetPrimaryFlag()
 						}
 
 						tCa.SubAts = append(tCa.SubAts, subAtMap)
@@ -152,30 +389,12 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 		}
 	} else { // handle SimpleAttributes
 		if pp.ParentType != nil {
-			var tSaMap map[string]*base.SimpleAttribute
+			var offsets []int
 			tCa := res.GetAttr(pp.ParentType.NormName).GetComplexAt()
-			if pp.SlctrType != nil {
-				matched := false
-				for _, saMap := range tCa.SubAts {
-					sa := saMap[pp.SlctrType.NormName]
-					if sa != nil {
-						matched = base.Compare(pp.SlctrType, sa.Values[0], pp.SlctrVal)
-						if matched {
-							tSaMap = saMap
-							break
-						}
-					}
-				}
-
-				if !matched {
-					detail := fmt.Sprintf("The selector %s present in the path of %d operation didn't match any attribute", po.Path, po.Index)
-					se := base.NewBadRequestError(detail)
-					panic(se)
-				}
-			}
-
-			if tSaMap == nil {
-				tSaMap = tCa.SubAts[0]
+			if pp.Slctr != nil {
+				offsets = findSelectedObj(po, tCa)
+			} else {
+				offsets = []int{0}
 			}
 
 			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
@@ -186,22 +405,24 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 				}
 			}
 
-			tSa := tSaMap[pp.AtType.NormName]
+			for _, o := range offsets {
+				tSaMap := tCa.SubAts[o]
+				tSa := tSaMap[pp.AtType.NormName]
 
-			atPath := pp.ParentType.NormName + "." + sa.Name
+				atPath := pp.ParentType.NormName + "." + sa.Name
 
-			if tSa == nil {
-				tSaMap[pp.AtType.NormName] = sa
-				sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
-				mh.markDirty()
-			} else if !sa.Equals(tSa) {
-				//re-index
-				sl.dropSAtFromIndex(tSa, atPath, prIdx, rt.Name, rid, tx)
-				tSaMap[pp.AtType.NormName] = sa
-				sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
-				mh.markDirty()
+				if tSa == nil {
+					tSaMap[pp.AtType.NormName] = sa
+					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
+					mh.markDirty()
+				} else if !sa.Equals(tSa) {
+					//re-index
+					sl.dropSAtFromIndex(tSa, atPath, prIdx, rt.Name, rid, tx)
+					tSaMap[pp.AtType.NormName] = sa
+					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
+					mh.markDirty()
+				}
 			}
-
 		} else {
 			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
 			tAt := res.GetAttr(pp.AtType.NormName)
@@ -235,8 +456,6 @@ func (sl *Silo) addAttrTo(target *base.Resource, attr base.Attribute, tx *bolt.T
 		se := base.NewBadRequestError(detail)
 		panic(se)
 	}
-
-	//parentType := atType.Parent()
 
 	var atg *base.AtGroup
 
@@ -326,23 +545,27 @@ func (sl *Silo) dropSAtFromIndex(sa *base.SimpleAttribute, atPath string, prIdx 
 	}
 }
 
-func (sl *Silo) dropCAtFromIndex(exAt *base.ComplexAttribute, prIdx *Index, resName string, rid string, tx *bolt.Tx) {
+func (sl *Silo) dropCAtFromIndex(ca *base.ComplexAttribute, prIdx *Index, resName string, rid string, tx *bolt.Tx) {
 	// drop the old values from index
-	for _, saMap := range exAt.SubAts {
-		for _, sa := range saMap {
-			atPath := exAt.Name + "." + sa.Name
-			idx := sl.getIndex(resName, atPath)
-			if idx != nil {
-				err := prIdx.remove(atPath, rid, tx)
-				if err != nil {
-					panic(err)
-				}
+	for _, saMap := range ca.SubAts {
+		sl.dropSubAtMapFromIndex(ca.Name, saMap, prIdx, resName, rid, tx)
+	}
+}
 
-				// the SimpleAttributes here will always be single valued
-				err = idx.remove(sa.Values[0], rid, tx)
-				if err != nil {
-					panic(err)
-				}
+func (sl *Silo) dropSubAtMapFromIndex(parentName string, saMap map[string]*base.SimpleAttribute, prIdx *Index, resName string, rid string, tx *bolt.Tx) {
+	for _, sa := range saMap {
+		atPath := parentName + "." + sa.Name
+		idx := sl.getIndex(resName, atPath)
+		if idx != nil {
+			err := prIdx.remove(atPath, rid, tx)
+			if err != nil {
+				panic(err)
+			}
+
+			// the SimpleAttributes here will always be single valued
+			err = idx.remove(sa.Values[0], rid, tx)
+			if err != nil {
+				panic(err)
 			}
 		}
 	}
@@ -405,6 +628,7 @@ func (sl *Silo) addSubAtMapToIndex(parentName string, saMap map[string]*base.Sim
 		}
 	}
 }
+
 func mergeSubAtMap(tMap, sMap map[string]*base.SimpleAttribute, mh *modifyHints) bool {
 	merged := false
 
@@ -443,4 +667,122 @@ func convertSaValueBeforeParsing(atType *schema.AttrType, val interface{}) inter
 	}
 
 	return val
+}
+
+func findSelectedObj(po *base.PatchOp, tCa *base.ComplexAttribute) []int {
+	pp := po.ParsedPath
+	offsets := pp.Slctr.Find(tCa)
+
+	if offsets == nil {
+		detail := fmt.Sprintf("The selector %s present in the path of operation %d didn't match any attribute", pp.Text, po.Index)
+		se := base.NewBadRequestError(detail)
+		panic(se)
+	}
+
+	return offsets
+}
+
+func skipAndCopy(ca *base.ComplexAttribute, numSubObj int, index int) {
+	newSubAts := make([]map[string]*base.SimpleAttribute, numSubObj-1)
+	pos := 0
+	for i, subAtMap := range ca.SubAts {
+		if i == index {
+			// skip the object to be deleted
+			continue
+		}
+		newSubAts[pos] = subAtMap
+		pos++
+	}
+
+	ca.SubAts = newSubAts
+
+}
+
+func deleteAtFromSubAtMap(sl *Silo, pp *base.ParsedPath, tSaMap map[string]*base.SimpleAttribute, pos int, ca *base.ComplexAttribute, prIdx *Index, res *base.Resource, rid string, tx *bolt.Tx, mh *modifyHints) {
+	numSubObj := len(ca.SubAts)
+	rt := res.GetType()
+	if sa, ok := tSaMap[pp.AtType.Name]; ok {
+		delete(tSaMap, sa.Name)
+		sl.dropSAtFromIndex(sa, ca.Name+"."+sa.Name, prIdx, rt.Name, rid, tx)
+		if len(tSaMap) == 0 {
+			if numSubObj == 1 {
+				res.DeleteAttr(ca.Name)
+			} else {
+				skipAndCopy(ca, numSubObj, pos)
+			}
+		}
+
+		mh.markDirty()
+	}
+}
+
+func (sl *Silo) replaceAttrIn(target *base.Resource, attr base.Attribute, tx *bolt.Tx, prIdx *Index, mh *modifyHints) {
+	rt := target.GetType()
+	rid := target.GetId()
+	atType := attr.GetType()
+
+	if atType.IsReadOnly() {
+		detail := fmt.Sprintf("Cannot replace read-only attribute %s to resource %s", atType.Name, target.GetId())
+		log.Debugf(detail)
+		se := base.NewBadRequestError(detail)
+		panic(se)
+	}
+
+	var atg *base.AtGroup
+
+	if atType.SchemaId == rt.Schema {
+		atg = target.Core // core will never be nil
+	} else {
+		atg = target.Ext[atType.SchemaId]
+
+		// add extension schema if not already present
+		if atg == nil {
+			atg = base.NewAtGroup()
+		}
+		target.Ext[atType.SchemaId] = atg
+		target.UpdateSchemas()
+	}
+
+	if atType.IsComplex() {
+		tCa := atg.ComplexAts[atType.NormName]
+		ca := attr.GetComplexAt()
+		if tCa == nil {
+			// attr must be a complex AT, must add it
+			atg.ComplexAts[atType.NormName] = ca
+			sl.addCAtoIndex(ca, prIdx, rt.Name, rid, tx)
+			mh.markDirty()
+		} else {
+			if atType.IsImmutable() {
+				detail := fmt.Sprintf("Cannot replace immutable attribute %s to resource %s, value already exists", atType.Name, target.GetId())
+				log.Debugf(detail)
+				se := base.NewBadRequestError(detail)
+				se.ScimType = base.ST_MUTABILITY
+				panic(se)
+			}
+
+			// whether multi-valued or not if path is not specified it will be replaced
+			sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
+
+			tCa.SubAts = ca.SubAts
+
+			sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
+			mh.markDirty()
+		}
+	} else {
+		sa := attr.GetSimpleAt()
+		tAt := target.GetAttr(sa.Name)
+		if tAt == nil {
+			target.AddSimpleAt(sa)
+			sl.addSAtoIndex(sa, sa.Name, prIdx, rt.Name, rid, tx)
+			mh.markDirty()
+		} else {
+			tSa := tAt.GetSimpleAt()
+			if !sa.Equals(tSa) {
+				sl.dropSAtFromIndex(tSa, tSa.Name, prIdx, rt.Name, rid, tx)
+				target.AddSimpleAt(sa)
+				sl.addSAtoIndex(sa, sa.Name, prIdx, rt.Name, rid, tx)
+				mh.markDirty()
+			}
+		}
+	}
 }
