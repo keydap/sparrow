@@ -139,7 +139,7 @@ func _compare(sa *SimpleAttribute, node *FilterNode, atType *schema.AttrType) bo
 	for _, iVal := range sa.Values {
 
 		switch atType.Type {
-		case "string":
+		case "string", "reference":
 			val := iVal.(string)
 			if !atType.CaseExact {
 				val = strings.ToLower(val)
