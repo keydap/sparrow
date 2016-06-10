@@ -154,7 +154,8 @@ outer:
 					dotPos := strings.IndexRune(t, '[')
 					if dotPos > 0 && dotPos < (len(t)-1) {
 						if complexAtBegin { // if there exists a prior [ but was not matched with a closing ] then panic
-							panic(fmt.Errorf("Invalid filter mismatched square brackets [ and ] starting at pos %d", pos.tokenStart))
+							detail := fmt.Sprintf("Invalid filter mismatched square brackets [ and ] starting at pos %d", pos.tokenStart)
+							panic(NewBadRequestError(detail))
 						}
 
 						complexAtBegin = true
@@ -181,7 +182,8 @@ outer:
 					}
 
 					if root == nil {
-						panic(fmt.Errorf("Invalid %s node, missing child", op))
+						detail := fmt.Sprintf("Invalid %s node, missing child", op)
+						panic(NewBadRequestError(detail))
 					}
 
 					tmp := &FilterNode{Op: op, Count: -1}
@@ -196,7 +198,7 @@ outer:
 					}
 					pos.state = READ_OP
 				} else if op == "NOT" {
-					panic(fmt.Errorf("Misplaced NOT filter"))
+					panic(NewBadRequestError("Misplaced NOT filter"))
 				} else {
 					node.Op = op
 					pos.state = READ_VAL
@@ -234,7 +236,8 @@ outer:
 
 		case ']':
 			if !complexAtBegin {
-				panic(fmt.Errorf("Invalid filter, found ] without a complex attribute definition"))
+				detail := fmt.Sprintf("Invalid filter, found ] without a complex attribute definition")
+				panic(NewBadRequestError(detail))
 			}
 			complexAtBegin = false
 			log.Tracef("terminal ]")
@@ -245,7 +248,8 @@ outer:
 		if pos.index >= length {
 			if pos.state == READ_VAL {
 				// bad filter
-				panic(fmt.Errorf("Invalid filter, missing token at position %d (started at position %d)", pos.index+1, pos.tokenStart+1))
+				detail := fmt.Sprintf("Invalid filter, missing token at position %d (started at position %d)", pos.index+1, pos.tokenStart+1)
+				panic(NewBadRequestError(detail))
 			}
 
 			break
@@ -327,7 +331,8 @@ func toOperator(op string) string {
 
 	upperVal := strings.ToUpper(op)
 	if _, ok := op_map[upperVal]; !ok {
-		panic(fmt.Errorf("Invalid operator %s", op))
+		detail := fmt.Sprintf("Invalid operator %s", op)
+		panic(NewBadRequestError(detail))
 	}
 
 	return upperVal
@@ -365,7 +370,7 @@ func (fn *FilterNode) normalize() {
 	}
 
 	switch fn.atType.Type {
-	case "string":
+	case "string", "reference":
 		if !fn.atType.CaseExact {
 			fn.NormValue = strings.ToLower(fn.Value)
 		} else {
