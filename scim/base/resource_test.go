@@ -75,8 +75,8 @@ func TestDeleteAttribute(t *testing.T) {
 
 	del := rs.DeleteAttr("emails.value")
 
-	if !del {
-		t.Errorf("The return value of delete operation is false")
+	if del == nil {
+		t.Errorf("The return value of delete operation is nil")
 	}
 
 	if len(emails.SubAts) != 2 {
@@ -103,15 +103,15 @@ func TestDeleteAttribute(t *testing.T) {
 
 	del = rs.DeleteAttr("name.xyz")
 
-	if del {
+	if del != nil {
 		t.Error("Unknown attriute cannot be deleted")
 	}
 
 	//fmt.Println(rs.ToJSON())
 
 	del = rs.DeleteAttr("urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber")
-	if !del {
-		t.Error("Could not deleted extended attribute employeenumber")
+	if del == nil {
+		t.Error("Could not delete extended attribute employeenumber")
 	}
 }
 
