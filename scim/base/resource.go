@@ -177,7 +177,7 @@ func (atg *AtGroup) getAttribute(name string) Attribute {
 	return at
 }
 
-func (rs *Resource) DeleteAttr(attrPath string) bool {
+func (rs *Resource) DeleteAttr(attrPath string) Attribute {
 	log.Debugf("deleting attribute %s", attrPath)
 	pos := strings.LastIndex(attrPath, URI_DELIM)
 	if pos > 0 {
@@ -195,7 +195,7 @@ func (rs *Resource) DeleteAttr(attrPath string) bool {
 				atg = rs.Core
 			} else {
 				log.Warningf("Unknown URI prefix given in the attribute %s", attrPath)
-				return false
+				return nil
 			}
 		}
 
@@ -206,7 +206,7 @@ func (rs *Resource) DeleteAttr(attrPath string) bool {
 	return rs.deleteAttribute(attrPath, rs.Core)
 }
 
-func (rs *Resource) deleteAttribute(attrPath string, atg *AtGroup) bool {
+func (rs *Resource) deleteAttribute(attrPath string, atg *AtGroup) Attribute {
 	pos := strings.LastIndex(attrPath, ATTR_DELIM)
 	//handle the attributes with . char
 	if pos > 0 {
@@ -215,12 +215,12 @@ func (rs *Resource) deleteAttribute(attrPath string, atg *AtGroup) bool {
 		if at != nil {
 			ct := at.GetComplexAt()
 			childName := attrPath[pos+1:]
-			deleted := false
+			var deleted Attribute
 
 			nilAtMapCount := 0
 			for i, atMap := range ct.SubAts {
-				if _, ok := atMap[childName]; ok {
-					deleted = true
+				if at, ok := atMap[childName]; ok {
+					deleted = at
 				}
 
 				delete(atMap, childName)
@@ -264,21 +264,21 @@ func (rs *Resource) deleteAttribute(attrPath string, atg *AtGroup) bool {
 			return deleted
 		}
 
-		return false
+		return nil
 	} else {
-		if _, ok := atg.SimpleAts[attrPath]; ok {
+		if at, ok := atg.SimpleAts[attrPath]; ok {
 			delete(atg.SimpleAts, attrPath)
-			return true
+			return at
 		} else {
-			if _, ok := atg.ComplexAts[attrPath]; ok {
+			if at, ok := atg.ComplexAts[attrPath]; ok {
 				log.Debugf("deleting complex ats for %s", attrPath)
 				delete(atg.ComplexAts, attrPath)
-				return true
+				return at
 			}
 		}
 	}
 
-	return false
+	return nil
 }
 
 // accessor methods for common attributes
