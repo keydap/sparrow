@@ -1,25 +1,24 @@
-package silo
+package base
 
 import (
 	"fmt"
 	"sort"
-	"sparrow/scim/base"
 	"sparrow/scim/schema"
 	"strings"
 )
 
 var EMPTY_EV = &EmptyEvaluator{}
 
-var ascendingCountNodes = func(n1, n2 *base.FilterNode) bool {
+var ascendingCountNodes = func(n1, n2 *FilterNode) bool {
 	return n1.Count < n2.Count
 }
 
-var descendingCountNodes = func(n1, n2 *base.FilterNode) bool {
+var descendingCountNodes = func(n1, n2 *FilterNode) bool {
 	return n1.Count > n2.Count
 }
 
 type Evaluator interface {
-	evaluate(rs *base.Resource) bool
+	Evaluate(rs *Resource) bool
 }
 
 type EmptyEvaluator struct {
@@ -34,20 +33,20 @@ type OrEvaluator struct {
 }
 
 type ArithmeticEvaluator struct {
-	node *base.FilterNode
+	node *FilterNode
 }
 
 type PresenceEvaluator struct {
-	node *base.FilterNode
+	node *FilterNode
 }
 
 type NotEvaluator struct {
 	childEv Evaluator
 }
 
-func (and *AndEvaluator) evaluate(rs *base.Resource) bool {
+func (and *AndEvaluator) Evaluate(rs *Resource) bool {
 	for _, ev := range and.children {
-		if !ev.evaluate(rs) {
+		if !ev.Evaluate(rs) {
 			return false
 		}
 	}
@@ -55,9 +54,9 @@ func (and *AndEvaluator) evaluate(rs *base.Resource) bool {
 	return true
 }
 
-func (or *OrEvaluator) evaluate(rs *base.Resource) bool {
+func (or *OrEvaluator) Evaluate(rs *Resource) bool {
 	for _, ev := range or.children {
-		if ev.evaluate(rs) {
+		if ev.Evaluate(rs) {
 			return true
 		}
 	}
@@ -65,15 +64,15 @@ func (or *OrEvaluator) evaluate(rs *base.Resource) bool {
 	return false
 }
 
-func (empty *EmptyEvaluator) evaluate(rs *base.Resource) bool {
+func (empty *EmptyEvaluator) Evaluate(rs *Resource) bool {
 	return false
 }
 
-func (not *NotEvaluator) evaluate(rs *base.Resource) bool {
-	return !not.childEv.evaluate(rs)
+func (not *NotEvaluator) Evaluate(rs *Resource) bool {
+	return !not.childEv.Evaluate(rs)
 }
 
-func (pr *PresenceEvaluator) evaluate(rs *base.Resource) bool {
+func (pr *PresenceEvaluator) Evaluate(rs *Resource) bool {
 	atType := pr.node.GetAtType()
 	if atType == nil {
 		return false
@@ -84,11 +83,11 @@ func (pr *PresenceEvaluator) evaluate(rs *base.Resource) bool {
 	return at != nil
 }
 
-func (ar *ArithmeticEvaluator) evaluate(rs *base.Resource) bool {
-	return compare(ar.node, rs)
+func (ar *ArithmeticEvaluator) Evaluate(rs *Resource) bool {
+	return rsCompare(ar.node, rs)
 }
 
-func compare(node *base.FilterNode, rs *base.Resource) bool {
+func rsCompare(node *FilterNode, rs *Resource) bool {
 	// last para of https://tools.ietf.org/html/rfc7644#section-3.4.2.1
 	atType := node.GetAtType()
 	if atType == nil {
@@ -134,7 +133,7 @@ func compare(node *base.FilterNode, rs *base.Resource) bool {
 	return _compare(sa, node, atType)
 }
 
-func _compare(sa *base.SimpleAttribute, node *base.FilterNode, atType *schema.AttrType) bool {
+func _compare(sa *SimpleAttribute, node *FilterNode, atType *schema.AttrType) bool {
 	var matched bool
 
 	for _, iVal := range sa.Values {
@@ -219,7 +218,7 @@ func _compare(sa *base.SimpleAttribute, node *base.FilterNode, atType *schema.At
 	return matched
 }
 
-func _compareInt(node *base.FilterNode, i int64, nint int64) bool {
+func _compareInt(node *FilterNode, i int64, nint int64) bool {
 	matched := false
 
 	switch node.Op {
@@ -245,7 +244,7 @@ func _compareInt(node *base.FilterNode, i int64, nint int64) bool {
 	return matched
 }
 
-func buildEvaluator(node *base.FilterNode) Evaluator {
+func BuildEvaluator(node *FilterNode) Evaluator {
 
 	if node.Count == 0 {
 		return EMPTY_EV
@@ -259,12 +258,12 @@ func buildEvaluator(node *base.FilterNode) Evaluator {
 		return &PresenceEvaluator{node: node}
 
 	case "NOT":
-		childEv := buildEvaluator(node.Children[0])
+		childEv := BuildEvaluator(node.Children[0])
 		return &NotEvaluator{childEv: childEv}
 
 	case "OR":
 		orNs := &nodeSorter{}
-		orNs.nodes = make([]*base.FilterNode, len(node.Children))
+		orNs.nodes = make([]*FilterNode, len(node.Children))
 		copy(orNs.nodes, node.Children)
 		orNs.order = descendingCountNodes
 		sort.Sort(orNs)
@@ -273,7 +272,7 @@ func buildEvaluator(node *base.FilterNode) Evaluator {
 
 	case "AND":
 		andNs := &nodeSorter{}
-		andNs.nodes = make([]*base.FilterNode, len(node.Children))
+		andNs.nodes = make([]*FilterNode, len(node.Children))
 		copy(andNs.nodes, node.Children)
 		andNs.order = ascendingCountNodes
 		sort.Sort(andNs)
@@ -284,10 +283,10 @@ func buildEvaluator(node *base.FilterNode) Evaluator {
 	panic(fmt.Errorf("Unknown filter node type %s", node.Op))
 }
 
-func buildEvList(children []*base.FilterNode) []Evaluator {
+func buildEvList(children []*FilterNode) []Evaluator {
 	evList := make([]Evaluator, 0)
 	for _, node := range children {
-		ev := buildEvaluator(node)
+		ev := BuildEvaluator(node)
 		evList = append(evList, ev)
 	}
 
@@ -295,8 +294,8 @@ func buildEvList(children []*base.FilterNode) []Evaluator {
 }
 
 type nodeSorter struct {
-	nodes []*base.FilterNode
-	order func(n1, n2 *base.FilterNode) bool
+	nodes []*FilterNode
+	order func(n1, n2 *FilterNode) bool
 }
 
 func (ns *nodeSorter) Len() int {

@@ -1128,7 +1128,7 @@ func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) erro
 
 	for _, rsType := range sc.ResTypes {
 		count := getOptimizedResults(sc.Filter, rsType, tx, sl, candidates)
-		evaluator := buildEvaluator(sc.Filter)
+		evaluator := base.BuildEvaluator(sc.Filter)
 
 		buc := tx.Bucket(sl.resources[rsType.Name])
 
@@ -1146,7 +1146,7 @@ func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) erro
 					}
 
 					rs.SetSchema(rsType)
-					if evaluator.evaluate(rs) {
+					if evaluator.Evaluate(rs) {
 						outPipe <- rs
 					}
 				}
@@ -1167,7 +1167,7 @@ func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) erro
 					}
 
 					rs.SetSchema(rsType)
-					if evaluator.evaluate(rs) {
+					if evaluator.Evaluate(rs) {
 						outPipe <- rs
 					}
 				}
