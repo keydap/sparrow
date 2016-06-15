@@ -281,17 +281,48 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 		}
 
 	} else {
-		at := res.DeleteAttr(pp.AtType.Name)
-		if at != nil {
+		if pp.Slctr != nil {
+			at := res.GetAttr(pp.AtType.Name)
 			if at.IsSimple() {
-				sa := at.GetSimpleAt()
-				sl.dropSAtFromIndex(sa, sa.Name, prIdx, rt.Name, rid, tx)
-			} else {
-				ca := at.GetComplexAt()
-				// removed CA
-				sl.dropCAtFromIndex(ca, prIdx, rt.Name, rid, tx)
+				detail := fmt.Sprintf("The attribute %s associated with the selector %s present in the path of operation %d is not a complex attribute", pp.AtType.Name, pp.Text, po.Index)
+				se := base.NewBadRequestError(detail)
+				panic(se)
 			}
+			ca := at.GetComplexAt()
+			offsets := findSelectedObj(po, ca)
+			for _, pos := range offsets {
+				saMap := ca.SubAts[pos]
+				sl.dropSubAtMapFromIndex(ca.Name, saMap, prIdx, rt.Name, rid, tx)
+				ca.SubAts[pos] = nil
+			}
+
+			newSubAts := make([]map[string]*base.SimpleAttribute, 0)
+			for _, subAtMap := range ca.SubAts {
+				if subAtMap != nil {
+					newSubAts = append(newSubAts, subAtMap)
+				}
+			}
+
+			if len(newSubAts) == 0 {
+				res.DeleteAttr(ca.Name)
+			} else {
+				ca.SubAts = newSubAts
+			}
+
 			mh.markDirty()
+		} else {
+			at := res.DeleteAttr(pp.AtType.Name)
+			if at != nil {
+				if at.IsSimple() {
+					sa := at.GetSimpleAt()
+					sl.dropSAtFromIndex(sa, sa.Name, prIdx, rt.Name, rid, tx)
+				} else {
+					ca := at.GetComplexAt()
+					// removed CA
+					sl.dropCAtFromIndex(ca, prIdx, rt.Name, rid, tx)
+				}
+				mh.markDirty()
+			}
 		}
 	}
 }

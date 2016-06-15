@@ -209,6 +209,19 @@ func _compare(sa *SimpleAttribute, node *FilterNode, atType *schema.AttrType) bo
 			case "LE":
 				matched = (f <= nfloat)
 			}
+
+		case "boolean":
+			val := iVal.(bool)
+
+			nval := node.NormValue.(bool)
+
+			switch node.Op {
+			case "EQ":
+				matched = (val == nval)
+
+			case "NE":
+				matched = (val != nval)
+			}
 		}
 
 		if matched {

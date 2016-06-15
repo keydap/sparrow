@@ -404,6 +404,14 @@ func (fn *FilterNode) normalize() {
 		millis := t.UnixNano() / 1000000
 		fn.NormValue = millis
 		fn.NvBytes = utils.Itob(millis)
+
+	case "boolean":
+		boolVal := strings.ToLower(fn.Value)
+		fn.NormValue = false
+
+		if boolVal == "true" {
+			fn.NormValue = true
+		}
 	}
 }
 

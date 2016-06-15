@@ -87,7 +87,31 @@ func (pr *PresenceSelector) Find(ca *ComplexAttribute) []int {
 }
 
 func (or *OrSelector) Find(ca *ComplexAttribute) []int {
-	return nil
+	indices := make([]int, len(ca.SubAts))
+
+	for _, ev := range or.children {
+		childIndices := ev.Find(ca)
+		if childIndices == nil {
+			continue
+		}
+
+		for _, i := range childIndices {
+			indices[i] |= 1
+		}
+	}
+
+	finalIndices := make([]int, 0)
+	for i, v := range indices {
+		if v == 1 {
+			finalIndices = append(finalIndices, i)
+		}
+	}
+
+	if len(finalIndices) == 0 {
+		finalIndices = nil
+	}
+
+	return finalIndices
 }
 
 func (ar *ArithmeticSelector) Find(ca *ComplexAttribute) []int {

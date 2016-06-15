@@ -196,6 +196,7 @@ func assertIndexVal(resName string, attrPath string, val interface{}, expected b
 	tx.Rollback()
 	if actual != expected {
 		t.Errorf("Did not find the expected value %s in the index of attribute %s", val, attrPath)
+		panic("")
 	}
 }
 
