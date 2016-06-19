@@ -111,6 +111,17 @@
                     "mutability":"readWrite",
                     "returned":"default",
                     "uniqueness":"none"
+                },
+                {
+                    "name":"desc",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"Description of location",
+                    "required":false,
+                    "caseExact":false,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
                 }
              ]
          },
