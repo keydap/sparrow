@@ -110,50 +110,35 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 			sl.addAttrTo(res, ca, tx, prIdx, mh)
 		} else {
 			tCa := tAt.GetComplexAt()
-			// TODO an additional case here is to use selector and find the target object
+			var offsets []int
 			if pp.Slctr != nil {
-				//				/
+				offsets = findSelectedObj(po, tCa)
+			} else {
+				offsets = []int{0}
 			}
 
 			if pp.AtType.MultiValued {
-				// po.Value can be array of subAtMapS too right?
-				rv := reflect.ValueOf(po.Value)
-				kind := rv.Kind()
-				arrLen := rv.Len()
-
-				if (kind == reflect.Slice) || (kind == reflect.Array) {
-					prmSet := false
-					for i := 0; i < arrLen; i++ {
-						val := rv.Index(i).Interface()
-						subAtMap, p := base.ParseSubAtList(val, pp.AtType)
-						if p {
-							if !prmSet {
-								prmSet = true
-								// reset any other sub-list's primary flag if set
-								tCa.UnsetPrimaryFlag()
-							} else {
-								detail := fmt.Sprintf("More than one sub-attribute object has the primary flag set in the %d operation", po.Index)
-								panic(base.NewBadRequestError(detail))
-							}
-						}
-
-						tCa.SubAts = append(tCa.SubAts, subAtMap)
-						sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
-					}
-				} else {
-					subAtMap, primary := base.ParseSubAtList(po.Value, pp.AtType)
-					if primary {
-						// reset any other sub-list's primary flag if set
-						tCa.UnsetPrimaryFlag()
-					}
-
-					tCa.SubAts = append(tCa.SubAts, subAtMap)
-					// index the subAtMap
-					sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
+				subAtMap, primary := base.ParseSubAtList(po.Value, pp.AtType)
+				if primary {
+					detail := fmt.Sprintf("Cannot set primary flag on multiple sub-attributes of attribute %s of resource %s", pp.AtType.Name, rid)
+					se := base.NewBadRequestError(detail)
+					panic(se)
 				}
+
+				sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
+				for _, o := range offsets {
+					tSaMap := tCa.SubAts[o]
+					for name, sa := range subAtMap {
+						tSaMap[name] = sa
+					}
+				}
+				sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
+				mh.markDirty()
 			} else { // merge them
 				subAtMap, _ := base.ParseSubAtList(po.Value, pp.AtType)
+				sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
 				mergeSubAtMap(tCa.SubAts[0], subAtMap, mh)
+				sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
 			}
 		}
 	} else { // handle SimpleAttributes
@@ -163,7 +148,13 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 			if pp.Slctr != nil {
 				offsets = findSelectedObj(po, tCa)
 			} else {
-				offsets = []int{0}
+				count := len(tCa.SubAts)
+				offsets = make([]int, count)
+				if count > 1 && pp.ParentType.MultiValued { // multivalued attribute
+					for i, _ := range tCa.SubAts {
+						offsets[i] = i
+					}
+				}
 			}
 
 			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
@@ -415,7 +406,9 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 				}
 			} else { // merge them
 				subAtMap, _ := base.ParseSubAtList(po.Value, pp.AtType)
+				sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
 				mergeSubAtMap(tCa.SubAts[0], subAtMap, mh)
+				sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
 			}
 		}
 	} else { // handle SimpleAttributes
