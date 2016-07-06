@@ -5,6 +5,8 @@ import (
 )
 
 type AuthContext struct {
+	
+	*OpContext                        // the operation context
 }
 
 type OpContext struct {

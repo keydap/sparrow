@@ -126,3 +126,7 @@ func (prv *Provider) GetResource(opCtx *base.OpContext, rid string, rt *schema.R
 func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) {
 	prv.sl.Search(sc, outPipe)
 }
+
+func (prv *provider) Authenticate(ac *base.AuthContext) {
+	
+}
