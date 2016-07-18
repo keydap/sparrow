@@ -8,3 +8,12 @@ fast reads, ACID writes, and namespaces/domains
 
 How about storing ppolicy data in a separate index, keyed by either username or resource's ID?
 This might boost the performance by avoiding deserializing resource data and applying schema.
+
+Store the Group information in the User resource rather than filling the "members" attribute of
+each Group resource. This will prevent a Group entity from growing in size when new members are added.
+
+Add a new index for Group's members.value and store each entry against the group's ID in the form
+<Group-ID>:<ref-Type>:<value>
+For example if the Group's ID is `g1` and the member is a User with ID `u6` then the index entry will
+be like `g1:User:u6`
+This index must allow duplicate keys.
