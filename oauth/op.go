@@ -1,8 +1,6 @@
 package oauth
 
-import(
-)
+import ()
 
-type Token struct{
-	
+type Token struct {
 }

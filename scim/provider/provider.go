@@ -128,5 +128,5 @@ func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource)
 }
 
 func (prv *Provider) Authenticate(ac *base.AuthContext) {
-	
+
 }
