@@ -21,6 +21,7 @@ func main() {
 
 	logger.ConfigureLoggers("<root>=debug;")
 	http.Start("/tmp/sparrow")
+	//	http.Start("/Volumes/EVOSSD/sparrow-bench")
 
 	if false {
 		log := logger.GetLogger("scim.main")
