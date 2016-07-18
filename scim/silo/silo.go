@@ -669,8 +669,6 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 		}
 	}
 
-	sl.storeResource(tx, inRes)
-
 	if rt.Name == "Group" {
 		members := inRes.GetAttr("members")
 		if members != nil {
@@ -679,11 +677,9 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 				value := subAtMap["value"]
 				if value != nil {
 					refId := value.Values[0].(string)
-					// TODO what should be done if the ref doesn't contain above "value" field's value
-					//ref := subAtMap["$ref"]
-					refType := subAtMap["$ref"]
+					refType := subAtMap["type"]
 
-					refTypeVal := "Group" // default value
+					refTypeVal := "User" // default value
 					if refType != nil {
 						refTypeVal = refType.Values[0].(string)
 					} else {
@@ -692,37 +688,49 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 
 					refRType := sl.resTypes[refTypeVal]
 					if refRType == nil {
-						detail := fmt.Sprintf("Given reference type %s associated with value %s is not found", refTypeVal, refId)
+						detail := fmt.Sprintf("Resource type %s is not found(it was associated with the resource ID %s in the input)", refTypeVal, refId)
 						panic(base.NewNotFoundError(detail))
 					}
 
 					refRes, _ := sl.Get(refId, refRType)
 
 					if refRes == nil {
-						detail := fmt.Sprintf("There is no resource with the referenced value %s", refId)
+						detail := fmt.Sprintf("There is no resource of type %s with the referenced value %s", refTypeVal, refId)
 						panic(base.NewNotFoundError(detail))
 					}
-					groups := refRes.GetAttr("groups")
-					subAt := make(map[string]interface{})
-					subAt["value"] = rid
-					subAt["$ref"] = refRType.Endpoint + "/" + rid
-					subAt["type"] = refRType.Name
 
-					if groups == nil {
-						err = refRes.AddCA("groups", subAt)
-						if err != nil {
-							panic(err)
+					// update the $ref and type values in the Group's "members" attribute
+					subAtMap["$ref"].Values = []interface{}{refRType.Endpoint + "/" + refRes.GetId()}
+					subAtMap["type"].Values = []interface{}{refRType.Name}
+
+					if refRType.Name == "User" {
+						groups := refRes.GetAttr("groups")
+						subAt := make(map[string]interface{})
+						subAt["value"] = rid
+						subAt["$ref"] = "/Groups/" + rid
+						subAt["type"] = "Group"
+
+						if groups == nil {
+							err = refRes.AddCA("groups", subAt)
+							if err != nil {
+								panic(err)
+							}
+						} else {
+							ca := groups.GetComplexAt()
+							ca.AddSubAts(subAt)
 						}
-					} else {
-						ca := groups.GetComplexAt()
-						ca.AddSubAts(subAt)
+
+						refRes.UpdateLastModTime()
+						sl.storeResource(tx, refRes)
 					}
 
-					sl.storeResource(tx, refRes)
 				}
 			}
 		}
 	}
+
+	sl.storeResource(tx, inRes)
+
 	return inRes, nil
 }
 
@@ -785,8 +793,6 @@ func (sl *Silo) getUsingTx(rid string, rt *schema.ResourceType, tx *bolt.Tx) (re
 }
 
 func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
-	ridBytes := []byte(rid)
-	rtNameBytes := sl.resources[rt.Name]
 
 	tx, err := sl.db.Begin(true)
 	if err != nil {
@@ -794,7 +800,11 @@ func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
 	}
 
 	defer func() {
-		err := recover()
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
 		if err != nil {
 			log.Debugf("failed to remove resource with ID %s\n %s", rid, err)
 			tx.Rollback()
@@ -803,6 +813,15 @@ func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
 			log.Debugf("Successfully removed resource with ID %s", rid)
 		}
 	}()
+
+	err = sl._removeResource(rid, rt, tx)
+
+	return err
+}
+
+func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx) (err error) {
+	ridBytes := []byte(rid)
+	rtNameBytes := sl.resources[rt.Name]
 
 	buck := tx.Bucket(rtNameBytes)
 	resData := buck.Get(ridBytes)
@@ -835,6 +854,39 @@ func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
 				err := idx.remove(val, rid, tx)
 				if err != nil {
 					panic(err)
+				}
+			}
+		}
+	}
+
+	if rt.Name == "Group" {
+		members := resource.GetAttr("members")
+		if members != nil {
+			ca := members.GetComplexAt()
+			for _, subAtMap := range ca.SubAts {
+				refType := subAtMap["type"].Values[0].(string)
+				refId := subAtMap["value"].Values[0].(string)
+				refRt := sl.resTypes[refType]
+
+				// handle nested groups
+				if refType == "Group" {
+					err := sl._removeResource(refId, refRt, tx)
+					if err != nil {
+						return err
+					}
+				} else if refType == "User" {
+					res, _ := sl.getUsingTx(refId, refRt, tx)
+					if res != nil {
+						groups := res.GetAttr("groups").GetComplexAt()
+						for i, gatMap := range groups.SubAts {
+							val := gatMap["value"].Values[0].(string)
+							if val == rid {
+								// delete Ith subAt
+								fmt.Print(i)
+								break
+							}
+						}
+					}
 				}
 			}
 		}
