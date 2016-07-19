@@ -3,7 +3,7 @@ Sparrow design (14-Oct-2015)
 2. Add complete RBAC support using Fortress
 3. Support OpenIDConnect
 
-The end goal is to make it an alternative for LDAP by supporting
+The end goal is to make it an alternative to LDAP by supporting
 fast reads, ACID writes, and namespaces/domains
 
 How about storing ppolicy data in a separate index, keyed by either username or resource's ID?
