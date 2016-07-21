@@ -49,8 +49,8 @@ func TestReplace(t *testing.T) {
 
 	resName := newRs.GetType().Name
 
-	originalMeta := originalRs.GetMeta().SubAts[0]
-	newMeta := newRs.GetMeta().SubAts[0]
+	originalMeta := originalRs.GetMeta().GetFirstSubAt()
+	newMeta := newRs.GetMeta().GetFirstSubAt()
 
 	assertEquals(t, "meta.created", newRs, originalMeta["created"].Values[0])
 	assertEquals(t, "meta.version", newRs, fmt.Sprint(newMeta["lastmodified"].Values[0]))

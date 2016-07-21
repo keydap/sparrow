@@ -85,8 +85,10 @@ func TestDeleteAttribute(t *testing.T) {
 
 	// type is set at even positions so 1st and 3rd emails will be completely deleted
 	// leading to resizing the slice of sub-attributes in emails
-	if emails.SubAts[0]["value"] != nil && emails.SubAts[3]["type"] != nil {
-		t.Errorf("emails.type was not deleted from 2nd and 4th emails")
+	for _, subAtMap := range emails.SubAts {
+		if subAtMap["value"] != nil {
+			t.Errorf("emails.type was not deleted from 2nd and 4th emails")
+		}
 	}
 
 	del = rs.DeleteAttr("emails.type")
@@ -97,7 +99,7 @@ func TestDeleteAttribute(t *testing.T) {
 
 	del = rs.DeleteAttr("name.formatted")
 	name := rs.GetAttr("name").GetComplexAt()
-	if len(name.SubAts[0]) != 3 {
+	if len(name.GetFirstSubAt()) != 3 {
 		t.Error("Failed to delete the attribute name.formatted")
 	}
 

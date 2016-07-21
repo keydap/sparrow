@@ -45,8 +45,8 @@ func TestPatchAddSimpleAts(t *testing.T) {
 		t.Errorf("Failed to apply patch req")
 	}
 
-	originalMeta := updatedRs.GetMeta().SubAts[0]
-	newMeta := notUpdatedRs.GetMeta().SubAts[0]
+	originalMeta := updatedRs.GetMeta().GetFirstSubAt()
+	newMeta := notUpdatedRs.GetMeta().GetFirstSubAt()
 
 	assertEquals(t, "meta.created", notUpdatedRs, originalMeta["created"].Values[0])
 	assertEquals(t, "meta.version", notUpdatedRs, fmt.Sprint(originalMeta["lastmodified"].Values[0]))
@@ -165,8 +165,8 @@ func TestPatchAddComplexAT(t *testing.T) {
 		t.Errorf("Failed to apply patch req on the already updated resource")
 	}
 
-	originalMeta := updatedRs.GetMeta().SubAts[0]
-	newMeta := notUpdatedRs.GetMeta().SubAts[0]
+	originalMeta := updatedRs.GetMeta().GetFirstSubAt()
+	newMeta := notUpdatedRs.GetMeta().GetFirstSubAt()
 
 	assertEquals(t, "meta.created", notUpdatedRs, originalMeta["created"].Values[0])
 	assertEquals(t, "meta.version", notUpdatedRs, fmt.Sprint(originalMeta["lastmodified"].Values[0]))
@@ -230,12 +230,18 @@ func TestPatchAddMultiValComplexAT(t *testing.T) {
 	}
 
 	photos := updatedRs.GetAttr("photos").GetComplexAt()
-	if !photos.SubAts[2]["primary"].Values[0].(bool) {
-		t.Errorf("the sub-attribute with value 123.jpg should be marked as primary")
-	}
+	for _, subAtMap := range photos.SubAts {
+		if subAtMap["value"].Values[0].(string) == "123.jpg" {
+			if !subAtMap["primary"].Values[0].(bool) {
+				t.Errorf("the sub-attribute with value 123.jpg should be marked as primary")
+			}
+		}
 
-	if photos.SubAts[3]["primary"].Values[0].(bool) {
-		t.Errorf("the sub-attribute with value 456.jpg should NOT be marked as primary")
+		if subAtMap["value"].Values[0].(string) == "456.jpg" {
+			if subAtMap["primary"].Values[0].(bool) {
+				t.Errorf("the sub-attribute with value 456.jpg should NOT be marked as primary")
+			}
+		}
 	}
 
 	assertIndexVal(deviceType.Name, "photos.value", "123.jpg", true, t)
@@ -253,12 +259,18 @@ func TestPatchAddMultiValComplexAT(t *testing.T) {
 	}
 
 	photos = updatedRs.GetAttr("photos").GetComplexAt()
-	if photos.SubAts[0]["primary"].Values[0].(bool) {
-		t.Errorf("the sub-attribute with value abc.jpg's primary flag should be set to false")
-	}
+	for _, subAtMap := range photos.SubAts {
+		if subAtMap["value"].Values[0].(string) == "abc.jpg" {
+			if subAtMap["primary"].Values[0].(bool) {
+				t.Errorf("the sub-attribute with value abc.jpg's primary flag should be set to false")
+			}
+		}
 
-	if !photos.SubAts[1]["primary"].Values[0].(bool) {
-		t.Errorf("the sub-attribute with value xyz.jpg' should be marked as primary")
+		if subAtMap["value"].Values[0].(string) == "xyz.jpg" {
+			if !subAtMap["primary"].Values[0].(bool) {
+				t.Errorf("the sub-attribute with value xyz.jpg' should be marked as primary")
+			}
+		}
 	}
 }
 

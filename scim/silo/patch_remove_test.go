@@ -30,8 +30,8 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 		t.Errorf("Failed to apply patch req")
 	}
 
-	originalMeta := updatedRs.GetMeta().SubAts[0]
-	newMeta := notUpdatedRs.GetMeta().SubAts[0]
+	originalMeta := updatedRs.GetMeta().GetFirstSubAt()
+	newMeta := notUpdatedRs.GetMeta().GetFirstSubAt()
 
 	assertEquals(t, "meta.created", notUpdatedRs, originalMeta["created"].Values[0])
 	assertEquals(t, "meta.version", notUpdatedRs, fmt.Sprint(originalMeta["lastmodified"].Values[0]))

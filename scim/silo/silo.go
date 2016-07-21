@@ -881,8 +881,7 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 						for i, gatMap := range groups.SubAts {
 							val := gatMap["value"].Values[0].(string)
 							if val == rid {
-								// delete Ith subAt
-								fmt.Print(i)
+								delete(groups.SubAts, i)
 								break
 							}
 						}

@@ -6,7 +6,7 @@ import (
 )
 
 type Selector interface {
-	Find(ca *ComplexAttribute) []int
+	Find(ca *ComplexAttribute) []string
 }
 
 type AndSelector struct {
@@ -29,8 +29,8 @@ type NotSelector struct {
 	childEv Selector
 }
 
-func (and *AndSelector) Find(ca *ComplexAttribute) []int {
-	indices := make([]int, len(ca.SubAts))
+func (and *AndSelector) Find(ca *ComplexAttribute) []string {
+	indices := make(map[string]int)
 	first := true
 
 	for _, ev := range and.children {
@@ -51,7 +51,7 @@ func (and *AndSelector) Find(ca *ComplexAttribute) []int {
 		}
 	}
 
-	finalIndices := make([]int, 0)
+	finalIndices := make([]string, 0)
 	for i, v := range indices {
 		if v == 1 {
 			finalIndices = append(finalIndices, i)
@@ -65,13 +65,13 @@ func (and *AndSelector) Find(ca *ComplexAttribute) []int {
 	return finalIndices
 }
 
-func (not *NotSelector) Find(ca *ComplexAttribute) []int {
+func (not *NotSelector) Find(ca *ComplexAttribute) []string {
 	return not.childEv.Find(ca)
 }
 
-func (pr *PresenceSelector) Find(ca *ComplexAttribute) []int {
+func (pr *PresenceSelector) Find(ca *ComplexAttribute) []string {
 	atType := pr.node.GetAtType()
-	indices := make([]int, 0)
+	indices := make([]string, 0)
 	for i, subAtMap := range ca.SubAts {
 		sa := subAtMap[atType.NormName]
 		if sa != nil {
@@ -86,8 +86,8 @@ func (pr *PresenceSelector) Find(ca *ComplexAttribute) []int {
 	return indices
 }
 
-func (or *OrSelector) Find(ca *ComplexAttribute) []int {
-	indices := make([]int, len(ca.SubAts))
+func (or *OrSelector) Find(ca *ComplexAttribute) []string {
+	indices := make(map[string]int)
 
 	for _, ev := range or.children {
 		childIndices := ev.Find(ca)
@@ -100,7 +100,7 @@ func (or *OrSelector) Find(ca *ComplexAttribute) []int {
 		}
 	}
 
-	finalIndices := make([]int, 0)
+	finalIndices := make([]string, 0)
 	for i, v := range indices {
 		if v == 1 {
 			finalIndices = append(finalIndices, i)
@@ -114,12 +114,12 @@ func (or *OrSelector) Find(ca *ComplexAttribute) []int {
 	return finalIndices
 }
 
-func (ar *ArithmeticSelector) Find(ca *ComplexAttribute) []int {
+func (ar *ArithmeticSelector) Find(ca *ComplexAttribute) []string {
 	return caCompare(ar.node, ca)
 }
 
-func caCompare(node *FilterNode, ca *ComplexAttribute) []int {
-	indices := make([]int, 0)
+func caCompare(node *FilterNode, ca *ComplexAttribute) []string {
+	indices := make([]string, 0)
 	for i, subAtMap := range ca.SubAts {
 		sa := subAtMap[node.atType.NormName]
 		if sa != nil {

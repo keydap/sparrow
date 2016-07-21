@@ -110,11 +110,12 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 			sl.addAttrTo(res, ca, tx, prIdx, mh)
 		} else {
 			tCa := tAt.GetComplexAt()
-			var offsets []int
+			var offsets []string
 			if pp.Slctr != nil {
 				offsets = findSelectedObj(po, tCa)
 			} else {
-				offsets = []int{0}
+				_, k := tCa.GetFirstSubAtAndKey()
+				offsets = []string{k}
 			}
 
 			if pp.AtType.MultiValued {
@@ -137,23 +138,28 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 			} else { // merge them
 				subAtMap, _ := base.ParseSubAtList(po.Value, pp.AtType)
 				sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
-				mergeSubAtMap(tCa.SubAts[0], subAtMap, mh)
+				mergeSubAtMap(tCa.GetFirstSubAt(), subAtMap, mh)
 				sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
 			}
 		}
 	} else { // handle SimpleAttributes
 		if pp.ParentType != nil {
-			var offsets []int
+			var offsets []string
 			tCa := res.GetAttr(pp.ParentType.NormName).GetComplexAt()
 			if pp.Slctr != nil {
 				offsets = findSelectedObj(po, tCa)
 			} else {
 				count := len(tCa.SubAts)
-				offsets = make([]int, count)
 				if count > 1 && pp.ParentType.MultiValued { // multivalued attribute
-					for i, _ := range tCa.SubAts {
-						offsets[i] = i
+					offsets = make([]string, count)
+					i := 0
+					for k, _ := range tCa.SubAts {
+						offsets[i] = k
+						i++
 					}
+				} else {
+					_, k := tCa.GetFirstSubAtAndKey()
+					offsets = []string{k}
 				}
 			}
 
@@ -229,45 +235,27 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 		ca := res.GetAttr(pp.ParentType.Name).GetComplexAt()
 		if pp.Slctr != nil {
 			offsets := findSelectedObj(po, ca)
-			for _, pos := range offsets {
-				tSaMap := ca.SubAts[pos]
-				deleteAtFromSubAtMap(sl, pp, tSaMap, pos, ca, prIdx, res, rid, tx, mh)
+			for _, key := range offsets {
+				tSaMap := ca.SubAts[key]
+				deleteAtFromSubAtMap(sl, pp, tSaMap, key, ca, prIdx, res, rid, tx, mh)
 			}
 		} else {
 			if pp.ParentType.MultiValued {
 				// delete the sub-attribute from all values
-				removedAtMap := false
 				for i, subAtMap := range ca.SubAts {
 					if sa, ok := subAtMap[pp.AtType.Name]; ok {
 						delete(subAtMap, sa.Name)
 						sl.dropSAtFromIndex(sa, ca.Name+"."+sa.Name, prIdx, rt.Name, rid, tx)
 						if len(subAtMap) == 0 {
-							ca.SubAts[i] = nil
-							removedAtMap = true
+							delete(ca.SubAts, i)
 						}
 
 						mh.markDirty()
 					}
 				}
-
-				if removedAtMap {
-					newSubAts := make([]map[string]*base.SimpleAttribute, 0)
-					for _, subAtMap := range ca.SubAts {
-						if subAtMap != nil {
-							newSubAts = append(newSubAts, subAtMap)
-						}
-					}
-
-					if len(newSubAts) == 0 {
-						res.DeleteAttr(ca.Name)
-					} else {
-						ca.SubAts = newSubAts
-					}
-				}
-
 			} else {
-				tSaMap := ca.SubAts[0]
-				deleteAtFromSubAtMap(sl, pp, tSaMap, 0, ca, prIdx, res, rid, tx, mh)
+				tSaMap, key := ca.GetFirstSubAtAndKey()
+				deleteAtFromSubAtMap(sl, pp, tSaMap, key, ca, prIdx, res, rid, tx, mh)
 			}
 		}
 
@@ -284,22 +272,12 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 			for _, pos := range offsets {
 				saMap := ca.SubAts[pos]
 				sl.dropSubAtMapFromIndex(ca.Name, saMap, prIdx, rt.Name, rid, tx)
-				ca.SubAts[pos] = nil
+				delete(ca.SubAts, pos)
 			}
 
-			newSubAts := make([]map[string]*base.SimpleAttribute, 0)
-			for _, subAtMap := range ca.SubAts {
-				if subAtMap != nil {
-					newSubAts = append(newSubAts, subAtMap)
-				}
-			}
-
-			if len(newSubAts) == 0 {
+			if len(ca.SubAts) == 0 {
 				res.DeleteAttr(ca.Name)
-			} else {
-				ca.SubAts = newSubAts
 			}
-
 			mh.markDirty()
 		} else {
 			at := res.DeleteAttr(pp.AtType.Name)
@@ -390,7 +368,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 							}
 						}
 
-						tCa.SubAts = append(tCa.SubAts, subAtMap)
+						tCa.SubAts[base.RandStr()] = subAtMap
 						sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
 					}
 				} else {
@@ -400,25 +378,26 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 						tCa.UnsetPrimaryFlag()
 					}
 
-					tCa.SubAts = append(tCa.SubAts, subAtMap)
+					tCa.SubAts[base.RandStr()] = subAtMap
 					// index the subAtMap
 					sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
 				}
 			} else { // merge them
 				subAtMap, _ := base.ParseSubAtList(po.Value, pp.AtType)
 				sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
-				mergeSubAtMap(tCa.SubAts[0], subAtMap, mh)
+				mergeSubAtMap(tCa.GetFirstSubAt(), subAtMap, mh)
 				sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
 			}
 		}
 	} else { // handle SimpleAttributes
 		if pp.ParentType != nil {
-			var offsets []int
+			var offsets []string
 			tCa := res.GetAttr(pp.ParentType.NormName).GetComplexAt()
 			if pp.Slctr != nil {
 				offsets = findSelectedObj(po, tCa)
 			} else {
-				offsets = []int{0}
+				_, key := tCa.GetFirstSubAtAndKey()
+				offsets = []string{key}
 			}
 
 			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
@@ -519,16 +498,18 @@ func (sl *Silo) addAttrTo(target *base.Resource, attr base.Attribute, tx *bolt.T
 					tCa.UnsetPrimaryFlag()
 				}
 
-				tCa.SubAts = append(tCa.SubAts, ca.SubAts...)
 				for _, subAtMap := range ca.SubAts {
+					// the old key might have been regenerated so do not use the key
+					// from the above loop, instead generate a new random key
+					tCa.SubAts[base.RandStr()] = subAtMap
 					sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
 				}
 				mh.markDirty()
 			} else {
 				// merge complex attributes
 				sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
-				tMap := tCa.SubAts[0]
-				sMap := ca.SubAts[0]
+				tMap := tCa.GetFirstSubAt()
+				sMap := ca.GetFirstSubAt()
 				mergeSubAtMap(tMap, sMap, mh)
 				sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
 			}
@@ -693,7 +674,7 @@ func convertSaValueBeforeParsing(atType *schema.AttrType, val interface{}) inter
 	return val
 }
 
-func findSelectedObj(po *base.PatchOp, tCa *base.ComplexAttribute) []int {
+func findSelectedObj(po *base.PatchOp, tCa *base.ComplexAttribute) []string {
 	pp := po.ParsedPath
 	offsets := pp.Slctr.Find(tCa)
 
@@ -706,23 +687,8 @@ func findSelectedObj(po *base.PatchOp, tCa *base.ComplexAttribute) []int {
 	return offsets
 }
 
-func skipAndCopy(ca *base.ComplexAttribute, numSubObj int, index int) {
-	newSubAts := make([]map[string]*base.SimpleAttribute, numSubObj-1)
-	pos := 0
-	for i, subAtMap := range ca.SubAts {
-		if i == index {
-			// skip the object to be deleted
-			continue
-		}
-		newSubAts[pos] = subAtMap
-		pos++
-	}
-
-	ca.SubAts = newSubAts
-
-}
-
-func deleteAtFromSubAtMap(sl *Silo, pp *base.ParsedPath, tSaMap map[string]*base.SimpleAttribute, pos int, ca *base.ComplexAttribute, prIdx *Index, res *base.Resource, rid string, tx *bolt.Tx, mh *modifyHints) {
+// key is the value of key of the map that is holding the subAtMapS
+func deleteAtFromSubAtMap(sl *Silo, pp *base.ParsedPath, tSaMap map[string]*base.SimpleAttribute, key string, ca *base.ComplexAttribute, prIdx *Index, res *base.Resource, rid string, tx *bolt.Tx, mh *modifyHints) {
 	numSubObj := len(ca.SubAts)
 	rt := res.GetType()
 	if sa, ok := tSaMap[pp.AtType.Name]; ok {
@@ -732,7 +698,7 @@ func deleteAtFromSubAtMap(sl *Silo, pp *base.ParsedPath, tSaMap map[string]*base
 			if numSubObj == 1 {
 				res.DeleteAttr(ca.Name)
 			} else {
-				skipAndCopy(ca, numSubObj, pos)
+				delete(ca.SubAts, key)
 			}
 		}
 

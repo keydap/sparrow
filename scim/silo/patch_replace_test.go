@@ -26,8 +26,8 @@ func estPatchReplaceSimpleAts(t *testing.T) {
 		t.Errorf("Failed to apply patch req")
 	}
 
-	originalMeta := updatedRs.GetMeta().SubAts[0]
-	newMeta := notUpdatedRs.GetMeta().SubAts[0]
+	originalMeta := updatedRs.GetMeta().GetFirstSubAt()
+	newMeta := notUpdatedRs.GetMeta().GetFirstSubAt()
 
 	assertEquals(t, "meta.created", notUpdatedRs, originalMeta["created"].Values[0])
 	assertEquals(t, "meta.version", notUpdatedRs, fmt.Sprint(originalMeta["lastmodified"].Values[0]))
@@ -70,16 +70,11 @@ func TestAddMultiValuedSubAt(t *testing.T) {
 	}
 
 	photos := updatedRs.GetAttr("photos").GetComplexAt()
-	subAtMap := photos.SubAts[0]
-	val := subAtMap["display"].Values[0].(string)
-	if val != "photo display" {
-		t.Errorf("Failed to add display value of photos attribute")
-	}
-
-	subAtMap = photos.SubAts[1]
-	val = subAtMap["display"].Values[0].(string)
-	if val != "photo display" {
-		t.Errorf("Failed to add display value of photos attribute")
+	for _, subAtMap := range photos.SubAts {
+		val := subAtMap["display"].Values[0].(string)
+		if val != "photo display" {
+			t.Errorf("Failed to add display value of photos attribute")
+		}
 	}
 }
 
@@ -125,11 +120,13 @@ func TestReplaceMultiCA(t *testing.T) {
 	assertIndexVal(deviceType.Name, "photos.value", "xyz.jpg", false, t)
 	assertIndexVal(deviceType.Name, "photos.value", "1.jpg", true, t)
 
-	display := updatedRs.GetAttr("photos").GetComplexAt().SubAts[1]["display"].Values[0].(string)
-	if display != "added display" {
-		t.Error("display attribute was not added")
+	displayAt := updatedRs.GetAttr("photos").GetComplexAt()
+	for _, subAtMap := range displayAt.SubAts {
+		display := subAtMap["display"].Values[0].(string)
+		if display != "added display" {
+			t.Error("display attribute was not added")
+		}
 	}
-
 }
 
 /*
