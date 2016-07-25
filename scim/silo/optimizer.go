@@ -69,8 +69,6 @@ func gatherCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.T
 	default:
 		panic(fmt.Errorf("Unknown operator %s", node.Op))
 	}
-
-	return 0
 }
 
 func orCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {

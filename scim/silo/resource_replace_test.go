@@ -71,7 +71,7 @@ func TestReplace(t *testing.T) {
 	assertIndexVal(resName, "price", float64(9.2), true, t)  // value after replacing
 
 	if newRs.GetAttr("installeddate") != nil {
-		t.Error("installedDate should be removed %#v", newRs.GetAttr("installeddate"))
+		t.Errorf("installedDate should be removed %#v", newRs.GetAttr("installeddate"))
 	}
 	assertIndexVal(resName, "installedDate", utils.GetTimeMillis("2016-05-17T14:19:14Z"), false, t) // value should be removed
 	tx, _ := sl.db.Begin(false)
