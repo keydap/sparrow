@@ -124,7 +124,7 @@ func parsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error)
 		selector = path[:slctrEndPos]
 
 		if len(selector) == 0 {
-			detail := fmt.Sprintf("Invalid attribute path, empty selector present", path)
+			detail := fmt.Sprintf("Invalid attribute path %s, empty selector present", path)
 			return nil, NewBadRequestError(detail)
 		}
 
@@ -210,6 +210,18 @@ func parsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error)
 		pp.Text = selector
 		pp.Slctr = buildSelector(slctrNode, rt)
 	}
+
+	// If the target location is a multi-valued attribute and no filter
+	// is specified, the attribute and all values are replaced.
+	// from the section https://tools.ietf.org/html/rfc7644#section-3.5.2.3
+	// seems to be quite problematic when it comes to handling "members" of a Group
+	// what should we do when the path present in any given operation contains no selector
+	// for example "members.value" should we reject such operation??
+	//	if pp.ParentType != nil {
+	//		if pp.ParentType.MultiValued && (pp.Slctr == nil) {
+	//
+	//		}
+	//	}
 
 	return pp, nil
 }

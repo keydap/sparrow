@@ -1,7 +1,7 @@
 package provider
 
 import (
-	//	"fmt"
+	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -10,7 +10,7 @@ import (
 
 func randAlphaStr(length int) string {
 	if length <= 0 {
-		panic(error.Error)
+		panic(fmt.Errorf("Invalid length %d", length))
 	}
 	rand.Seed(time.Now().UnixNano())
 	// A-Z 65 - 90
