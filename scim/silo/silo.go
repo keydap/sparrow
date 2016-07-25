@@ -673,65 +673,86 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 		members := inRes.GetAttr("members")
 		if members != nil {
 			ca := members.GetComplexAt()
-			for _, subAtMap := range ca.SubAts {
-				value := subAtMap["value"]
-				if value != nil {
-					refId := value.Values[0].(string)
-					refType := subAtMap["type"]
-
-					refTypeVal := "User" // default value
-					if refType != nil {
-						refTypeVal = refType.Values[0].(string)
-					} else {
-						log.Debugf("No reference type is mentioned, assuming the default value %s", refTypeVal)
-					}
-
-					refRType := sl.resTypes[refTypeVal]
-					if refRType == nil {
-						detail := fmt.Sprintf("Resource type %s is not found(it was associated with the resource ID %s in the input)", refTypeVal, refId)
-						panic(base.NewNotFoundError(detail))
-					}
-
-					refRes, _ := sl.Get(refId, refRType)
-
-					if refRes == nil {
-						detail := fmt.Sprintf("There is no resource of type %s with the referenced value %s", refTypeVal, refId)
-						panic(base.NewNotFoundError(detail))
-					}
-
-					// update the $ref and type values in the Group's "members" attribute
-					subAtMap["$ref"].Values = []interface{}{refRType.Endpoint + "/" + refRes.GetId()}
-					subAtMap["type"].Values = []interface{}{refRType.Name}
-
-					if refRType.Name == "User" {
-						groups := refRes.GetAttr("groups")
-						subAt := make(map[string]interface{})
-						subAt["value"] = rid
-						subAt["$ref"] = "/Groups/" + rid
-						subAt["type"] = "Group"
-
-						if groups == nil {
-							err = refRes.AddCA("groups", subAt)
-							if err != nil {
-								panic(err)
-							}
-						} else {
-							ca := groups.GetComplexAt()
-							ca.AddSubAts(subAt)
-						}
-
-						refRes.UpdateLastModTime()
-						sl.storeResource(tx, refRes)
-					}
-
-				}
-			}
+			sl.addGroupMembers(ca, rid, tx)
 		}
 	}
 
 	sl.storeResource(tx, inRes)
 
 	return inRes, nil
+}
+
+func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string, tx *bolt.Tx) {
+	for _, subAtMap := range members.SubAts {
+		value := subAtMap["value"]
+		if value != nil {
+			refId := value.Values[0].(string)
+			refType := subAtMap["type"]
+
+			refTypeVal := "User" // default value
+			if refType != nil {
+				refTypeVal = refType.Values[0].(string)
+			} else {
+				log.Debugf("No reference type is mentioned, assuming the default value %s", refTypeVal)
+			}
+
+			refRType := sl.resTypes[refTypeVal]
+			if refRType == nil {
+				detail := fmt.Sprintf("Resource type %s is not found(it was associated with the resource ID %s in the input)", refTypeVal, refId)
+				panic(base.NewNotFoundError(detail))
+			}
+
+			refRes, _ := sl.Get(refId, refRType)
+
+			if refRes == nil {
+				detail := fmt.Sprintf("There is no resource of type %s with the referenced value %s", refTypeVal, refId)
+				panic(base.NewNotFoundError(detail))
+			}
+
+			// update the $ref and type values in the Group's "members" attribute
+			subAtMap["$ref"].Values = []interface{}{refRType.Endpoint + "/" + refRes.GetId()}
+			subAtMap["type"].Values = []interface{}{refRType.Name}
+
+			if refRType.Name == "User" {
+				groups := refRes.GetAttr("groups")
+				subAt := make(map[string]interface{})
+				subAt["value"] = groupRid
+				subAt["$ref"] = "/Groups/" + groupRid
+				subAt["type"] = "Group"
+
+				updated := false
+				if groups == nil {
+					err := refRes.AddCA("groups", subAt)
+					if err != nil {
+						panic(err)
+					}
+					updated = true
+				} else {
+					ca := groups.GetComplexAt()
+					present := false
+					// add only if the group is not already present in this user
+					for _, groupAtMap := range ca.SubAts {
+						existingGid := groupAtMap["value"].Values[0].(string)
+						if existingGid == groupRid {
+							present = true
+							break
+						}
+					}
+
+					if !present {
+						ca.AddSubAts(subAt)
+						updated = true
+					}
+				}
+
+				if updated {
+					refRes.UpdateLastModTime()
+					sl.storeResource(tx, refRes)
+				}
+			}
+
+		}
+	}
 }
 
 // FIXME there is a method duplicating this functionality in addSAtoIndex() in silo_patch.go
@@ -966,6 +987,29 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 
 	prIdx := sl.getSysIndex(rt.Name, "presence")
 
+	if rt.Name == "Group" {
+		var inMembers, existingMembers *base.ComplexAttribute
+		inMemAt := inRes.GetAttr("members")
+		if inMemAt != nil {
+			inMembers = inMemAt.GetComplexAt()
+		}
+
+		exMemAt := existing.GetAttr("members")
+		if exMemAt != nil {
+			existingMembers = exMemAt.GetComplexAt()
+		}
+
+		// compute refIds to be added or to be deleted and based on that perform the action
+		if inMembers == nil {
+			if existingMembers != nil {
+				sl.deleteGroupMembers(existingMembers, rid, tx)
+			}
+		} else {
+			sl.deleteGroupMembers(existingMembers, rid, tx)
+			sl.addGroupMembers(inMembers, rid, tx)
+		}
+	}
+
 	sl.replaceAtGroup(rt.Name, rid, tx, prIdx, inRes.Core, existing.Core)
 
 	if len(inRes.Ext) == 0 {
@@ -1006,6 +1050,42 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 	sl.storeResource(tx, existing)
 
 	return inRes, nil
+}
+
+func (sl *Silo) deleteGroupMembers(existingMembers *base.ComplexAttribute, groupRid string, tx *bolt.Tx) {
+	if existingMembers == nil {
+		return
+	}
+
+	for _, subAtMap := range existingMembers.SubAts {
+		sl._deleteGroupMembers(subAtMap, groupRid, tx)
+	}
+}
+
+func (sl *Silo) _deleteGroupMembers(memberSubAtMap map[string]*base.SimpleAttribute, groupRid string, tx *bolt.Tx) {
+	refId := memberSubAtMap["value"].Values[0].(string)
+	refType := "User"
+	refTypeAt := memberSubAtMap["type"]
+	if refTypeAt != nil {
+		refType = refTypeAt.Values[0].(string)
+	}
+
+	refRt := sl.resTypes[refType]
+	if refType == "User" {
+		user, _ := sl.getUsingTx(refId, refRt, tx)
+		if user != nil {
+			groups := user.GetAttr("groups").GetComplexAt()
+			for key, subAtMap := range groups.SubAts {
+				userGroupId := subAtMap["value"].Values[0].(string)
+				if userGroupId == groupRid {
+					delete(groups.SubAts, key)
+				}
+			}
+
+			user.UpdateLastModTime()
+			sl.storeResource(tx, user)
+		}
+	}
 }
 
 func (sl *Silo) deleteFromAtGroup(resName string, rid string, tx *bolt.Tx, prIdx *Index, inAtg *base.AtGroup, exAtg *base.AtGroup) {

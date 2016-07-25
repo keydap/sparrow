@@ -97,11 +97,20 @@ func (ca *ComplexAttribute) GetComplexAt() *ComplexAttribute {
 	return ca
 }
 
+func NewComplexAt(atType *schema.AttrType) *ComplexAttribute {
+	ca := &ComplexAttribute{}
+	ca.Name = atType.NormName
+	ca.atType = atType
+	ca.SubAts = make(map[string]map[string]*SimpleAttribute)
+
+	return ca
+}
+
 func (ca *ComplexAttribute) AddSubAts(subAtMap map[string]interface{}) {
 	subAt, _ := ParseSubAtList(subAtMap, ca.atType)
 	created := false
 	if ca.SubAts == nil {
-		ca.SubAts = make(map[string]map[string]*SimpleAttribute, 1)
+		ca.SubAts = make(map[string]map[string]*SimpleAttribute)
 		created = true
 	}
 
@@ -1085,8 +1094,6 @@ func CheckValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) interf
 	default:
 		panic(err)
 	}
-
-	panic(err)
 }
 
 func ParseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttribute {

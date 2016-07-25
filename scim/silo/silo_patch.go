@@ -66,6 +66,8 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 
 	pp := po.ParsedPath
 
+	isGroup := (rt.Name == "Group")
+
 	if pp == nil { // no path is provided
 		var addRs *base.Resource
 		var err error
@@ -85,7 +87,22 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 		}
 
 		for _, ca := range addRs.Core.ComplexAts {
+			if isGroup {
+				if ca.Name == "members" {
+					tCa := res.GetAttr("members")
+					if tCa != nil {
+						sl.deleteGroupMembers(tCa.GetComplexAt(), rid, tx)
+					}
+				}
+			}
+
 			sl.replaceAttrIn(res, ca, tx, prIdx, mh)
+
+			if isGroup {
+				if ca.Name == "members" {
+					sl.addGroupMembers(ca, rid, tx)
+				}
+			}
 		}
 
 		for _, ext := range addRs.Ext {
@@ -103,38 +120,89 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 	}
 
 	if pp.AtType.IsComplex() {
+		isMembers := (isGroup && pp.AtType.NormName == "members")
 		tAt := res.GetAttr(pp.AtType.NormName)
 		if tAt == nil {
 			// just add it
 			ca := base.ParseComplexAttr(pp.AtType, po.Value)
 			sl.addAttrTo(res, ca, tx, prIdx, mh)
+			if isMembers {
+				sl.addGroupMembers(ca, rid, tx)
+			}
 		} else {
 			tCa := tAt.GetComplexAt()
-			var offsets []string
-			if pp.Slctr != nil {
-				offsets = findSelectedObj(po, tCa)
-			} else {
-				_, k := tCa.GetFirstSubAtAndKey()
-				offsets = []string{k}
-			}
 
 			if pp.AtType.MultiValued {
-				subAtMap, primary := base.ParseSubAtList(po.Value, pp.AtType)
-				if primary {
-					detail := fmt.Sprintf("Cannot set primary flag on multiple sub-attributes of attribute %s of resource %s", pp.AtType.Name, rid)
-					se := base.NewBadRequestError(detail)
-					panic(se)
-				}
+				rv := reflect.ValueOf(po.Value)
+				kind := rv.Kind()
+				arrLen := rv.Len()
 
-				sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
-				for _, o := range offsets {
-					tSaMap := tCa.SubAts[o]
-					for name, sa := range subAtMap {
-						tSaMap[name] = sa
+				ca := base.NewComplexAt(tCa.GetType())
+				if (kind == reflect.Slice) || (kind == reflect.Array) {
+					if pp.Slctr != nil {
+						detail := fmt.Sprintf("Cannot replace multi-valued attribute %s of resource %s when selector is present but an array of values is given", pp.AtType.Name, rid)
+						se := base.NewBadRequestError(detail)
+						panic(se)
 					}
+					prmSet := false
+					for i := 0; i < arrLen; i++ {
+						val := rv.Index(i).Interface()
+						subAtMap, p := base.ParseSubAtList(val, pp.AtType)
+						if p {
+							if !prmSet {
+								prmSet = true
+								// reset any other sub-list's primary flag if set
+								tCa.UnsetPrimaryFlag()
+							} else {
+								detail := fmt.Sprintf("More than one sub-attribute object has the primary flag set in the %d operation", po.Index)
+								panic(base.NewBadRequestError(detail))
+							}
+						}
+
+						// the ca should hold only one subAtMap so keeping the key as a constant
+						ca.SubAts[base.RandStr()] = subAtMap
+					}
+
+					sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
+
+					if isMembers {
+						sl.deleteGroupMembers(tCa, rid, tx)
+						sl.addGroupMembers(ca, rid, tx)
+					}
+
+					tCa.SubAts = ca.SubAts
+					sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
+				} else {
+					subAtMap, primary := base.ParseSubAtList(po.Value, pp.AtType)
+					if primary {
+						detail := fmt.Sprintf("Cannot set primary flag on multiple sub-attributes of attribute %s of resource %s", pp.AtType.Name, rid)
+						se := base.NewBadRequestError(detail)
+						panic(se)
+					}
+
+					if isMembers {
+						sl.deleteGroupMembers(tCa, rid, tx)
+					}
+
+					sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
+					if pp.Slctr != nil {
+						offsets := findSelectedObj(po, tCa)
+						for _, o := range offsets {
+							tSaMap := tCa.SubAts[o]
+							for name, sa := range subAtMap {
+								tSaMap[name] = sa
+							}
+						}
+					} else { // replace all the subAts when no selector is specified
+						tCa.SubAts = make(map[string]map[string]*base.SimpleAttribute)
+
+					}
+					sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
+					if isMembers {
+						sl.addGroupMembers(tCa, rid, tx)
+					}
+					mh.markDirty()
 				}
-				sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
-				mh.markDirty()
 			} else { // merge them
 				subAtMap, _ := base.ParseSubAtList(po.Value, pp.AtType)
 				sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
@@ -144,6 +212,8 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 		}
 	} else { // handle SimpleAttributes
 		if pp.ParentType != nil {
+			// handle members.value
+			isMemberVal := (isGroup && pp.ParentType.NormName == "members" && pp.AtType.NormName == "value")
 			var offsets []string
 			tCa := res.GetAttr(pp.ParentType.NormName).GetComplexAt()
 			if pp.Slctr != nil {
@@ -179,18 +249,36 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 
 				if tSa == nil {
 					tSaMap[pp.AtType.NormName] = sa
+					if isMemberVal {
+						membersCa := base.NewComplexAt(tCa.GetType())
+						membersCa.SubAts["1"] = tSaMap
+						sl.addGroupMembers(membersCa, rid, tx)
+					}
 					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
 					mh.markDirty()
 				} else if !sa.Equals(tSa) {
 					//re-index
+					if isMemberVal {
+						sl._deleteGroupMembers(tSaMap, rid, tx)
+					}
+
 					sl.dropSAtFromIndex(tSa, atPath, prIdx, rt.Name, rid, tx)
+
 					tSaMap[pp.AtType.NormName] = sa
+
+					if isMemberVal {
+						membersCa := base.NewComplexAt(tCa.GetType())
+						membersCa.SubAts["1"] = tSaMap
+						sl.addGroupMembers(membersCa, rid, tx)
+					}
+
 					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
 					mh.markDirty()
 				}
 			}
 
 		} else {
+			// this is unreachable for updates on Group's "members.value", hence no handling is needed here
 			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
 			tAt := res.GetAttr(pp.AtType.NormName)
 			if tAt == nil {
@@ -231,12 +319,19 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 		panic(se)
 	}
 
+	isGroup := (rt.Name == "Group")
+
 	if pp.ParentType != nil {
 		ca := res.GetAttr(pp.ParentType.Name).GetComplexAt()
+		isMemberVal := (isGroup && pp.ParentType.NormName == "members" && pp.AtType.NormName == "value")
+
 		if pp.Slctr != nil {
 			offsets := findSelectedObj(po, ca)
 			for _, key := range offsets {
 				tSaMap := ca.SubAts[key]
+				if isMemberVal {
+					sl._deleteGroupMembers(tSaMap, rid, tx)
+				}
 				deleteAtFromSubAtMap(sl, pp, tSaMap, key, ca, prIdx, res, rid, tx, mh)
 			}
 		} else {
@@ -244,6 +339,9 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 				// delete the sub-attribute from all values
 				for i, subAtMap := range ca.SubAts {
 					if sa, ok := subAtMap[pp.AtType.Name]; ok {
+						if isMemberVal {
+							sl._deleteGroupMembers(subAtMap, rid, tx)
+						}
 						delete(subAtMap, sa.Name)
 						sl.dropSAtFromIndex(sa, ca.Name+"."+sa.Name, prIdx, rt.Name, rid, tx)
 						if len(subAtMap) == 0 {
@@ -260,6 +358,7 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 		}
 
 	} else {
+		isMembers := (isGroup && pp.AtType.NormName == "members")
 		if pp.Slctr != nil {
 			at := res.GetAttr(pp.AtType.Name)
 			if at.IsSimple() {
@@ -271,6 +370,9 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 			offsets := findSelectedObj(po, ca)
 			for _, pos := range offsets {
 				saMap := ca.SubAts[pos]
+				if isMembers {
+					sl._deleteGroupMembers(saMap, rid, tx)
+				}
 				sl.dropSubAtMapFromIndex(ca.Name, saMap, prIdx, rt.Name, rid, tx)
 				delete(ca.SubAts, pos)
 			}
@@ -287,6 +389,9 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 					sl.dropSAtFromIndex(sa, sa.Name, prIdx, rt.Name, rid, tx)
 				} else {
 					ca := at.GetComplexAt()
+					if isMembers {
+						sl.deleteGroupMembers(ca, rid, tx)
+					}
 					// removed CA
 					sl.dropCAtFromIndex(ca, prIdx, rt.Name, rid, tx)
 				}
@@ -301,6 +406,8 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 
 	rt := res.GetType()
 	prIdx := sl.getSysIndex(rt.Name, "presence")
+
+	isGroup := (res.GetType().Name == "Group")
 
 	if pp == nil {
 		var addRs *base.Resource
@@ -322,6 +429,11 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 
 		for _, ca := range addRs.Core.ComplexAts {
 			sl.addAttrTo(res, ca, tx, prIdx, mh)
+			if isGroup {
+				if ca.Name == "members" {
+					sl.addGroupMembers(ca, rid, tx)
+				}
+			}
 		}
 
 		for _, ext := range addRs.Ext {
@@ -339,11 +451,15 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 	}
 
 	if pp.AtType.IsComplex() {
+		isMembers := (isGroup && pp.AtType.NormName == "members")
 		tAt := res.GetAttr(pp.AtType.NormName)
 		if tAt == nil {
 			// just add it
 			ca := base.ParseComplexAttr(pp.AtType, po.Value)
 			sl.addAttrTo(res, ca, tx, prIdx, mh)
+			if isMembers {
+				sl.addGroupMembers(ca, rid, tx)
+			}
 		} else {
 			tCa := tAt.GetComplexAt()
 			if pp.AtType.MultiValued {
@@ -352,6 +468,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 				kind := rv.Kind()
 				arrLen := rv.Len()
 
+				ca := base.NewComplexAt(tCa.GetType())
 				if (kind == reflect.Slice) || (kind == reflect.Array) {
 					prmSet := false
 					for i := 0; i < arrLen; i++ {
@@ -368,7 +485,17 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 							}
 						}
 
-						tCa.SubAts[base.RandStr()] = subAtMap
+						if isMembers {
+							// the ca should hold only one subAtMap so keeping the key as a constant
+							ca.SubAts["1"] = subAtMap
+							sl.addGroupMembers(ca, rid, tx)
+							// the $ref and type values will be updated in the subAtMap when addGroupMembers is called
+							// so use this updated subAtMap
+							tCa.SubAts[base.RandStr()] = subAtMap
+						} else {
+							tCa.SubAts[base.RandStr()] = subAtMap
+						}
+
 						sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
 					}
 				} else {
@@ -378,7 +505,17 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 						tCa.UnsetPrimaryFlag()
 					}
 
-					tCa.SubAts[base.RandStr()] = subAtMap
+					if isMembers {
+						// the ca should hold only one subAtMap so keeping the key as a constant
+						ca.SubAts["1"] = subAtMap
+						sl.addGroupMembers(ca, rid, tx)
+						// the $ref and type values will be updated in the subAtMap when addGroupMembers is called
+						// so use this updated subAtMap
+						tCa.SubAts[base.RandStr()] = subAtMap
+					} else {
+						tCa.SubAts[base.RandStr()] = subAtMap
+					}
+
 					// index the subAtMap
 					sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
 				}
