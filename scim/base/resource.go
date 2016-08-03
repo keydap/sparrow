@@ -97,6 +97,23 @@ func (ca *ComplexAttribute) GetComplexAt() *ComplexAttribute {
 	return ca
 }
 
+func NewSimpleAt(atType *schema.AttrType, vals ...interface{}) *SimpleAttribute {
+	sa := &SimpleAttribute{}
+	sa.atType = atType
+	sa.Name = atType.NormName
+	sa.Values = make([]interface{}, 0)
+
+	if atType.MultiValued {
+		for v := range vals {
+			sa.Values = append(sa.Values, v)
+		}
+	} else {
+		sa.Values = append(sa.Values, vals[0])
+	}
+
+	return sa
+}
+
 func NewComplexAt(atType *schema.AttrType) *ComplexAttribute {
 	ca := &ComplexAttribute{}
 	ca.Name = atType.NormName
@@ -354,6 +371,22 @@ func (rs *Resource) GetExternalId() *string {
 
 func (rs *Resource) GetMeta() *ComplexAttribute {
 	return rs.Core.ComplexAts["meta"]
+}
+
+func (rs *Resource) IsMemberOf(gid string) bool {
+	ca := rs.Core.ComplexAts["groups"]
+	if ca == nil {
+		return false
+	}
+
+	for _, subAtMap := range ca.SubAts {
+		id := subAtMap["value"].Values[0].(string)
+		if id == gid {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (rs *Resource) AddMeta() *ComplexAttribute {

@@ -683,6 +683,10 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 }
 
 func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string, tx *bolt.Tx) {
+	groupType := sl.resTypes["Group"]
+	gRefAtType := groupType.GetAtType("members.$ref")
+	gTypeAtType := groupType.GetAtType("members.type")
+
 	for _, subAtMap := range members.SubAts {
 		value := subAtMap["value"]
 		if value != nil {
@@ -710,8 +714,8 @@ func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string,
 			}
 
 			// update the $ref and type values in the Group's "members" attribute
-			subAtMap["$ref"].Values = []interface{}{refRType.Endpoint + "/" + refRes.GetId()}
-			subAtMap["type"].Values = []interface{}{refRType.Name}
+			subAtMap["$ref"] = base.NewSimpleAt(gRefAtType, refRType.Endpoint+"/"+refRes.GetId())
+			subAtMap["type"] = base.NewSimpleAt(gTypeAtType, refRType.Name)
 
 			if refRType.Name == "User" {
 				groups := refRes.GetAttr("groups")
