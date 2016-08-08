@@ -88,9 +88,11 @@ func DefaultConfig() *Config {
 	sort := Sort{Supported: true}
 	cf.Sort = sort
 
-	userRc := ResourceConf{Name: "User", IndexFields: []string{"userName", "name.givenName", "employeeNumber", "organization", "emails.value"}}
+	userRc := ResourceConf{Name: "User", IndexFields: []string{"userName", "name.givenName", "employeeNumber", "organization", "emails.value", "groups.value"}}
 	deviceRc := ResourceConf{Name: "Device", IndexFields: []string{"manufacturer", "serialNumber", "rating", "price", "location.latitude", "installedDate", "repairDates", "photos.value"}}
-	cf.Resources = []ResourceConf{userRc, deviceRc}
+	groupRc := ResourceConf{Name: "Group", IndexFields: []string{"members.value"}}
+
+	cf.Resources = []ResourceConf{userRc, deviceRc, groupRc}
 
 	return cf
 }

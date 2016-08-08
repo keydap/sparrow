@@ -687,6 +687,8 @@ func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string,
 	gRefAtType := groupType.GetAtType("members.$ref")
 	gTypeAtType := groupType.GetAtType("members.type")
 
+	ugroupIdx := sl.getIndex("User", "groups.value")
+
 	for _, subAtMap := range members.SubAts {
 		value := subAtMap["value"]
 		if value != nil {
@@ -750,6 +752,7 @@ func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string,
 				}
 
 				if updated {
+					ugroupIdx.add(groupRid, refId, tx)
 					refRes.UpdateLastModTime()
 					sl.storeResource(tx, refRes)
 				}
@@ -900,6 +903,7 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 						return err
 					}
 				} else if refType == "User" {
+					ugroupIdx := sl.getIndex(refType, "groups.value")
 					res, _ := sl.getUsingTx(refId, refRt, tx)
 					if res != nil {
 						groups := res.GetAttr("groups").GetComplexAt()
@@ -907,9 +911,40 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 							val := gatMap["value"].Values[0].(string)
 							if val == rid {
 								delete(groups.SubAts, i)
+								if ugroupIdx != nil {
+									ugroupIdx.remove(val, refId, tx)
+								}
+								res.UpdateLastModTime()
+								sl.storeResource(tx, res)
 								break
 							}
 						}
+					}
+				}
+			}
+		}
+	} else {
+		groups := resource.GetAttr("groups")
+		if groups != nil {
+			refRt := sl.resTypes["Group"]
+			gmemberIdx := sl.getIndex(refRt.Name, "members.value")
+			ca := groups.GetComplexAt()
+			for _, subAtMap := range ca.SubAts {
+				// the ID of the group
+				gid := subAtMap["value"].Values[0].(string)
+				res, _ := sl.getUsingTx(gid, refRt, tx)
+				members := res.GetAttr("members").GetComplexAt()
+				for i, memMap := range members.SubAts {
+					val := memMap["value"].Values[0].(string)
+					if val == rid {
+						delete(members.SubAts, i)
+						if gmemberIdx != nil {
+							// removing
+							gmemberIdx.remove(rid, gid, tx)
+						}
+						res.UpdateLastModTime()
+						sl.storeResource(tx, res)
+						break
 					}
 				}
 			}

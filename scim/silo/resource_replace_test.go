@@ -195,7 +195,11 @@ func assertIndexVal(resName string, attrPath string, val interface{}, expected b
 	actual := idx.HasVal(val, tx)
 	tx.Rollback()
 	if actual != expected {
-		t.Errorf("Did not find the expected value %s in the index of attribute %s", val, attrPath)
+		if expected {
+			t.Errorf("Did not find the expected value %s in the index of attribute %s", val, attrPath)
+		} else {
+			t.Errorf("The unexpected value %s is still present in the index of attribute %s", val, attrPath)
+		}
 		panic("")
 	}
 }

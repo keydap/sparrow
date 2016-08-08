@@ -373,6 +373,22 @@ func (rs *Resource) GetMeta() *ComplexAttribute {
 	return rs.Core.ComplexAts["meta"]
 }
 
+func (rs *Resource) HasMember(userOrSubGid string) bool {
+	ca := rs.Core.ComplexAts["members"]
+	if ca == nil {
+		return false
+	}
+
+	for _, subAtMap := range ca.SubAts {
+		id := subAtMap["value"].Values[0].(string)
+		if id == userOrSubGid {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (rs *Resource) IsMemberOf(gid string) bool {
 	ca := rs.Core.ComplexAts["groups"]
 	if ca == nil {

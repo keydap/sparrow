@@ -24,6 +24,7 @@ var schemas map[string]*schema.Schema
 var restypes map[string]*schema.ResourceType
 var deviceType *schema.ResourceType
 var userType *schema.ResourceType
+var groupType *schema.ResourceType
 
 func TestMain(m *testing.M) {
 	logger.ConfigureLoggers("<root>=warn;scim.main=debug")
@@ -38,6 +39,8 @@ func TestMain(m *testing.M) {
 
 	deviceType = restypes["Device"]
 	userType = restypes["User"]
+	groupType = restypes["Group"]
+
 	userResName = userType.Name
 
 	os.Remove(dbFilePath)
