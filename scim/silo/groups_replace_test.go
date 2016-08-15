@@ -295,6 +295,52 @@ func TestPatchReplace(t *testing.T) {
 	checkGroupIndex(gid, t, u1Id, u3Id)
 }
 
+func TestPatchRemove(t *testing.T) {
+	initSilo()
+
+	user1 := createTestUser()
+	sl.Insert(user1)
+
+	user2 := createTestUser()
+	sl.Insert(user2)
+
+	user3 := createTestUser()
+	sl.Insert(user3)
+
+	u1Id := user1.GetId()
+	u2Id := user2.GetId()
+	u3Id := user3.GetId()
+
+	group := prepareGroup(user1, user2, user3)
+	group, _ = sl.Insert(group)
+
+	gid := group.GetId()
+
+	checkGroupIndex(gid, t, u1Id, u2Id, u3Id)
+
+	// now patch the group with path set to members
+	pr := getPr(`{"Operations":[{"op":"remove", "path": "members[value eq `+u3Id+`]"}]}`, groupType)
+	group, err := sl.Patch(gid, pr, groupType)
+	if err != nil {
+		t.Errorf("Failed to apply patch add req with path")
+	}
+
+	if !group.HasMember(u1Id) || !group.HasMember(u2Id) {
+		t.Error("User3 is not a member of the group")
+	}
+
+	// User3 should not be present anymore as a member
+	if group.HasMember(u3Id) {
+		t.Error("User3 is still a member of the group after remove operation")
+	}
+
+	assertIndexVal(groupType.Name, "members.value", u1Id, true, t)
+	assertIndexVal(groupType.Name, "members.value", u2Id, true, t)
+	assertIndexVal(groupType.Name, "members.value", u3Id, false, t)
+
+	checkGroupIndex(gid, t, u1Id, u2Id)
+}
+
 // Checks if the expected User resource IDs are present in the groups.value index
 // This function checks for the exact number of expected UIDs in the index.
 // If the index has more than one element and a single UID needs to be checked then
