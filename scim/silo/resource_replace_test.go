@@ -230,10 +230,10 @@ func assertEquals(t *testing.T, attrPath string, rs *base.Resource, expected ...
 			matched = base.Compare(atType, sa.Values[0], expected[0])
 		}
 	} else {
-		panic("Complex attributes cannot be asserted")
+		panic(fmt.Errorf("Complex attributes cannot be asserted"))
 	}
 
 	if !matched {
-		t.Errorf("Failed to match %s with the expected value(s)", attrPath)
+		panic(fmt.Errorf("Failed to match %s with the expected value(s) %#v", attrPath, expected))
 	}
 }
