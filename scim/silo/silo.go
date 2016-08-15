@@ -1111,18 +1111,28 @@ func (sl *Silo) _deleteGroupMembers(memberSubAtMap map[string]*base.SimpleAttrib
 
 	refRt := sl.resTypes[refType]
 	if refType == "User" {
+		ugroupIdx := sl.getIndex(refType, "groups.value")
 		user, _ := sl.getUsingTx(refId, refRt, tx)
 		if user != nil {
+			updated := false
 			groups := user.GetAttr("groups").GetComplexAt()
+
 			for key, subAtMap := range groups.SubAts {
 				userGroupId := subAtMap["value"].Values[0].(string)
 				if userGroupId == groupRid {
+					if ugroupIdx != nil {
+						uid := user.GetId()
+						ugroupIdx.remove(groupRid, uid, tx)
+					}
 					delete(groups.SubAts, key)
+					updated = true
 				}
 			}
 
-			user.UpdateLastModTime()
-			sl.storeResource(tx, user)
+			if updated {
+				user.UpdateLastModTime()
+				sl.storeResource(tx, user)
+			}
 		}
 	}
 }
