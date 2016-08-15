@@ -94,7 +94,6 @@ func TestReplace(t *testing.T) {
 	assertEquals(t, "location.longitude", newRs, "78°13'02.8\"E")
 	assertEquals(t, "macid", newRs, "abcd1")
 
-	assertEquals(t, "photos.value", newRs, "device1.jpg", "device2.jpg")
 	assertIndexVal(resName, "photos.value", "abc.jpg", false, t)    // 1st value before replacing
 	assertIndexVal(resName, "photos.value", "xyz.jpg", false, t)    // 2nd value before replacing
 	assertIndexVal(resName, "photos.value", "device1.jpg", true, t) // 1st value after replacing
