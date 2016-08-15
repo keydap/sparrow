@@ -405,6 +405,20 @@ func (rs *Resource) IsMemberOf(gid string) bool {
 	return false
 }
 
+func (rs *Resource) RemoveMember(uid string) {
+	ca := rs.Core.ComplexAts["members"]
+	if ca == nil {
+		return
+	}
+
+	for key, subAtMap := range ca.SubAts {
+		id := subAtMap["value"].Values[0].(string)
+		if id == uid {
+			delete(ca.SubAts, key)
+		}
+	}
+}
+
 func (rs *Resource) AddMeta() *ComplexAttribute {
 	// manually adding with the assumption that this performs better than parsing map[string]interface{} when AddCA() is used
 	ca := &ComplexAttribute{}
