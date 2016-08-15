@@ -10,7 +10,7 @@ func estPatchReplaceSimpleAts(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"rplace", "value":{"installedDate": "2016-06-18T14:19:14Z"}}]}`)
+	pr := getPr(`{"Operations":[{"op":"rplace", "value":{"installedDate": "2016-06-18T14:19:14Z"}}]}`, deviceType)
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -35,7 +35,7 @@ func estPatchReplaceSimpleAts(t *testing.T) {
 		t.Errorf("Patch operation modified though the attribute data is unchanged")
 	}
 
-	pr = getPr(`{"Operations":[{"op":"replace", "path": "location.latitude", "value": "20°10'45.4\"N"}]}`)
+	pr = getPr(`{"Operations":[{"op":"replace", "path": "location.latitude", "value": "20°10'45.4\"N"}]}`, deviceType)
 
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -45,7 +45,7 @@ func estPatchReplaceSimpleAts(t *testing.T) {
 	assertIndexVal(deviceType.Name, "location.latitude", "19°10'45.4\"N", false, t)
 	assertIndexVal(deviceType.Name, "location.latitude", "20°10'45.4\"N", true, t)
 
-	pr = getPr(`{"Operations":[{"op":"replace", "path": "macId", "value": "6A"}]}`)
+	pr = getPr(`{"Operations":[{"op":"replace", "path": "macId", "value": "6A"}]}`, deviceType)
 
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -62,7 +62,7 @@ func TestAddMultiValuedSubAt(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"replace", "path": "photos.display", "value": "photo display"}]}`)
+	pr := getPr(`{"Operations":[{"op":"replace", "path": "photos.display", "value": "photo display"}]}`, deviceType)
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -82,7 +82,7 @@ func TestReplaceSingleCA(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"replace", "path": "location", "value": {"latitude": "20°10'45.4\"N", "desc": "kodihalli"}}]}`)
+	pr := getPr(`{"Operations":[{"op":"replace", "path": "location", "value": {"latitude": "20°10'45.4\"N", "desc": "kodihalli"}}]}`, deviceType)
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -109,7 +109,7 @@ func TestReplaceMultiCA(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"replace", "path": "photos[value pr]", "value": {"value": "1.jpg", "display": "added display"}}]}`)
+	pr := getPr(`{"Operations":[{"op":"replace", "path": "photos[value pr]", "value": {"value": "1.jpg", "display": "added display"}}]}`, deviceType)
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestMultival(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"replace", "path": "photos[value pr].display", "value": "this is a photo"}]}`)
+	pr := getPr(`{"Operations":[{"op":"replace", "path": "photos[value pr].display", "value": "this is a photo"}]}`, deviceType)
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
