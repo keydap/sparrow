@@ -112,7 +112,8 @@ func searchResource(hc *httpContext) {
 		log.Debugf("Searching for the resource with ID %s", rid)
 		rtByPath := hc.pr.RtPathMap[hc.Endpoint[0:pos]]
 
-		rs, err := hc.pr.GetResource(hc.OpContext, rid, rtByPath)
+		getCtx := base.GetContext{Rid: rid, Rt: rtByPath, OpContext: hc.OpContext}
+		rs, err := hc.pr.GetResource(&getCtx)
 		if err != nil {
 			writeError(hc, err)
 			return
@@ -219,24 +220,7 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 	var exclAttrLst []*base.AttributeParam
 
 	if len(sr.Attributes) != 0 {
-		attrSet, subAtPresent := base.SplitAttrCsv(sr.Attributes, rTypes)
-		if attrSet != nil {
-			// the mandatory attributes that will always be returned
-			for _, rt := range rTypes {
-				for k, _ := range rt.AtsAlwaysRtn {
-					attrSet[k] = 1
-				}
-
-				for k, _ := range rt.AtsNeverRtn {
-					if _, ok := attrSet[k]; ok {
-						delete(attrSet, k)
-					}
-				}
-			}
-
-			// sort the names and eliminate redundant values, for example "name, name.familyName" will be reduced to name
-			attrLst = base.ConvertToParamAttributes(attrSet, subAtPresent)
-		}
+		attrLst = parseAttrParam(sr.Attributes, rTypes)
 	} else {
 		exclAttrSet, subAtPresent := base.SplitAttrCsv(sr.ExcludedAttributes, rTypes)
 
@@ -325,8 +309,8 @@ func createResource(hc *httpContext) {
 		return
 	}
 
-	hc.OpContext.Rs = rs
-	insertedRs, err := hc.pr.CreateResource(hc.OpContext)
+	createCtx := base.CreateContext{InRes: rs, OpContext: hc.OpContext}
+	insertedRs, err := hc.pr.CreateResource(&createCtx)
 	if err != nil {
 		writeError(hc, err)
 		return
@@ -340,10 +324,105 @@ func createResource(hc *httpContext) {
 	log.Debugf("Successfully inserted the resource with ID %s", rid)
 }
 
-func replaceResource(w http.ResponseWriter, r *http.Request, pr *provider.Provider) {
+func replaceResource(hc *httpContext) {
+	pos := strings.LastIndex(hc.Endpoint, "/")
+	pos++
+	if pos >= len(hc.Endpoint) {
+		writeCommonHeaders(hc.w, hc.pr)
+		hc.w.WriteHeader(http.StatusBadRequest)
+		detail := "Invalid replace request, missing resource ID"
+		log.Debugf(detail)
+		err := base.NewBadRequestError(detail)
+		hc.w.Write(err.Serialize())
+		return
+	}
+
+	rs, err := base.ParseResource(hc.pr.RsTypes, hc.pr.Schemas, hc.r.Body)
+	if err != nil {
+		writeError(hc, err)
+		return
+	}
+
+	rid := hc.Endpoint[pos:]
+	rtByPath := hc.pr.RtPathMap[hc.Endpoint[0:pos-1]]
+	rsType := rs.GetType()
+	if rsType != rtByPath {
+		// return bad request error
+		err = base.NewBadRequestError(fmt.Sprintf("Resource data of type %s is sent to the wrong endpoint %s", rsType.Name, hc.r.RequestURI))
+		writeError(hc, err)
+		return
+	}
+
+	replaceCtx := base.ReplaceContext{InRes: rs, OpContext: hc.OpContext}
+	replacedRs, err := hc.pr.Replace(&replaceCtx)
+	if err != nil {
+		writeError(hc, err)
+		return
+	}
+
+	writeCommonHeaders(hc.w, hc.pr)
+	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
+	hc.w.WriteHeader(http.StatusOK)
+	hc.w.Write(replacedRs.Serialize())
+	log.Debugf("Successfully replaced the resource with ID %s", rid)
 }
 
-func modifyResource(w http.ResponseWriter, r *http.Request, pr *provider.Provider) {
+func patchResource(hc *httpContext) {
+	pos := strings.LastIndex(hc.Endpoint, "/")
+	pos++
+	if pos >= len(hc.Endpoint) {
+		writeCommonHeaders(hc.w, hc.pr)
+		hc.w.WriteHeader(http.StatusBadRequest)
+		detail := "Invalid patch request, missing resource ID"
+		log.Debugf(detail)
+		err := base.NewBadRequestError(detail)
+		hc.w.Write(err.Serialize())
+		return
+	}
+
+	err := hc.r.ParseForm()
+	if err != nil {
+		writeError(hc, err)
+		return
+	}
+
+	reqAttr := hc.r.Form.Get("attributes")
+
+	rid := hc.Endpoint[pos:]
+	rtByPath := hc.pr.RtPathMap[hc.Endpoint[0:pos-1]]
+	if rtByPath == nil {
+		// return bad request error
+		err := base.NewBadRequestError(fmt.Sprintf("There is no resource type associated with the endpoint %s", hc.r.RequestURI))
+		writeError(hc, err)
+		return
+	}
+
+	patchReq, err := base.ParsePatchReq(hc.r.Body, rtByPath)
+	if err != nil {
+		writeError(hc, err)
+		return
+	}
+
+	patchCtx := base.PatchContext{Rid: rid, Rt: rtByPath, Pr: patchReq, OpContext: hc.OpContext}
+	patchedRes, err := hc.pr.Patch(&patchCtx)
+	if err != nil {
+		writeError(hc, err)
+		return
+	}
+
+	writeCommonHeaders(hc.w, hc.pr)
+	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
+
+	if reqAttr == "" {
+		hc.w.WriteHeader(http.StatusNoContent)
+	} else {
+		attrLst := parseAttrParam(reqAttr, []*schema.ResourceType{rtByPath})
+		if attrLst != nil {
+			data := patchedRes.FilterAndSerialize(attrLst, true)
+			hc.w.WriteHeader(http.StatusOK)
+			hc.w.Write(data)
+		}
+	}
 }
 
 func deleteResource(hc *httpContext) {
@@ -362,7 +441,8 @@ func deleteResource(hc *httpContext) {
 
 	rid := hc.Endpoint[pos:]
 	rtByPath := hc.pr.RtPathMap[hc.Endpoint[0:pos-1]]
-	err := hc.pr.DeleteResource(hc.OpContext, rid, rtByPath)
+	delCtx := base.DeleteContext{Rid: rid, Rt: rtByPath, OpContext: hc.OpContext}
+	err := hc.pr.DeleteResource(&delCtx)
 	if err != nil {
 		writeError(hc, err)
 		return
@@ -481,6 +561,12 @@ func createOpCtx(r *http.Request) *base.OpContext {
 		opCtx.Endpoint = parts[1]
 	} else {
 		opCtx.Endpoint = r.RequestURI
+	}
+
+	// trim '/' if it is the last char
+	epLen := len(opCtx.Endpoint)
+	if (epLen > 1) && (opCtx.Endpoint[epLen-1] == '/') {
+		opCtx.Endpoint = opCtx.Endpoint[:epLen-1]
 	}
 
 	return opCtx
@@ -616,4 +702,27 @@ func writeError(hc *httpContext, err error) {
 		unknown := base.NewInternalserverError(err.Error())
 		hc.w.Write(unknown.Serialize())
 	}
+}
+
+func parseAttrParam(attrParam string, rTypes []*schema.ResourceType) []*base.AttributeParam {
+	attrSet, subAtPresent := base.SplitAttrCsv(attrParam, rTypes)
+	if attrSet != nil {
+		// the mandatory attributes that will always be returned
+		for _, rt := range rTypes {
+			for k, _ := range rt.AtsAlwaysRtn {
+				attrSet[k] = 1
+			}
+
+			for k, _ := range rt.AtsNeverRtn {
+				if _, ok := attrSet[k]; ok {
+					delete(attrSet, k)
+				}
+			}
+		}
+
+		// sort the names and eliminate redundant values, for example "name, name.familyName" will be reduced to name
+		return base.ConvertToParamAttributes(attrSet, subAtPresent)
+	}
+
+	return nil
 }

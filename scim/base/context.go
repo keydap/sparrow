@@ -12,7 +12,36 @@ type OpContext struct {
 	ClientIP string
 	Tenant   string
 	Endpoint string
-	Rs       *Resource
+}
+
+type CreateContext struct {
+	InRes      *Resource
+	*OpContext // the operation context
+}
+
+type GetContext struct {
+	Rid        string
+	Rt         *schema.ResourceType
+	*OpContext // the operation context
+}
+
+type DeleteContext struct {
+	Rid        string
+	Rt         *schema.ResourceType
+	*OpContext // the operation context
+}
+
+type ReplaceContext struct {
+	InRes      *Resource
+	Rt         *schema.ResourceType
+	*OpContext // the operation context
+}
+
+type PatchContext struct {
+	Rid        string
+	Pr         *PatchReq
+	Rt         *schema.ResourceType
+	*OpContext // the operation context
 }
 
 type SearchContext struct {

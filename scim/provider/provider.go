@@ -111,20 +111,28 @@ func (prv *Provider) GetConfigJson() (data []byte, err error) {
 	return ioutil.ReadFile(f)
 }
 
-func (prv *Provider) CreateResource(opCtx *base.OpContext) (res *base.Resource, err error) {
-	return prv.sl.Insert(opCtx.Rs)
+func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resource, err error) {
+	return prv.sl.Insert(crCtx.InRes)
 }
 
-func (prv *Provider) DeleteResource(opCtx *base.OpContext, rid string, rt *schema.ResourceType) error {
-	return prv.sl.Remove(rid, rt)
+func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) error {
+	return prv.sl.Delete(delCtx.Rid, delCtx.Rt)
 }
 
-func (prv *Provider) GetResource(opCtx *base.OpContext, rid string, rt *schema.ResourceType) (res *base.Resource, err error) {
-	return prv.sl.Get(rid, rt)
+func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, err error) {
+	return prv.sl.Get(getCtx.Rid, getCtx.Rt)
 }
 
 func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) {
 	prv.sl.Search(sc, outPipe)
+}
+
+func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resource, err error) {
+	return prv.sl.Replace(replaceCtx.InRes)
+}
+
+func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err error) {
+	return prv.sl.Patch(patchCtx.Rid, patchCtx.Pr, patchCtx.Rt)
 }
 
 func (prv *Provider) Authenticate(ac *base.AuthContext) {
