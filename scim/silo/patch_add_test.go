@@ -66,7 +66,7 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	}
 
 	// with path now
-	sl.Remove(rs.GetId(), deviceType)
+	sl.Delete(rs.GetId(), deviceType)
 
 	rs = insertRs(patchDevice)
 	pr = getPr(`{"Operations":[{"op":"add", "path":"price", "value":10.6}]}`, deviceType)
@@ -249,7 +249,7 @@ func TestPatchAddMultiValComplexAT(t *testing.T) {
 	assertIndexVal(deviceType.Name, "photos.value", "456.jpg", true, t)
 
 	// with path now
-	sl.Remove(rid, deviceType)
+	sl.Delete(rid, deviceType)
 	rs = insertRs(patchDevice)
 	rid = rs.GetId()
 	pr = getPr(`{"Operations":[{"op":"add", "path": "photos[value eq \"xyz.jpg\"].primary", "value":true}]}`, deviceType)

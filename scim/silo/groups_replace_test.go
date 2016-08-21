@@ -84,7 +84,7 @@ func TestGroupAddAndDelete(t *testing.T) {
 	assertIndexVal(userType.Name, "groups.value", gid, true, t)
 
 	// remove the second user, after which he shouldn't be part of the group
-	sl.Remove(u2Id, userType)
+	sl.Delete(u2Id, userType)
 
 	// check index after removing User2
 	assertIndexVal(groupType.Name, "members.value", u1Id, true, t)  // U1 should be present
@@ -95,7 +95,7 @@ func TestGroupAddAndDelete(t *testing.T) {
 		t.Errorf("Deleted user %s is still a member of the group %s", u2Id, gid)
 	}
 
-	err = sl.Remove(gid, groupType)
+	err = sl.Delete(gid, groupType)
 	if err != nil {
 		t.Errorf("Failed to delete the group %s", gid)
 	}

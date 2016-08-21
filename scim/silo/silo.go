@@ -820,7 +820,7 @@ func (sl *Silo) getUsingTx(rid string, rt *schema.ResourceType, tx *bolt.Tx) (re
 	return resource, err
 }
 
-func (sl *Silo) Remove(rid string, rt *schema.ResourceType) (err error) {
+func (sl *Silo) Delete(rid string, rt *schema.ResourceType) (err error) {
 
 	tx, err := sl.db.Begin(true)
 	if err != nil {
