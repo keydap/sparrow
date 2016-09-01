@@ -542,6 +542,12 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodDelete:
 		deleteResource(hc)
+
+	case http.MethodPatch:
+		patchResource(hc)
+
+	case http.MethodPut:
+		replaceResource(hc)
 	}
 }
 
