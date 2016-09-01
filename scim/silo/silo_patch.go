@@ -40,6 +40,7 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 	mh := &modifyHints{}
 
 	for _, po := range pr.Operations {
+		log.Debugf("Patch %s operation on resource %s", po.Op, rid)
 		switch po.Op {
 		case "add":
 			sl.handleAdd(po, res, rid, mh, tx)
