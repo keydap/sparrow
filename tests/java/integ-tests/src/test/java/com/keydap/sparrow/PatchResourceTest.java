@@ -51,5 +51,12 @@ public class PatchResourceTest extends TestBase {
         assertEquals("1.1", loc.getLatitude());
         assertEquals("2.2", loc.getLongitude());
         assertEquals("device location", loc.getDesc());
+        
+        // when no attributes are mentioned then the server returns 204 status
+        pr.setAttributes(null);
+        pr.getOperations().clear();
+        pr.remove("location");
+        resp = client.patchResource(pr);
+        assertEquals(HttpStatus.SC_NO_CONTENT, resp.getHttpCode());
     }
 }
