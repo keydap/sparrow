@@ -10,12 +10,15 @@ import (
 	"os"
 	"sparrow/scim/base"
 	"testing"
+	"time"
 )
 
 func TestCreateResourcesPerf(t *testing.T) {
 	if true {
+		fmt.Println("Not running insert perf test")
 		return
 	}
+
 	bufReader, err := os.Open("/Volumes/EVOSSD/sparrow-bench/100k-users.json")
 	if err != nil {
 		t.Error(err)
@@ -25,6 +28,11 @@ func TestCreateResourcesPerf(t *testing.T) {
 	lineReader := bufio.NewReader(bufReader)
 	count := 0
 
+	durSlice := make([]float64, 0)
+
+	start := time.Now()
+
+outer:
 	for {
 		l, err := lineReader.ReadBytes('\n')
 		if err != nil {
@@ -36,6 +44,21 @@ func TestCreateResourcesPerf(t *testing.T) {
 		}
 
 		buf := bytes.NewReader(l)
+		for {
+			ch, _, err := buf.ReadRune()
+
+			if ch == 0 || err != nil {
+				continue outer
+			}
+
+			if ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r' {
+				continue
+			} else {
+				buf.UnreadRune()
+				break
+			}
+		}
+
 		resp, se := http.Post("http://localhost:9090/v2/Users", "application/scim+json", buf)
 		if se != nil {
 			fmt.Printf("Error while creating resource %#v\n", se)
@@ -46,14 +69,19 @@ func TestCreateResourcesPerf(t *testing.T) {
 
 		if resp.StatusCode == http.StatusCreated {
 			count++
+		} else {
+			panic(fmt.Errorf("Unable to insert %d resource status is %s\n %s", count+1, resp.Status, buf))
 		}
 
-		if count == 20000 {
-			break
+		if (count > 0) && ((count % 5000) == 0) {
+			durSec := time.Now().Sub(start).Seconds()
+			durSlice = append(durSlice, durSec)
+			fmt.Printf("Time took to insert %d entries %fsec\n", count, durSec)
 		}
 	}
 
-	fmt.Printf("Created %d resources\n", count)
+	fmt.Printf("Created %d resources in %fsec\n", count, time.Now().Sub(start).Seconds())
+	fmt.Println(durSlice)
 }
 
 func TestSearchResourcesPerf(t *testing.T) {
@@ -63,6 +91,8 @@ func TestSearchResourcesPerf(t *testing.T) {
 		t.Errorf(err.Error())
 		return
 	}
+
+	start := time.Now()
 
 	resp, se := http.Post("http://localhost:9090/v2/Users/.search", "application/scim+json", bytes.NewReader(data))
 	if se != nil {
@@ -79,6 +109,7 @@ func TestSearchResourcesPerf(t *testing.T) {
 	fmt.Println(resp.Status)
 
 	if resp.StatusCode == http.StatusOK {
-		fmt.Printf("Number of resources fetched %d", lr.TotalResults)
+		durSec := time.Now().Sub(start).Seconds()
+		fmt.Printf("%d resources fetched in %fsec\n", lr.TotalResults, durSec)
 	}
 }
