@@ -122,7 +122,6 @@ func (idx *Index) keyCount(key string, tx *bolt.Tx) int64 {
 }
 
 // Inserts the given <attribute value, resource ID> tuple in the index
-// FIXME check for the presence of key before insertion otherwise insertion of the same key will increment count
 func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 	log.Debugf("adding value %s of resource %s to index %s", val, rid, idx.Name)
 	vData := idx.convert(val)
