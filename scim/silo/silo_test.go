@@ -152,6 +152,48 @@ func TestInsert(t *testing.T) {
 		t.Error("Invalid insert operation, no generated ID found for the inserted resource")
 	}
 
+	idx := sl.getIndex(userResName, "username")
+	tx, _ := sl.db.Begin(true)
+	cnt := idx.getCount(tx)
+	//fmt.Printf("Total username count %d\n", cnt)
+	if cnt != 1 {
+		t.Errorf("Incorrect key count %d in the username index", cnt)
+	}
+
+	unameVal := rs.GetAttr("username").GetSimpleAt().Values[0]
+	idx.add(unameVal, rid, tx)
+	cnt = idx.getCount(tx)
+	//fmt.Printf("Total username count %d\n", cnt)
+	if cnt != 1 {
+		t.Errorf("Key count should not increment after inserting the same key in the index expected %d found %d", 1, cnt)
+	}
+
+	cnt = 0
+	cur := idx.cursor(tx)
+	for k, _ := cur.First(); k != nil; k, _ = cur.Next() {
+		cnt++
+	}
+
+	if cnt != 1 {
+		t.Errorf("Wrong number of entries %d fetched after navigating using a cursor", cnt)
+	}
+
+	idx.remove(unameVal, rid, tx)
+	cnt = idx.getCount(tx)
+	if cnt != 0 {
+		t.Errorf("Invalid key count after deleting the username from index, expected %d found %d", 0, cnt)
+	}
+
+	idx.remove(unameVal, rid, tx)
+	cnt = idx.getCount(tx)
+	if cnt != 0 {
+		t.Errorf("Invalid key count after attempting to delete the same username again from index, expected %d found %d", 0, cnt)
+	}
+
+	// now, put back the username in index to let the rest of the test pass
+	idx.add(unameVal, rid, tx)
+	tx.Commit()
+
 	// check that metadata is overwritten
 	rsMeta := rs.GetMeta()
 	if uMeta.GetValue("created") == rsMeta.GetValue("created") {

@@ -27,6 +27,8 @@ var (
 
 	// the delimiter that separates resource and index name
 	RES_INDEX_DELIM = ":"
+
+	DUP_KEY_VAL = []byte{0}
 )
 
 var log logger.Logger
@@ -125,6 +127,7 @@ func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 	log.Debugf("adding value %s of resource %s to index %s", val, rid, idx.Name)
 	vData := idx.convert(val)
 	buck := tx.Bucket(idx.BnameBytes)
+	ridBytes := []byte(rid)
 
 	var err error
 	if idx.AllowDupKey {
@@ -150,7 +153,15 @@ func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 			count = utils.Btoi(cb)
 		}
 
-		err = dupBuck.Put([]byte(rid), []byte(nil))
+		if !firstCount {
+			valData := dupBuck.Get(ridBytes)
+			if valData != nil {
+				// key already exists, return
+				return nil
+			}
+		}
+
+		err = dupBuck.Put(ridBytes, DUP_KEY_VAL)
 		if err != nil {
 			return err
 		}
@@ -160,9 +171,15 @@ func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 			err = buck.Put(countKey, utils.Itob(count))
 		}
 	} else {
-		err = buck.Put(vData, []byte(rid))
+		existingRid := buck.Get(vData)
+		err = buck.Put(vData, ridBytes)
 		if err != nil {
 			return err
+		}
+
+		if existingRid != nil {
+			// key already exists, or old key was replaced, no need to update count
+			return nil
 		}
 	}
 
@@ -184,19 +201,26 @@ func (idx *Index) remove(val interface{}, rid string, tx *bolt.Tx) error {
 	log.Debugf("removing value %s of resource %s from index %s", val, rid, idx.Name)
 	vData := idx.convert(val)
 	buck := tx.Bucket(idx.BnameBytes)
+	ridBytes := []byte(rid)
 
 	var err error
 	if idx.AllowDupKey {
 		dupBuck := buck.Bucket(vData)
 
 		if dupBuck != nil {
+			existingVal := dupBuck.Get(ridBytes)
+			// nothing to delete
+			if existingVal == nil {
+				return nil
+			}
+
 			countKey := []byte(strings.ToLower(fmt.Sprint(val)) + "_count")
 
 			cb := buck.Get(countKey)
 			count := utils.Btoi(cb)
 
 			if count > 1 {
-				err = dupBuck.Delete([]byte(rid))
+				err = dupBuck.Delete(ridBytes)
 				if err != nil {
 					return err
 				}
@@ -218,6 +242,12 @@ func (idx *Index) remove(val interface{}, rid string, tx *bolt.Tx) error {
 			}
 		}
 	} else {
+		existingVal := buck.Get(vData)
+		// nothing to delete
+		if existingVal == nil {
+			return nil
+		}
+
 		err = buck.Delete(vData)
 		if err != nil {
 			return err
