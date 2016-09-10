@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	"math"
-	"sparrow/scim/base"
-	"sparrow/scim/schema"
+	"sparrow/base"
+	"sparrow/schema"
 	"strings"
 )
 

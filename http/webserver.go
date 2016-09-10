@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sparrow/scim/base"
-	"sparrow/scim/provider"
-	"sparrow/scim/schema"
-	"sparrow/scim/utils"
+	"sparrow/base"
+	"sparrow/provider"
+	"sparrow/schema"
+	"sparrow/utils"
 	"strconv"
 	"strings"
 )
@@ -639,7 +639,7 @@ func createDefaultDomain(domainsDir string) {
 	}
 
 	wDir, _ := os.Getwd()
-	wDir += "/../resources"
+	wDir += "/resources"
 
 	schemaDir := wDir + "/schemas"
 	copyDir(schemaDir, layout.SchemaDir)

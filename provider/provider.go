@@ -6,10 +6,10 @@ import (
 	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"path/filepath"
-	"sparrow/scim/base"
-	"sparrow/scim/conf"
-	"sparrow/scim/schema"
-	"sparrow/scim/silo"
+	"sparrow/base"
+	"sparrow/conf"
+	"sparrow/schema"
+	"sparrow/silo"
 	"strings"
 )
 

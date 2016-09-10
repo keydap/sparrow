@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	"reflect"
-	"sparrow/scim/base"
-	"sparrow/scim/schema"
+	"sparrow/base"
+	"sparrow/schema"
 )
 
 func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (res *base.Resource, err error) {

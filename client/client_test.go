@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"sparrow/scim/base"
+	"sparrow/base"
 	"testing"
 	"time"
 )

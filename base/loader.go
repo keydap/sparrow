@@ -3,7 +3,7 @@ package base
 import (
 	"fmt"
 	"os"
-	"sparrow/scim/schema"
+	"sparrow/schema"
 	"strings"
 )
 

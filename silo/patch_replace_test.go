@@ -2,7 +2,7 @@ package silo
 
 import (
 	"fmt"
-	"sparrow/scim/utils"
+	"sparrow/utils"
 	"testing"
 )
 

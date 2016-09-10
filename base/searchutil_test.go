@@ -2,7 +2,7 @@ package base
 
 import (
 	"os"
-	"sparrow/scim/schema"
+	"sparrow/schema"
 	"testing"
 )
 

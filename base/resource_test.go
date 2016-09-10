@@ -3,7 +3,7 @@ package base
 import (
 	"bytes"
 	"fmt"
-	"sparrow/scim/schema"
+	"sparrow/schema"
 	"testing"
 )
 

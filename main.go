@@ -7,9 +7,9 @@ import (
 	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"os"
-	"sparrow/scim/base"
-	"sparrow/scim/http"
-	"sparrow/scim/schema"
+	"sparrow/base"
+	"sparrow/http"
+	"sparrow/schema"
 	"time"
 )
 
@@ -25,7 +25,7 @@ func main() {
 
 	if false {
 		log := logger.GetLogger("scim.main")
-		resDir = resDir + "/../resources/"
+		resDir = resDir + "/resources/"
 		sc, err := schema.LoadSchema(resDir + "/schemas/user.json")
 		if err != nil {
 			log.Debugf("%s", err)

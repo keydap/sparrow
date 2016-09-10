@@ -2,7 +2,7 @@ package base
 
 import (
 	"fmt"
-	"sparrow/scim/schema"
+	"sparrow/schema"
 )
 
 type Selector interface {

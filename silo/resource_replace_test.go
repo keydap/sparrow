@@ -3,8 +3,8 @@ package silo
 import (
 	"bytes"
 	"fmt"
-	"sparrow/scim/base"
-	"sparrow/scim/utils"
+	"sparrow/base"
+	"sparrow/utils"
 	"strings"
 	"testing"
 )

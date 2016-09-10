@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sparrow/scim/schema"
+	"sparrow/schema"
 	"strings"
 )
 

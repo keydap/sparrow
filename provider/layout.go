@@ -3,7 +3,7 @@ package provider
 import (
 	"os"
 	"path/filepath"
-	"sparrow/scim/utils"
+	"sparrow/utils"
 	"strings"
 )
 

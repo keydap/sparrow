@@ -3,8 +3,8 @@ package base
 import (
 	"fmt"
 	logger "github.com/juju/loggo"
-	"sparrow/scim/schema"
-	"sparrow/scim/utils"
+	"sparrow/schema"
+	"sparrow/utils"
 	"strconv"
 	"strings"
 	"time"

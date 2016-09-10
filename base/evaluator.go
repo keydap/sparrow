@@ -3,7 +3,7 @@ package base
 import (
 	"fmt"
 	"sort"
-	"sparrow/scim/schema"
+	"sparrow/schema"
 	"strings"
 )
 

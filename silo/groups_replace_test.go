@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"sparrow/scim/base"
+	"sparrow/base"
 	"strings"
 	"testing"
 )

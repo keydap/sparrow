@@ -1,7 +1,7 @@
 package base
 
 import (
-	"sparrow/scim/schema"
+	"sparrow/schema"
 )
 
 type AuthContext struct {

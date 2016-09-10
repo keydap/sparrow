@@ -7,9 +7,9 @@ import (
 	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"os"
-	"sparrow/scim/base"
-	"sparrow/scim/conf"
-	"sparrow/scim/schema"
+	"sparrow/base"
+	"sparrow/conf"
+	"sparrow/schema"
 	"testing"
 )
 
