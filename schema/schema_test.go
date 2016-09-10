@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	resDir = "../../resources/schemas/"
+	resDir = "../resources/schemas/"
 )
 
 func TestGenerateSchema(t *testing.T) {

@@ -181,7 +181,7 @@ func bnfgen() string {
 		panic(err)
 	}
 
-	grammar, err := ioutil.ReadFile(wd + "/../../resources/filter.abnf")
+	grammar, err := ioutil.ReadFile(wd + "/../resources/filter.abnf")
 	if err != nil {
 		panic(err)
 	}

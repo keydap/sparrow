@@ -29,7 +29,7 @@ var groupType *schema.ResourceType
 func TestMain(m *testing.M) {
 	logger.ConfigureLoggers("<root>=warn;scim.main=debug")
 
-	resDir += "/../../"
+	resDir += "/../"
 	resDir = resDir + "/resources/"
 	schemaDir := resDir + "/schemas"
 	rtDir := resDir + "/types"

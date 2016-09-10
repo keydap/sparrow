@@ -12,7 +12,7 @@ var rTypesMap map[string]*schema.ResourceType
 
 func TestMain(m *testing.M) {
 	resDir, _ := os.Getwd()
-	resDir += "/../../"
+	resDir += "/../"
 	resDir = resDir + "/resources/"
 	schemaDir := resDir + "/schemas"
 	rtDir := resDir + "/types"
