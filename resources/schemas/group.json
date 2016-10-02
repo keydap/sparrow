@@ -65,6 +65,28 @@
             ],
             "mutability":"readWrite",
             "returned":"default"
+        },
+        {
+            "name":"permissions",
+            "type":"complex",
+            "multiValued":true,
+            "description":"A list of permissions of the Group.",
+            "required":false,
+            "subAttributes":[
+                {
+                    "name":"value",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"Identifier of the permissions of this Group.",
+                    "required":false,
+                    "caseExact":false,
+                    "mutability":"immutable",
+                    "returned":"default",
+                    "uniqueness":"none"
+                }
+            ],
+            "mutability":"readWrite",
+            "returned":"request"
         }
     ],
     "meta":{
