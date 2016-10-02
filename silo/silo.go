@@ -7,6 +7,7 @@ import (
 	"math"
 	"sparrow/base"
 	"sparrow/conf"
+	"sparrow/rbac"
 	"sparrow/schema"
 	"sparrow/utils"
 	"strings"
@@ -629,6 +630,8 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 
 	tx, err := sl.db.Begin(true)
 
+	isGroup := false
+
 	if err != nil {
 		detail := fmt.Sprintf("Could not begin a transaction for inserting the resource [%s]", err.Error())
 		log.Criticalf(detail)
@@ -646,6 +649,11 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 		} else {
 			tx.Commit()
 			res = inRes
+
+			if isGroup {
+				rbac.UpsertRole(inRes)
+			}
+
 			log.Debugf("Successfully inserted resource with id %s", rid)
 		}
 	}()
@@ -699,6 +707,7 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 	}
 
 	if rt.Name == "Group" {
+		isGroup = true
 		members := inRes.GetAttr("members")
 		if members != nil {
 			ca := members.GetComplexAt()
@@ -867,6 +876,11 @@ func (sl *Silo) Delete(rid string, rt *schema.ResourceType) (err error) {
 			tx.Rollback()
 		} else {
 			tx.Commit()
+
+			if rt.Name == "Group" {
+				rbac.DeleteRole(rid)
+			}
+
 			log.Debugf("Successfully removed resource with ID %s", rid)
 		}
 	}()
@@ -1026,6 +1040,8 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 
 	tx, err := sl.db.Begin(true)
 
+	isGroup := false
+
 	if err != nil {
 		detail := fmt.Sprintf("Could not begin a transaction for replacing the resource [%s]", err.Error())
 		log.Criticalf(detail)
@@ -1043,6 +1059,11 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 		} else {
 			tx.Commit()
 			res = inRes
+
+			if isGroup {
+				rbac.UpsertRole(inRes)
+			}
+
 			log.Debugf("Successfully replaced resource with id %s", rid)
 		}
 	}()
@@ -1056,6 +1077,7 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 	prIdx := sl.getSysIndex(rt.Name, "presence")
 
 	if rt.Name == "Group" {
+		isGroup = true
 		var inMembers, existingMembers *base.ComplexAttribute
 		inMemAt := inRes.GetAttr("members")
 		if inMemAt != nil {
