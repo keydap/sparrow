@@ -45,6 +45,7 @@ type Silo struct {
 	sysIndices map[string]map[string]*Index
 	schemas    map[string]*schema.Schema
 	resTypes   map[string]*schema.ResourceType
+	Engine     *rbac.RbacEngine
 }
 
 type Index struct {
@@ -486,6 +487,10 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 		return err
 	})
 
+	sl.Engine = rbac.NewEngine()
+	// load the roles
+	sl.LoadGroups()
+
 	return sl, nil
 }
 
@@ -651,7 +656,7 @@ func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
 			res = inRes
 
 			if isGroup {
-				rbac.UpsertRole(inRes)
+				sl.Engine.UpsertRole(inRes)
 			}
 
 			log.Debugf("Successfully inserted resource with id %s", rid)
@@ -878,7 +883,7 @@ func (sl *Silo) Delete(rid string, rt *schema.ResourceType) (err error) {
 			tx.Commit()
 
 			if rt.Name == "Group" {
-				rbac.DeleteRole(rid)
+				sl.Engine.DeleteRole(rid)
 			}
 
 			log.Debugf("Successfully removed resource with ID %s", rid)
@@ -1061,7 +1066,7 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 			res = inRes
 
 			if isGroup {
-				rbac.UpsertRole(inRes)
+				sl.Engine.UpsertRole(inRes)
 			}
 
 			log.Debugf("Successfully replaced resource with id %s", rid)
@@ -1407,4 +1412,44 @@ func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) erro
 	}
 
 	return nil
+}
+
+func (sl *Silo) LoadGroups() {
+	tx, err := sl.db.Begin(false)
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+			log.Debugf("Error while loading groups %s", err.Error())
+		}
+
+		tx.Rollback()
+	}()
+
+	if err != nil {
+		panic(err)
+	}
+
+	log.Debugf("Loading Groups")
+	groupType := sl.resTypes["Group"]
+	buc := tx.Bucket(sl.resources[groupType.Name])
+	cursor := buc.Cursor()
+
+	for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+		reader := bytes.NewReader(v)
+		decoder := gob.NewDecoder(reader)
+
+		if v != nil {
+			var rs *base.Resource
+			err = decoder.Decode(&rs)
+			if err != nil {
+				panic(err)
+			}
+
+			rs.SetSchema(groupType)
+			sl.Engine.UpsertRole(rs)
+		}
+	}
+
 }

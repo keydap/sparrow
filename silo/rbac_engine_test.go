@@ -2,7 +2,6 @@ package silo
 
 import (
 	"fmt"
-	"sparrow/rbac"
 	"testing"
 )
 
@@ -17,7 +16,7 @@ func TestCreateJwt(t *testing.T) {
 
 	user, _ = sl.Get(user.GetId(), userType)
 
-	session := rbac.NewRbacSession(user)
+	session := sl.Engine.NewRbacSession(user)
 
 	fmt.Println(session.ToJwt())
 }

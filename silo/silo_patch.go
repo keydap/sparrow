@@ -5,7 +5,6 @@ import (
 	"github.com/boltdb/bolt"
 	"reflect"
 	"sparrow/base"
-	"sparrow/rbac"
 	"sparrow/schema"
 )
 
@@ -36,7 +35,7 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 			tx.Commit()
 
 			if rt.Name == "Group" {
-				rbac.UpsertRole(res)
+				sl.Engine.UpsertRole(res)
 			}
 
 			log.Debugf("Successfully modified resource with id %s", rid)

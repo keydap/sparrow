@@ -9,19 +9,20 @@ import (
 	"time"
 )
 
-var allRoles map[string]*Role
-
-func init() {
-	allRoles = make(map[string]*Role)
+type RbacEngine struct {
+	TokenTtl int64
+	allRoles map[string]*Role
 }
 
-var defaultTokenTtl int64
+func NewEngine() *RbacEngine {
+	engine := &RbacEngine{}
+	engine.allRoles = make(map[string]*Role)
+	engine.TokenTtl = 8 * 60 * 60 // 8 hours
 
-func init() {
-	defaultTokenTtl = 8 * 60 * 60
+	return engine
 }
 
-func NewRbacSession(rs *base.Resource) *RbacSession {
+func (engine *RbacEngine) NewRbacSession(rs *base.Resource) *RbacSession {
 
 	session := &RbacSession{}
 	session.Sub = rs.GetId()
@@ -31,7 +32,7 @@ func NewRbacSession(rs *base.Resource) *RbacSession {
 
 	//session.Aud = ""
 	session.Iat = time.Now().Unix()
-	session.Exp = session.Iat + defaultTokenTtl
+	session.Exp = session.Iat + engine.TokenTtl
 	session.Jti = utils.GenUUID()
 
 	groups := rs.GetAttr("groups")
@@ -46,7 +47,7 @@ func NewRbacSession(rs *base.Resource) *RbacSession {
 		if gAt != nil {
 			fmt.Println(gAt)
 			roleId := gAt.Values[0].(string)
-			role := allRoles[roleId]
+			role := engine.allRoles[roleId]
 			session.Roles[roleId] = role.Name
 
 			// now gather the permissions from role
@@ -61,11 +62,11 @@ func NewRbacSession(rs *base.Resource) *RbacSession {
 	return session
 }
 
-func DeleteRole(groupId string) {
-	delete(allRoles, groupId)
+func (engine *RbacEngine) DeleteRole(groupId string) {
+	delete(engine.allRoles, groupId)
 }
 
-func UpsertRole(groupRes *base.Resource) {
+func (engine *RbacEngine) UpsertRole(groupRes *base.Resource) {
 	role := &Role{}
 	role.Id = groupRes.GetId()
 	role.Perms = make(map[string]*Permission)
@@ -88,7 +89,7 @@ func UpsertRole(groupRes *base.Resource) {
 		}
 	}
 
-	allRoles[role.Id] = role
+	engine.allRoles[role.Id] = role
 }
 
 func (session *RbacSession) ToJwt() string {
