@@ -2,6 +2,7 @@ package utils
 
 import (
 	"math"
+	"os"
 	"testing"
 )
 
@@ -43,4 +44,28 @@ func encodeDecodeFloat(in float64, t *testing.T) {
 	if in != out {
 		t.Error("failed to decode float")
 	}
+}
+
+func TestGenCert(t *testing.T) {
+	dirName := "/tmp"
+	suffix := "cert_util"
+
+	err := CreateCert(dirName, suffix)
+	if err != nil {
+		t.Error("Failed to generate a certificate")
+	}
+
+	certName := dirName + string(os.PathSeparator) + suffix + ".cer"
+	_, err = os.Stat(certName)
+	if err != nil {
+		t.Error("Could not find the generated certificate file")
+	}
+	os.Remove(certName)
+
+	keyName := dirName + string(os.PathSeparator) + suffix + ".key"
+	_, err = os.Stat(keyName)
+	if err != nil {
+		t.Error("Could not find the generated private key file")
+	}
+	os.Remove(keyName)
 }
