@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	logger "github.com/juju/loggo"
-	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sparrow/base"
 	"sparrow/provider"
 	"sparrow/schema"
-	"sparrow/utils"
 	"strconv"
 	"strings"
 )
@@ -40,23 +37,10 @@ type httpContext struct {
 }
 
 func Start(srvHome string) {
-	log.Debugf("Checking server home directory %s", srvHome)
-	utils.CheckAndCreate(srvHome)
-
-	domainsDir := filepath.Join(srvHome, "domains")
-	log.Debugf("Checking server domains directory %s", domainsDir)
-	utils.CheckAndCreate(domainsDir)
-
-	loadProviders(domainsDir)
-
-	cwd, _ := os.Getwd()
-	fmt.Println("Current working directory: ", cwd)
-
-	if len(providers) == 0 {
-		createDefaultDomain(domainsDir)
-	}
 
 	log.Debugf("Starting server...")
+
+	srvConf := initHome(srvHome)
 
 	router := mux.NewRouter()
 	router.StrictSlash(true)
@@ -97,7 +81,12 @@ func Start(srvHome string) {
 		}
 	}
 
-	http.ListenAndServe(":9090", router)
+	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.Port)
+	if srvConf.Https {
+		http.ListenAndServeTLS(hostAddr, srvConf.CertFile, srvConf.PrivKeyFile, router)
+	} else {
+		http.ListenAndServe(hostAddr, router)
+	}
 }
 
 func bulkUpdate(w http.ResponseWriter, r *http.Request) {
@@ -586,115 +575,6 @@ func writeCommonHeaders(w http.ResponseWriter, pr *provider.Provider) {
 	headers := w.Header()
 	headers.Add("Content-Type", SCIM_JSON_TYPE)
 	headers.Add(TENANT_HEADER, pr.Name)
-}
-
-func loadProviders(domainsDir string) {
-	log.Infof("Loading domains")
-	dir, err := os.Open(domainsDir)
-	if err != nil {
-		err = fmt.Errorf("Could not open domains directory %s [%s]", domainsDir, err.Error())
-		panic(err)
-	}
-
-	files, err := dir.Readdir(-1)
-
-	if err != nil {
-		err = fmt.Errorf("Could not read domains from directory %s [%s]", domainsDir, err.Error())
-		panic(err)
-	}
-
-	for _, f := range files {
-		if f.IsDir() {
-			lDir := filepath.Join(domainsDir, f.Name())
-			layout, err := provider.NewLayout(lDir, false)
-			if err != nil {
-				log.Infof("Could not create a layout from the directory %s [%s]", lDir, err.Error())
-			} else {
-				lName := layout.Name()
-				if _, ok := providers[lName]; ok {
-					log.Infof("A provider for the domain %s already loaded, ignoring the domain present at %s", lName, lDir)
-					continue
-				}
-
-				prv, err := provider.NewProvider(layout)
-				if err != nil {
-					log.Infof("Could not create a provider for the domain %s [%s]", layout.Name(), err.Error())
-				} else {
-					providers[lName] = prv
-				}
-			}
-		}
-	}
-
-	log.Infof("Loaded providers for %d domains", len(providers))
-}
-
-func createDefaultDomain(domainsDir string) {
-	log.Infof("Creating default domain")
-
-	defaultDomain := filepath.Join(domainsDir, "example.com")
-	layout, err := provider.NewLayout(defaultDomain, true)
-	if err != nil {
-		panic(err)
-	}
-
-	wDir, _ := os.Getwd()
-	wDir += "/resources"
-
-	schemaDir := wDir + "/schemas"
-	copyDir(schemaDir, layout.SchemaDir)
-
-	rtDir := wDir + "/types"
-	copyDir(rtDir, layout.ResTypesDir)
-
-	confDir := wDir + "/conf"
-	copyDir(confDir, layout.ConfDir)
-
-	prv, err := provider.NewProvider(layout)
-	if err != nil {
-		panic(err)
-	}
-
-	providers[layout.Name()] = prv
-}
-
-func copyDir(src, dest string) {
-	dir, err := os.Open(src)
-	if err != nil {
-		panic(err)
-	}
-
-	defer dir.Close()
-
-	files, err := dir.Readdir(-1)
-
-	if err != nil {
-		panic(err)
-	}
-
-	for _, f := range files {
-		sFile := filepath.Join(src, f.Name())
-		tFile := filepath.Join(dest, f.Name())
-		if f.IsDir() {
-			err = os.Mkdir(tFile, DIR_PERM)
-			if err != nil {
-				panic(err)
-			}
-			copyDir(sFile, tFile)
-			continue
-		}
-
-		data, err := ioutil.ReadFile(sFile)
-		if err != nil {
-			panic(err)
-		}
-
-		err = ioutil.WriteFile(tFile, data, DIR_PERM)
-
-		if err != nil {
-			panic(err)
-		}
-	}
 }
 
 func writeError(hc *httpContext, err error) {

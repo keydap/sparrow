@@ -94,7 +94,7 @@ func (engine *RbacEngine) UpsertRole(groupRes *base.Resource) {
 
 func (session *RbacSession) ToJwt() string {
 	//sm := jwt.SigningMethodRSA{}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, session)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, session)
 	str, err := token.SignedString([]byte("abcdefg"))
 	if err != nil {
 		panic(fmt.Errorf("could not create the JWT from session %#v", err))

@@ -1,7 +1,7 @@
 package provider
 
 import (
-	//"encoding/json"
+	"crypto"
 	"fmt"
 	logger "github.com/juju/loggo"
 	"io/ioutil"
@@ -21,6 +21,8 @@ type Provider struct {
 	sl        *silo.Silo
 	layout    *Layout
 	Name      string // the domain name
+	PubKey    crypto.PublicKey
+	PrivKey   crypto.PrivateKey
 }
 
 var log logger.Logger
@@ -43,7 +45,7 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 		return nil, err
 	}
 
-	prv.config, err = conf.ParseConfig(filepath.Join(layout.ConfDir, "config.json"))
+	prv.config, err = conf.ParseConfig(filepath.Join(layout.ConfDir, "domain.json"))
 	if err != nil {
 		return nil, err
 	}
