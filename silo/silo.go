@@ -618,15 +618,21 @@ func fillIndexMap(bucket *bolt.Bucket, m map[string]*Index) error {
 }
 
 func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
+	inRes.RemoveReadOnlyAt()
+
+	rid := utils.GenUUID()
+	inRes.SetId(rid)
+
+	return sl.InsertInternal(inRes)
+}
+
+func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err error) {
 	err = inRes.CheckMissingRequiredAts()
 	if err != nil {
 		return nil, err
 	}
 
-	inRes.RemoveReadOnlyAt()
-
-	rid := utils.GenUUID()
-	inRes.SetId(rid)
+	rid := inRes.GetId()
 
 	// validate the uniqueness constraints based on the schema
 	rt := inRes.GetType()

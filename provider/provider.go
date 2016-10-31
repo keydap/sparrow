@@ -26,7 +26,11 @@ type Provider struct {
 	Name      string // the domain name
 	PubKey    crypto.PublicKey
 	PrivKey   crypto.PrivateKey
+	immResIds map[string]int // map of IDs of resources that cannot be deleted
 }
+
+const adminGroupId = "00000000-1000-0000-0000-000000000000"
+const adminUserId = "10000000-0000-0000-0000-000000000000"
 
 var log logger.Logger
 
@@ -64,6 +68,9 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	prv.layout = layout
 	prv.Name = layout.name
 	prv.sl.Engine.Domain = layout.name
+	prv.immResIds = make(map[string]int)
+	prv.immResIds[adminGroupId] = 1
+	prv.immResIds[adminUserId] = 1
 
 	err = prv.createDefaultResources()
 
@@ -71,27 +78,36 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 }
 
 func (prv *Provider) createDefaultResources() error {
-	// TODO how to identify admin groups uniquely when the name is not unique??
-	adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+	_, err := prv.sl.Get(adminGroupId, prv.RsTypes["Group"])
+	if err != nil {
+		adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+	                "id": "%s",
 				    "displayName": "Administrators",
 				    "permissions": [{"value": "READ"}, {"value": "CREATE"}, {"value": "UPDATE"}, {"value": "DELETE"}]
 				   }`
 
-	buf := bytes.NewBufferString(adminGroup)
+		adminGroup = fmt.Sprintf(adminGroup, adminGroupId)
 
-	grpRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
-	if err != nil {
-		return err
+		buf := bytes.NewBufferString(adminGroup)
+
+		grpRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
+		if err != nil {
+			return err
+		}
+
+		_, err = prv.sl.InsertInternal(grpRes)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("Successfully inserted default admin group %s", adminGroupId)
 	}
 
-	grpRes, err = prv.sl.Insert(grpRes)
+	_, err = prv.sl.Get(adminUserId, prv.RsTypes["User"])
+
 	if err != nil {
-		return err
-	}
-
-	log.Infof("Successfully inserted default admin group")
-
-	adminUser := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+		adminUser := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+                   "id": "%s",
                    "userName":"admin",
                    "displayName":"Administrator",
                    "password":"secret",
@@ -101,27 +117,28 @@ func (prv *Provider) createDefaultResources() error {
                          "type":"work",
                          "primary":true
                        }
+                     ],
+                   "groups": [
+                       {
+                          "value": "%s"
+                       }
                      ]
                    }`
 
-	adminUser = fmt.Sprintf(adminUser, prv.Name) // set domain name in email
-	buf = bytes.NewBufferString(adminUser)
-	userRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
-	if err != nil {
-		return err
+		adminUser = fmt.Sprintf(adminUser, adminUserId, prv.Name, adminGroupId) // set domain name in email
+		buf := bytes.NewBufferString(adminUser)
+		userRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
+		if err != nil {
+			return err
+		}
+
+		_, err = prv.sl.InsertInternal(userRes)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("Successfully inserted default administrator user %s", adminUserId)
 	}
-
-	subAtMap := make(map[string]interface{})
-	subAtMap["value"] = grpRes.GetId()
-	userRes.AddCA("groups", subAtMap)
-
-	_, err = prv.sl.Insert(userRes)
-	if err != nil {
-		return err
-	}
-
-	log.Infof("Successfully inserted default administrator user")
-
 	return nil
 }
 
@@ -179,6 +196,12 @@ func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resour
 }
 
 func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) error {
+	if _, ok := prv.immResIds[delCtx.Rid]; ok {
+		msg := fmt.Sprintf("Resource with ID %s cannot be deleted, it is required for the functioning of server", delCtx.Rid)
+		log.Debugf(msg)
+		return base.NewForbiddenError(msg)
+	}
+
 	return prv.sl.Delete(delCtx.Rid, delCtx.Rt)
 }
 
