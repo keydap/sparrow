@@ -26,7 +26,7 @@ type serverConf struct {
 }
 
 var DEFAULT_SRV_CONF string = `{
-    "enable-https" : true,
+    "enable-https" : false,
     "port" : 7090,
     "ipaddress" : "0.0.0.0",
     "certificate": "default.cer",
