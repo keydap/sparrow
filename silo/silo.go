@@ -488,6 +488,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 	})
 
 	sl.Engine = rbac.NewEngine()
+
 	// load the roles
 	sl.LoadGroups()
 
@@ -1452,4 +1453,54 @@ func (sl *Silo) LoadGroups() {
 		}
 	}
 
+}
+
+func (sl *Silo) Authenticate(principal string, password string) (user *base.Resource, err error) {
+	pos := strings.IndexRune(principal, '/')
+	if pos > 0 {
+		principal = principal[0:pos]
+	}
+
+	rt := sl.resTypes["User"]
+	idx := sl.getIndex(rt.Name, "username")
+
+	tx, err := sl.db.Begin(false)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+			log.Debugf("Error while authenticating principal %s %#v", principal, err)
+		}
+
+		tx.Rollback()
+	}()
+
+	rid := idx.GetRid([]byte(principal), tx)
+
+	if len(rid) == 0 {
+		return nil, fmt.Errorf("User with principal %s not found", principal)
+	}
+
+	user, err = sl.getUsingTx(rid, rt, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	at := user.GetAttr("password")
+	if at == nil {
+		return nil, fmt.Errorf("No password present for the user %s", principal)
+	}
+
+	passwd := at.GetSimpleAt().Values[0].(string)
+
+	// compare passwords
+	if strings.Compare(password, passwd) == 0 {
+		return user, nil
+	}
+
+	return nil, fmt.Errorf("Invalid password, did not match")
 }
