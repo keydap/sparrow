@@ -33,6 +33,7 @@ import com.keydap.sparrow.scim.User.Name;
  */
 public class SearchResourceTest extends TestBase {
     
+    private static User admin;
     private static User snowden;
     private static User bhagat;
     private static User assange;
@@ -51,7 +52,20 @@ public class SearchResourceTest extends TestBase {
         deleteAll(User.class);
         deleteAll(Device.class);
         //deleteAll(Group.class);
+
+        // 'admin' user is the existing user, hence NOT inserted 
+        // from here. It is present only to help some tests pass
+        admin = new User();
+        admin.setUserName("admin");
+        admin.setActive(true);
+        admin.setDisplayName("Administrator");
         
+        Email adEmail = new Email();
+        adEmail.setValue("admin@example.com");
+        adEmail.setType("work");
+        adEmail.setPrimary(true);
+        admin.setEmails(Collections.singletonList(adEmail));
+
         snowden = new User();
         snowden.setUserName("snowden");
         snowden.setActive(true);
@@ -214,10 +228,10 @@ public class SearchResourceTest extends TestBase {
         assertNull(found.getPassword()); // password should never be returned
         
         resp = client.searchResource("emails.type eq \"work\"", User.class);
-        checkResults(resp, snowden);
+        checkResults(resp, snowden, admin);
         
         resp = client.searchResource("username ne \"snowden\"", User.class);
-        checkResults(resp, assange, bhagat, stallman);
+        checkResults(resp, assange, bhagat, stallman, admin);
 
         resp = client.searchResource("name.formatted co \"l\"", User.class);
         checkResults(resp, stallman, assange);
@@ -235,10 +249,10 @@ public class SearchResourceTest extends TestBase {
         checkResults(resp, stallman, assange, snowden, bhagat);
 
         resp = client.searchResource("emails.value ew \".com\"", User.class);
-        checkResults(resp, snowden);
+        checkResults(resp, snowden, admin);
         
         resp = client.searchResource("emails.value ew \".COM\"", User.class);
-        checkResults(resp, snowden);
+        checkResults(resp, snowden, admin);
         
         resp = client.searchResource("costCenter pr", User.class);
         checkResults(resp, stallman);
@@ -250,19 +264,19 @@ public class SearchResourceTest extends TestBase {
         checkResults(uresp, stallman);
 
         uresp = client.searchResource("not username gt \"snowden\"", User.class);
-        checkResults(uresp, assange, bhagat, snowden);
+        checkResults(uresp, assange, bhagat, snowden, admin);
         
         uresp = client.searchResource("username ge \"snowden\"", User.class);
         checkResults(uresp, stallman, snowden);
         
         uresp = client.searchResource("not username ge \"snowden\"", User.class);
-        checkResults(uresp, assange, bhagat);
+        checkResults(uresp, assange, bhagat, admin);
         
         uresp = client.searchResource("username lt \"snowden\"", User.class);
-        checkResults(uresp, assange, bhagat);  
+        checkResults(uresp, assange, bhagat, admin);  
 
         uresp = client.searchResource("username le \"snowden\"", User.class);
-        checkResults(uresp, assange, snowden, bhagat);        
+        checkResults(uresp, assange, snowden, bhagat, admin);        
 
         SearchResponse<Device> dresp = client.searchResource("rating gt  ", Device.class);
         assertEquals(HttpStatus.SC_BAD_REQUEST, dresp.getHttpCode());
@@ -289,19 +303,19 @@ public class SearchResourceTest extends TestBase {
     @Test
     public void testLogicalOperators() {
         SearchResponse<User> resp = client.searchResource("emails[type eq \"work\" or value co \"org\"]", User.class);
-        checkResults(resp, snowden, assange, bhagat, stallman);
+        checkResults(resp, snowden, assange, bhagat, stallman, admin);
 
         resp = client.searchResource("emails[type eq \"work\" and value co \"org\"]", User.class);
         checkResults(resp, snowden);
 
         resp = client.searchResource("emails.type eq \"work\" and emails.value co \"com\"", User.class);
-        checkResults(resp, snowden);
+        checkResults(resp, snowden, admin);
         
         resp = client.searchResource("unknownAttribute eq \"work\" and emails.value co \"com\"", User.class);
         checkResults(resp);
         
         resp = client.searchResource("not costCenter pr", User.class);
-        checkResults(resp, snowden, assange, bhagat);
+        checkResults(resp, snowden, assange, bhagat, admin);
     }
 
     @Test
@@ -310,13 +324,13 @@ public class SearchResourceTest extends TestBase {
         checkResults(resp);
 
         resp = client.searchResource("not emails[type eq \"work\"] and username co \"ss\"", User.class);
-        checkResults(resp, assange, snowden, bhagat, stallman);
+        checkResults(resp, assange, snowden, bhagat, stallman, admin);
 
         resp = client.searchResource("(not emails[type eq \"work\"]) and username co \"ss\"", User.class);
         checkResults(resp, assange);
         
         resp = client.searchResource("schemas eq \"" + User.SCHEMA + "\"", User.class);
-        checkResults(resp, assange, snowden, bhagat, stallman);
+        checkResults(resp, assange, snowden, bhagat, stallman, admin);
 
         // emails.value is indexed
         resp = client.searchResource("emails.value co \"org\" and (username co \"ss\" and displayname sw \"j\")", User.class);
@@ -334,7 +348,7 @@ public class SearchResourceTest extends TestBase {
         req.setAttributes("username");
         
         SearchResponse<User> resp = client.searchResource(req, User.class);
-        checkResults(resp, snowden);
+        checkResults(resp, snowden, admin);
         // only the ID, schemas and username fields should be present
         User fetched = resp.getResources().get(0);
         assertNull(fetched.getEmails());
@@ -345,7 +359,7 @@ public class SearchResourceTest extends TestBase {
         req.setExcludedAttributes("emails");
         
         resp = client.searchResource(req, User.class);
-        checkResults(resp, snowden);
+        checkResults(resp, snowden, admin);
         // only the emails should NOT present
         fetched = resp.getResources().get(0);
         assertNull(fetched.getEmails());
@@ -355,7 +369,7 @@ public class SearchResourceTest extends TestBase {
         // use the pr operator on an indexed field
         req.setFilter("username pr");
         resp = client.searchResource(req, User.class);
-        checkResults(resp, snowden, stallman, bhagat, assange);
+        checkResults(resp, snowden, stallman, bhagat, assange, admin);
 
         req = new SearchRequest();
         // use the pr operator on an indexed field
@@ -379,7 +393,7 @@ public class SearchResourceTest extends TestBase {
         SearchResponse<Object> resp = client.searchAll(req);
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
         List<Object> received = resp.getResources();
-        assertEquals(7, received.size());
+        assertEquals(9, received.size());
     }
 
     @Test
@@ -397,7 +411,7 @@ public class SearchResourceTest extends TestBase {
         assertNotNull(rs.get(EnterpriseUser.SCHEMA));
 
         uresp = client.searchResource(User.SCHEMA.toLowerCase() + ":emails pr", User.class, "employeeNumber", "username");
-        checkResults(uresp, stallman, assange, snowden, bhagat);
+        checkResults(uresp, stallman, assange, snowden, bhagat, admin);
     }
     
     private void checkResults(SearchResponse<User> resp, User... ids) {
