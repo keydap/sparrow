@@ -1,8 +1,14 @@
 package silo
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"math/rand"
+	"os"
 	"testing"
+	"time"
 )
 
 func TestCreateJwt(t *testing.T) {
@@ -18,5 +24,21 @@ func TestCreateJwt(t *testing.T) {
 
 	session := sl.Engine.NewRbacSession(user)
 
-	fmt.Println(session.ToJwt())
+	now := time.Now().Unix()
+	random := rand.New(rand.NewSource(now))
+
+	priv, err := rsa.GenerateKey(random, 2048)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(session.ToJwt(priv))
+	if false {
+		block := &pem.Block{}
+		block.Bytes, _ = x509.MarshalPKIXPublicKey(priv.Public())
+		block.Type = "RSA PUBLIC KEY"
+		keyFile, _ := os.Create("/tmp/xyz.pem")
+		pem.Encode(keyFile, block)
+		keyFile.Close()
+	}
 }
