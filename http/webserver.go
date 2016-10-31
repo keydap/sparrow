@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	logger "github.com/juju/loggo"
 	"net/http"
@@ -24,6 +25,8 @@ var TENANT_HEADER = "X-Sparrow-Tenant-Id"
 var SCIM_JSON_TYPE = "application/scim+json"
 var API_BASE = "/v2" // NO slash at the end
 var commaByte = []byte{','}
+
+var defaultDomain = "example.com"
 
 func init() {
 	log = logger.GetLogger("sparrow.scim.http")
@@ -48,6 +51,8 @@ func Start(srvHome string) {
 	// scim requests
 	scimRouter := router.PathPrefix(API_BASE).Subrouter()
 
+	scimRouter.HandleFunc("/token", issueToken).Methods("POST")
+	//scimRouter.HandleFunc("/revoke", handleRevoke).Methods("DELETE")
 	scimRouter.HandleFunc("/Me", handleResRequest).Methods("GET", "POST", "PUT", "PATCH", "DELETE")
 
 	// generic service provider methods
@@ -104,11 +109,11 @@ func searchResource(hc *httpContext) {
 		getCtx := base.GetContext{Rid: rid, Rt: rtByPath, OpContext: hc.OpContext}
 		rs, err := hc.pr.GetResource(&getCtx)
 		if err != nil {
-			writeError(hc, err)
+			writeError(hc.w, err)
 			return
 		}
 
-		writeCommonHeaders(hc.w, hc.pr)
+		writeCommonHeaders(hc.w)
 		hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
 		hc.w.WriteHeader(http.StatusOK)
 		hc.w.Write(rs.Serialize())
@@ -120,7 +125,7 @@ func searchResource(hc *httpContext) {
 
 	err := hc.r.ParseForm()
 	if err != nil {
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
@@ -136,7 +141,7 @@ func searchWithSearchRequest(hc *httpContext) {
 	pos := strings.LastIndex(hc.Endpoint, "/.search")
 	if pos < 0 {
 		err := base.NewBadRequestError("Invalid request")
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
@@ -145,7 +150,7 @@ func searchWithSearchRequest(hc *httpContext) {
 	err := json.NewDecoder(hc.r.Body).Decode(sr)
 	if err != nil {
 		e := base.NewBadRequestError("Invalid search request " + err.Error())
-		writeError(hc, e)
+		writeError(hc.w, e)
 		return
 	}
 
@@ -178,14 +183,14 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 			paramFilter = "meta.resourceType eq " + rTypes[0].Name
 		} else if len(rTypes) > 1 {
 			err := base.NewBadRequestError("Missing 'filter' parameter")
-			writeError(hc, err)
+			writeError(hc.w, err)
 			return
 		}
 	}
 
 	if len(sr.Attributes) != 0 && len(sr.ExcludedAttributes) != 0 {
 		err := base.NewBadRequestError("The parameters 'attributes' and 'excludedAttributes' cannot be set in a signle request")
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
@@ -193,7 +198,7 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 	if err != nil {
 		se := base.NewBadRequestError(err.Error())
 		se.ScimType = base.ST_INVALIDFILTER
-		writeError(hc, se)
+		writeError(hc.w, se)
 		return
 	}
 
@@ -201,7 +206,7 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 	if err != nil {
 		se := base.NewBadRequestError(err.Error())
 		se.ScimType = base.ST_INVALIDFILTER
-		writeError(hc, se)
+		writeError(hc.w, se)
 		return
 	}
 
@@ -250,7 +255,7 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 
 	go hc.pr.Search(sc, outPipe)
 
-	writeCommonHeaders(hc.w, hc.pr)
+	writeCommonHeaders(hc.w)
 	hc.w.Write([]byte(`{"schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"], "Resources":[`)) // yes, the 'R' in resources must be upper case
 
 	count := 0
@@ -285,7 +290,7 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 func createResource(hc *httpContext) {
 	rs, err := base.ParseResource(hc.pr.RsTypes, hc.pr.Schemas, hc.r.Body)
 	if err != nil {
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
@@ -294,19 +299,19 @@ func createResource(hc *httpContext) {
 	if rsType != rtByPath {
 		// return bad request error
 		err = base.NewBadRequestError(fmt.Sprintf("Resource data of type %s is sent to the wrong endpoint %s", rsType.Name, hc.r.RequestURI))
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
 	createCtx := base.CreateContext{InRes: rs, OpContext: hc.OpContext}
 	insertedRs, err := hc.pr.CreateResource(&createCtx)
 	if err != nil {
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
 	rid := insertedRs.GetId()
-	writeCommonHeaders(hc.w, hc.pr)
+	writeCommonHeaders(hc.w)
 	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
 	hc.w.WriteHeader(http.StatusCreated)
 	hc.w.Write(insertedRs.Serialize())
@@ -317,7 +322,7 @@ func replaceResource(hc *httpContext) {
 	pos := strings.LastIndex(hc.Endpoint, "/")
 	pos++
 	if pos >= len(hc.Endpoint) {
-		writeCommonHeaders(hc.w, hc.pr)
+		writeCommonHeaders(hc.w)
 		hc.w.WriteHeader(http.StatusBadRequest)
 		detail := "Invalid replace request, missing resource ID"
 		log.Debugf(detail)
@@ -328,7 +333,7 @@ func replaceResource(hc *httpContext) {
 
 	rs, err := base.ParseResource(hc.pr.RsTypes, hc.pr.Schemas, hc.r.Body)
 	if err != nil {
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
@@ -338,18 +343,18 @@ func replaceResource(hc *httpContext) {
 	if rsType != rtByPath {
 		// return bad request error
 		err = base.NewBadRequestError(fmt.Sprintf("Resource data of type %s is sent to the wrong endpoint %s", rsType.Name, hc.r.RequestURI))
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
 	replaceCtx := base.ReplaceContext{InRes: rs, OpContext: hc.OpContext}
 	replacedRs, err := hc.pr.Replace(&replaceCtx)
 	if err != nil {
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
-	writeCommonHeaders(hc.w, hc.pr)
+	writeCommonHeaders(hc.w)
 	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
 	hc.w.WriteHeader(http.StatusOK)
 	hc.w.Write(replacedRs.Serialize())
@@ -360,7 +365,7 @@ func patchResource(hc *httpContext) {
 	pos := strings.LastIndex(hc.Endpoint, "/")
 	pos++
 	if pos >= len(hc.Endpoint) {
-		writeCommonHeaders(hc.w, hc.pr)
+		writeCommonHeaders(hc.w)
 		hc.w.WriteHeader(http.StatusBadRequest)
 		detail := "Invalid patch request, missing resource ID"
 		log.Debugf(detail)
@@ -371,7 +376,7 @@ func patchResource(hc *httpContext) {
 
 	err := hc.r.ParseForm()
 	if err != nil {
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
@@ -382,24 +387,24 @@ func patchResource(hc *httpContext) {
 	if rtByPath == nil {
 		// return bad request error
 		err := base.NewBadRequestError(fmt.Sprintf("There is no resource type associated with the endpoint %s", hc.r.RequestURI))
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
 	patchReq, err := base.ParsePatchReq(hc.r.Body, rtByPath)
 	if err != nil {
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
 	patchCtx := base.PatchContext{Rid: rid, Rt: rtByPath, Pr: patchReq, OpContext: hc.OpContext}
 	patchedRes, err := hc.pr.Patch(&patchCtx)
 	if err != nil {
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
-	writeCommonHeaders(hc.w, hc.pr)
+	writeCommonHeaders(hc.w)
 	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
 
 	if reqAttr == "" {
@@ -419,7 +424,7 @@ func deleteResource(hc *httpContext) {
 	pos := strings.LastIndex(hc.Endpoint, "/")
 	pos++
 	if pos >= len(hc.Endpoint) {
-		writeCommonHeaders(hc.w, hc.pr)
+		writeCommonHeaders(hc.w)
 		hc.w.WriteHeader(http.StatusBadRequest)
 		detail := "Invalid delete request, missing resource ID"
 		log.Debugf(detail)
@@ -433,7 +438,7 @@ func deleteResource(hc *httpContext) {
 	delCtx := base.DeleteContext{Rid: rid, Rt: rtByPath, OpContext: hc.OpContext}
 	err := hc.pr.DeleteResource(&delCtx)
 	if err != nil {
-		writeError(hc, err)
+		writeError(hc.w, err)
 		return
 	}
 
@@ -442,30 +447,55 @@ func deleteResource(hc *httpContext) {
 }
 
 func getServProvConf(w http.ResponseWriter, r *http.Request) {
-	pr := getProv(createOpCtx(r))
+	pr, err := getPrFromParam(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	log.Debugf("Sending service provider configuration of domain %s", pr.Name)
 
 	data, err := pr.GetConfigJson()
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 	} else {
-		writeCommonHeaders(w, pr)
+		writeCommonHeaders(w)
 		w.Write(data)
 	}
 }
 
+func getPrFromParam(r *http.Request) (pr *provider.Provider, err error) {
+	r.ParseForm() // ignore errors
+	domain := strings.ToLower(r.Form.Get("d"))
+
+	if len(domain) == 0 {
+		domain = defaultDomain
+	}
+
+	pr = providers[domain]
+	if pr == nil {
+		se := base.NewNotFoundError(fmt.Sprintf("No domain '%s' found", domain))
+		return nil, se
+	}
+	return pr, nil
+}
+
 func getResTypes(w http.ResponseWriter, r *http.Request) {
-	oc := createOpCtx(r)
-	pr := getProv(oc)
+	pr, err := getPrFromParam(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 
 	var data string
-	tokens := strings.SplitAfter(oc.Endpoint, "ResourceTypes/")
+	ep := getEndpoint(r)
+	tokens := strings.SplitAfter(ep, "ResourceTypes/")
 	if len(tokens) == 2 {
 		log.Debugf("Sending resource type %s of the domain %s", tokens[1], pr.Name)
 		rt := pr.RsTypes[tokens[1]]
 		if rt == nil {
 			se := base.NewNotFoundError("ResourceType " + tokens[1] + " does not exist")
-			writeCommonHeaders(w, pr)
+			writeCommonHeaders(w)
 			w.WriteHeader(se.Code())
 			w.Write(se.Serialize())
 			return
@@ -477,22 +507,26 @@ func getResTypes(w http.ResponseWriter, r *http.Request) {
 		data = pr.GetResTypeJsonArray()
 	}
 
-	writeCommonHeaders(w, pr)
+	writeCommonHeaders(w)
 	w.Write([]byte(data))
 }
 
 func getSchemas(w http.ResponseWriter, r *http.Request) {
-	oc := createOpCtx(r)
-	pr := getProv(oc)
+	pr, err := getPrFromParam(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 
 	var data string
-	tokens := strings.SplitAfter(oc.Endpoint, "Schemas/")
+	ep := getEndpoint(r)
+	tokens := strings.SplitAfter(ep, "Schemas/")
 	if len(tokens) == 2 {
 		log.Debugf("Sending schema %s of the domain %s", tokens[1], pr.Name)
 		sc := pr.Schemas[tokens[1]]
 		if sc == nil {
 			se := base.NewNotFoundError("Schema " + tokens[1] + " does not exist")
-			writeCommonHeaders(w, pr)
+			writeCommonHeaders(w)
 			w.WriteHeader(se.Code())
 			w.Write(se.Serialize())
 			return
@@ -504,16 +538,54 @@ func getSchemas(w http.ResponseWriter, r *http.Request) {
 		data = pr.GetSchemaJsonArray()
 	}
 
-	writeCommonHeaders(w, pr)
+	writeCommonHeaders(w)
 	w.Write([]byte(data))
 }
 
 func selfServe(w http.ResponseWriter, r *http.Request) {
 }
 
+func issueToken(w http.ResponseWriter, r *http.Request) {
+	ar := &base.AuthRequest{}
+	err := json.NewDecoder(r.Body).Decode(ar)
+	if err != nil {
+		e := base.NewBadRequestError("Invalid authentication request " + err.Error())
+		writeError(w, e)
+		return
+	}
+
+	ar.ClientIP = r.RemoteAddr
+	normDomain := strings.ToLower(strings.TrimSpace(ar.Domain))
+	pr := providers[normDomain]
+
+	if pr == nil {
+		e := base.NewBadRequestError("Invalid domain name " + ar.Domain)
+		writeError(w, e)
+		return
+	}
+
+	ar.Domain = normDomain
+	token, err := pr.Authenticate(ar)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	log.Debugf("Issued token %s by %s", token, ar.Domain)
+	// write the token
+	headers := w.Header()
+	headers.Add("Content-Type", "text/plain")
+	w.Write([]byte(token))
+}
+
 func handleResRequest(w http.ResponseWriter, r *http.Request) {
-	opCtx := createOpCtx(r)
-	pr := getProv(opCtx)
+	opCtx, err := createOpCtx(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	pr := providers[opCtx.Session.Domain]
 	log.Debugf("handling %s request on %s for the domain %s", r.Method, r.RequestURI, pr.Name)
 
 	hc := &httpContext{w, r, pr, opCtx}
@@ -540,53 +612,60 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func createOpCtx(r *http.Request) *base.OpContext {
-	tenantId := r.Header.Get(TENANT_HEADER)
-	if len(tenantId) == 0 {
-		// testing purpose
-		tenantId = "example.com"
+func createOpCtx(r *http.Request) (opCtx *base.OpContext, err error) {
+	opCtx = &base.OpContext{}
+
+	authzHeader := r.Header.Get("Authorization")
+	if len(authzHeader) == 0 {
+		// return Unauthorized error
+		return nil, base.NewUnAuthorizedError("Missing Authorization header")
 	}
 
-	opCtx := &base.OpContext{}
-	opCtx.ClientIP = r.RemoteAddr
-	opCtx.Tenant = strings.ToLower(tenantId)
+	session, err := parseToken(authzHeader)
+	if err != nil {
+		return nil, err
+	}
 
+	opCtx.Session = session
+	opCtx.ClientIP = r.RemoteAddr
+	opCtx.Endpoint = getEndpoint(r)
+
+	return opCtx, nil
+}
+
+func getEndpoint(r *http.Request) string {
 	parts := strings.Split(r.URL.Path, API_BASE)
+	ep := ""
 	if len(parts) == 2 { // extract the part after API_BASE
-		opCtx.Endpoint = parts[1]
+		ep = parts[1]
 	} else {
-		opCtx.Endpoint = r.RequestURI
+		ep = r.RequestURI
 	}
 
 	// trim '/' if it is the last char
-	epLen := len(opCtx.Endpoint)
-	if (epLen > 1) && (opCtx.Endpoint[epLen-1] == '/') {
-		opCtx.Endpoint = opCtx.Endpoint[:epLen-1]
+	epLen := len(ep)
+	if (epLen > 1) && (ep[epLen-1] == '/') {
+		ep = ep[:epLen-1]
 	}
 
-	return opCtx
+	return ep
 }
 
-func getProv(opCtx *base.OpContext) *provider.Provider {
-	return providers[opCtx.Tenant]
-}
-
-func writeCommonHeaders(w http.ResponseWriter, pr *provider.Provider) {
+func writeCommonHeaders(w http.ResponseWriter) {
 	headers := w.Header()
 	headers.Add("Content-Type", SCIM_JSON_TYPE)
-	headers.Add(TENANT_HEADER, pr.Name)
 }
 
-func writeError(hc *httpContext, err error) {
+func writeError(w http.ResponseWriter, err error) {
 	se, ok := err.(*base.ScimError)
-	writeCommonHeaders(hc.w, hc.pr)
+	writeCommonHeaders(w)
 	if ok {
-		hc.w.WriteHeader(se.Code())
-		hc.w.Write(se.Serialize())
+		w.WriteHeader(se.Code())
+		w.Write(se.Serialize())
 	} else {
-		hc.w.WriteHeader(http.StatusInternalServerError) // unknown error
+		w.WriteHeader(http.StatusInternalServerError) // unknown error
 		unknown := base.NewInternalserverError(err.Error())
-		hc.w.Write(unknown.Serialize())
+		w.Write(unknown.Serialize())
 	}
 }
 
@@ -611,4 +690,36 @@ func parseAttrParam(attrParam string, rTypes []*schema.ResourceType) []*base.Att
 	}
 
 	return nil
+}
+
+func parseToken(token string) (session *base.RbacSession, err error) {
+	session = &base.RbacSession{}
+
+	// strip the prefix "Bearer " from token
+	spacePos := strings.IndexRune(token, ' ')
+	if spacePos > 0 {
+		spacePos++
+		if spacePos < len(token)-1 {
+			token = token[spacePos:]
+		}
+	}
+
+	_, err = jwt.ParseWithClaims(token, session, keyFunc)
+
+	if err != nil {
+		log.Debugf("Failed to parse the token %s [%#v]", token, err)
+		return nil, err
+	}
+
+	return session, nil
+}
+
+func keyFunc(jt *jwt.Token) (key interface{}, err error) {
+	domain := jt.Header["d"]
+	if domain == nil {
+		return nil, jwt.NewValidationError("Missing domain attribute 'd' in the header", jwt.ValidationErrorMalformed)
+	}
+
+	prv := providers[domain.(string)]
+	return prv.PubKey, nil
 }
