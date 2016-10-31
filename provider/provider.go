@@ -1,13 +1,16 @@
 package provider
 
 import (
+	"bytes"
 	"crypto"
 	"fmt"
+	_ "github.com/dgrijalva/jwt-go"
 	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"path/filepath"
 	"sparrow/base"
 	"sparrow/conf"
+	_ "sparrow/rbac"
 	"sparrow/schema"
 	"sparrow/silo"
 	"strings"
@@ -60,8 +63,66 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	prv.layout = layout
 	prv.Name = layout.name
+	prv.sl.Engine.Domain = layout.name
 
-	return prv, nil
+	err = prv.createDefaultResources()
+
+	return prv, err
+}
+
+func (prv *Provider) createDefaultResources() error {
+	// TODO how to identify admin groups uniquely when the name is not unique??
+	adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+				    "displayName": "Administrators",
+				    "permissions": [{"value": "READ"}, {"value": "CREATE"}, {"value": "UPDATE"}, {"value": "DELETE"}]
+				   }`
+
+	buf := bytes.NewBufferString(adminGroup)
+
+	grpRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
+	if err != nil {
+		return err
+	}
+
+	grpRes, err = prv.sl.Insert(grpRes)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Successfully inserted default admin group")
+
+	adminUser := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+                   "userName":"admin",
+                   "displayName":"Administrator",
+                   "password":"secret",
+                   "emails":[
+                       {
+                         "value":"admin@%s",
+                         "type":"work",
+                         "primary":true
+                       }
+                     ]
+                   }`
+
+	adminUser = fmt.Sprintf(adminUser, prv.Name) // set domain name in email
+	buf = bytes.NewBufferString(adminUser)
+	userRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
+	if err != nil {
+		return err
+	}
+
+	subAtMap := make(map[string]interface{})
+	subAtMap["value"] = grpRes.GetId()
+	userRes.AddCA("groups", subAtMap)
+
+	_, err = prv.sl.Insert(userRes)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Successfully inserted default administrator user")
+
+	return nil
 }
 
 func (prv *Provider) GetSchemaJsonArray() string {
@@ -137,6 +198,17 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err
 	return prv.sl.Patch(patchCtx.Rid, patchCtx.Pr, patchCtx.Rt)
 }
 
-func (prv *Provider) Authenticate(ac *base.AuthContext) {
+func (prv *Provider) Authenticate(ar *base.AuthRequest) (authToken string, err error) {
+	user, err := prv.sl.Authenticate(ar.Username, ar.Password)
 
+	if err != nil {
+		msg := "Invalid username or password"
+		log.Debugf(msg)
+		return "", base.NewForbiddenError(msg)
+	}
+
+	session := prv.sl.Engine.NewRbacSession(user)
+	authToken = session.ToJwt(prv.PrivKey)
+
+	return authToken, nil
 }
