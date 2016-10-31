@@ -1,6 +1,11 @@
-package rbac
+package base
 
-import ()
+import (
+	"crypto"
+	"encoding/json"
+	"fmt"
+	"github.com/dgrijalva/jwt-go"
+)
 
 // the permissions allowed in Sparrow
 // here, though some permissions look identical to CRUD operations, the similarity ends there.
@@ -47,3 +52,43 @@ type RbacSession struct {
 func (session *RbacSession) Valid() error {
 	return nil
 }
+
+func (session *RbacSession) IsAllowCreate() bool {
+	return session._PermAllowed(PERM_CREATE)
+}
+
+func (session *RbacSession) IsAllowRead() bool {
+	return session._PermAllowed(PERM_READ)
+}
+
+func (session *RbacSession) IsAllowUpdate() bool {
+	return session._PermAllowed(PERM_UPDATE)
+}
+
+func (session *RbacSession) IsAllowDelete() bool {
+	return session._PermAllowed(PERM_DELETE)
+}
+
+func (session *RbacSession) _PermAllowed(perm string) bool {
+	_, ok := session.EffPerms[perm]
+
+	return ok
+}
+
+func (session *RbacSession) ToJwt(key crypto.PrivateKey) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, session)
+	token.Header["d"] = session.Domain
+	str, err := token.SignedString(key)
+	if err != nil {
+		panic(fmt.Errorf("could not create the JWT from session %#v", err))
+	}
+
+	data, _ := json.Marshal(session)
+	fmt.Println(string(data))
+
+	return str
+}
+
+//func VerifyJwt(tokenString string) bool {
+//	jwt.Parse(tokenString, keyFunc)
+//}

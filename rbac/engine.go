@@ -1,9 +1,7 @@
 package rbac
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"sparrow/base"
 	"sparrow/utils"
 	"time"
@@ -11,26 +9,28 @@ import (
 
 type RbacEngine struct {
 	TokenTtl int64
-	allRoles map[string]*Role
+	Domain   string
+	allRoles map[string]*base.Role
 }
 
 func NewEngine() *RbacEngine {
 	engine := &RbacEngine{}
-	engine.allRoles = make(map[string]*Role)
+	engine.allRoles = make(map[string]*base.Role)
 	engine.TokenTtl = 8 * 60 * 60 // 8 hours
 
 	return engine
 }
 
-func (engine *RbacEngine) NewRbacSession(rs *base.Resource) *RbacSession {
+func (engine *RbacEngine) NewRbacSession(rs *base.Resource) *base.RbacSession {
 
-	session := &RbacSession{}
+	session := &base.RbacSession{}
 	session.Sub = rs.GetId()
 
 	session.Roles = make(map[string]string)
 	session.EffPerms = make(map[string]int)
 
 	//session.Aud = ""
+	session.Domain = engine.Domain
 	session.Iat = time.Now().Unix()
 	session.Exp = session.Iat + engine.TokenTtl
 	session.Jti = utils.GenUUID()
@@ -67,9 +67,9 @@ func (engine *RbacEngine) DeleteRole(groupId string) {
 }
 
 func (engine *RbacEngine) UpsertRole(groupRes *base.Resource) {
-	role := &Role{}
+	role := &base.Role{}
 	role.Id = groupRes.GetId()
-	role.Perms = make(map[string]*Permission)
+	role.Perms = make(map[string]*base.Permission)
 
 	dispName := groupRes.GetAttr("displayname")
 	if dispName != nil {
@@ -83,47 +83,11 @@ func (engine *RbacEngine) UpsertRole(groupRes *base.Resource) {
 			valAt := subAtMap["value"]
 			if valAt != nil {
 				permName := valAt.Values[0].(string)
-				p := &Permission{Name: permName}
+				p := &base.Permission{Name: permName}
 				role.Perms[permName] = p
 			}
 		}
 	}
 
 	engine.allRoles[role.Id] = role
-}
-
-func (session *RbacSession) ToJwt() string {
-	//sm := jwt.SigningMethodRSA{}
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, session)
-	str, err := token.SignedString([]byte("abcdefg"))
-	if err != nil {
-		panic(fmt.Errorf("could not create the JWT from session %#v", err))
-	}
-
-	data, _ := json.Marshal(session)
-	fmt.Println(string(data))
-
-	return str
-}
-
-func (session *RbacSession) IsAllowCreate() bool {
-	return session._PermAllowed(PERM_CREATE)
-}
-
-func (session *RbacSession) IsAllowRead() bool {
-	return session._PermAllowed(PERM_READ)
-}
-
-func (session *RbacSession) IsAllowUpdate() bool {
-	return session._PermAllowed(PERM_UPDATE)
-}
-
-func (session *RbacSession) IsAllowDelete() bool {
-	return session._PermAllowed(PERM_DELETE)
-}
-
-func (session *RbacSession) _PermAllowed(perm string) bool {
-	_, ok := session.EffPerms[perm]
-
-	return ok
 }

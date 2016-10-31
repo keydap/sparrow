@@ -2,6 +2,7 @@ package base
 
 import (
 	"encoding/json"
+	"strconv"
 )
 
 var (
@@ -58,32 +59,48 @@ func NewError() *ScimError {
 func NewBadRequestError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
-	err.Status = "400"
 	err.code = 400
+	err.Status = strconv.Itoa(err.code)
 	return err
 }
 
 func NewNotFoundError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
-	err.Status = "404"
 	err.code = 404
+	err.Status = strconv.Itoa(err.code)
 	return err
 }
 
 func NewConflictError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
-	err.Status = "409"
 	err.code = 409
+	err.Status = strconv.Itoa(err.code)
 	return err
 }
 
 func NewInternalserverError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
-	err.Status = "500"
 	err.code = 500
+	err.Status = strconv.Itoa(err.code)
+	return err
+}
+
+func NewForbiddenError(detail string) *ScimError {
+	err := NewError()
+	err.Detail = detail
+	err.code = 403
+	err.Status = strconv.Itoa(err.code)
+	return err
+}
+
+func NewUnAuthorizedError(detail string) *ScimError {
+	err := NewError()
+	err.Detail = detail
+	err.code = 401
+	err.Status = strconv.Itoa(err.code)
 	return err
 }
 

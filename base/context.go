@@ -4,13 +4,9 @@ import (
 	"sparrow/schema"
 )
 
-type AuthContext struct {
-	*OpContext // the operation context
-}
-
 type OpContext struct {
+	Session  *RbacSession
 	ClientIP string
-	Tenant   string
 	Endpoint string
 }
 
@@ -78,6 +74,13 @@ type SearchRequest struct {
 	SortOrder          string   `json:"sortOrder"`
 	StartIndex         int      `json:"startIndex"`
 	Count              int      `json:"count"`
+}
+
+type AuthRequest struct {
+	Username string
+	Domain   string
+	Password string
+	ClientIP string
 }
 
 func NewSearchRequest(filter string, attrs string, include bool) *SearchRequest {
