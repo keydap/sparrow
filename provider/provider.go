@@ -125,7 +125,7 @@ func (prv *Provider) createDefaultResources() error {
                      ]
                    }`
 
-		adminUser = fmt.Sprintf(adminUser, adminUserId, prv.Name, adminGroupId) // set domain name in email
+		adminUser = fmt.Sprintf(adminUser, adminUserId, prv.Name, adminGroupId) // fill in the placeholders
 		buf := bytes.NewBufferString(adminUser)
 		userRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
 		if err != nil {
@@ -187,7 +187,7 @@ func (prv *Provider) GetResourceType(name string) (string, error) {
 }
 
 func (prv *Provider) GetConfigJson() (data []byte, err error) {
-	f := filepath.Join(prv.layout.ConfDir, "config.json")
+	f := filepath.Join(prv.layout.ConfDir, "domain.json")
 	return ioutil.ReadFile(f)
 }
 
