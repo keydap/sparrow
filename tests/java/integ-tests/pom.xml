@@ -47,7 +47,7 @@
                 </executions>
                 <configuration>
                     <generatePackage>com.keydap.sparrow.scim</generatePackage>
-                    <baseUrl>http://localhost:9090/v2</baseUrl>
+                    <baseUrl>http://localhost:7090/v2</baseUrl>
                 </configuration>
             </plugin>
         </plugins>

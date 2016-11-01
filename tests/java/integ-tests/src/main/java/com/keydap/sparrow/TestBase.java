@@ -44,7 +44,7 @@ public abstract class TestBase {
 
         client.authenticate();
         assertNotNull(authenticator.getToken());
-        System.out.println(authenticator.getToken());
+        //System.out.println(authenticator.getToken());
     }
     
     public static <T> void deleteAll(Class<T> resClass) {
