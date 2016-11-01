@@ -30,6 +30,9 @@ public abstract class TestBase {
     
     static ScimClient client;
     
+    /** the anonymous client */
+    static ScimClient unAuthClient;
+    
     static DateFormat utcDf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");//RFC3339
 
     static SparrowAuthenticator authenticator;
@@ -45,6 +48,9 @@ public abstract class TestBase {
         client.authenticate();
         assertNotNull(authenticator.getToken());
         //System.out.println(authenticator.getToken());
+        
+        unAuthClient = new ScimClient(baseApiUrl);
+        unAuthClient.register(User.class, Group.class, Device.class);
     }
     
     public static <T> void deleteAll(Class<T> resClass) {
