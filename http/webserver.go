@@ -56,7 +56,7 @@ func Start(srvHome string) {
 	scimRouter.HandleFunc("/Me", handleResRequest).Methods("GET", "POST", "PUT", "PATCH", "DELETE")
 
 	// generic service provider methods
-	scimRouter.HandleFunc("/ServiceProviderConfig", getServProvConf).Methods("GET")
+	scimRouter.HandleFunc("/ServiceProviderConfig", getSrvProvConf).Methods("GET")
 	scimRouter.HandleFunc("/ResourceTypes", getResTypes).Methods("GET")
 	scimRouter.HandleFunc("/Schemas", getSchemas).Methods("GET")
 	scimRouter.HandleFunc("/Bulk", bulkUpdate).Methods("POST")
@@ -446,7 +446,7 @@ func deleteResource(hc *httpContext) {
 	log.Debugf("Successfully deleted the resource with ID %s", rid)
 }
 
-func getServProvConf(w http.ResponseWriter, r *http.Request) {
+func getSrvProvConf(w http.ResponseWriter, r *http.Request) {
 	pr, err := getPrFromParam(r)
 	if err != nil {
 		writeError(w, err)
@@ -459,6 +459,7 @@ func getServProvConf(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 	} else {
+		//log.Debugf("service provider config %s", string(data))
 		writeCommonHeaders(w)
 		w.Write(data)
 	}
