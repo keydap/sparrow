@@ -192,10 +192,18 @@ func (prv *Provider) GetConfigJson() (data []byte, err error) {
 }
 
 func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resource, err error) {
+	if !crCtx.Session.IsAllowCreate() {
+		return nil, base.NewForbiddenError("Insufficent privileges to create a resource")
+	}
+
 	return prv.sl.Insert(crCtx.InRes)
 }
 
 func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) error {
+	if !delCtx.Session.IsAllowDelete() {
+		return base.NewForbiddenError("Insufficent privileges to delete a resource")
+	}
+
 	if _, ok := prv.immResIds[delCtx.Rid]; ok {
 		msg := fmt.Sprintf("Resource with ID %s cannot be deleted, it is required for the functioning of server", delCtx.Rid)
 		log.Debugf(msg)
@@ -206,18 +214,36 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) error {
 }
 
 func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, err error) {
+	if !getCtx.Session.IsAllowRead() {
+		return nil, base.NewForbiddenError("Insufficent privileges to read the resource")
+	}
+
 	return prv.sl.Get(getCtx.Rid, getCtx.Rt)
 }
 
-func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) {
-	prv.sl.Search(sc, outPipe)
+func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
+	if !sc.Session.IsAllowRead() {
+		return base.NewForbiddenError("Insufficent privileges to search resources")
+	}
+
+	go prv.sl.Search(sc, outPipe)
+
+	return nil
 }
 
 func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resource, err error) {
+	if !replaceCtx.Session.IsAllowUpdate() {
+		return nil, base.NewForbiddenError("Insufficent privileges to replace the resource")
+	}
+
 	return prv.sl.Replace(replaceCtx.InRes)
 }
 
 func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err error) {
+	if !patchCtx.Session.IsAllowUpdate() {
+		return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
+	}
+
 	return prv.sl.Patch(patchCtx.Rid, patchCtx.Pr, patchCtx.Rt)
 }
 
