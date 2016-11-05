@@ -22,7 +22,7 @@ var providers = make(map[string]*provider.Provider)
 var DIR_PERM os.FileMode = 0744 //rwxr--r--
 
 var TENANT_HEADER = "X-Sparrow-Tenant-Id"
-var SCIM_JSON_TYPE = "application/scim+json"
+var SCIM_JSON_TYPE = "application/scim+json; charset=UTF-8"
 var API_BASE = "/v2" // NO slash at the end
 var commaByte = []byte{','}
 
@@ -253,7 +253,14 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 
 	outPipe := make(chan *base.Resource, 0)
 
-	go hc.pr.Search(sc, outPipe)
+	// search starts a go routine and returns nil error immediately
+	// or returns an error before starting the go routine
+	err = hc.pr.Search(sc, outPipe)
+	if err != nil {
+		close(outPipe)
+		writeError(hc.w, err)
+		return
+	}
 
 	writeCommonHeaders(hc.w)
 	hc.w.Write([]byte(`{"schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"], "Resources":[`)) // yes, the 'R' in resources must be upper case
@@ -314,7 +321,9 @@ func createResource(hc *httpContext) {
 	writeCommonHeaders(hc.w)
 	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
 	hc.w.WriteHeader(http.StatusCreated)
-	hc.w.Write(insertedRs.Serialize())
+	d := insertedRs.Serialize()
+	log.Debugf("-------------------\n%s", string(d))
+	hc.w.Write(d)
 	log.Debugf("Successfully inserted the resource with ID %s", rid)
 }
 
@@ -580,6 +589,17 @@ func issueToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleResRequest(w http.ResponseWriter, r *http.Request) {
+	log.Debugf("-------------------- Headers received-----------\n%#v\n--------------------------------", r.Header)
+
+	contType := r.Header.Get("Content-Type")
+	if !strings.Contains(strings.ToLower(contType), "charset=utf-8") {
+		msg := fmt.Sprintf("Rejecting request with bad Content-Type header value %s", contType)
+		log.Debugf(msg)
+		err := base.NewBadRequestError(msg)
+		writeError(w, err)
+		return
+	}
+
 	opCtx, err := createOpCtx(r)
 	if err != nil {
 		writeError(w, err)
