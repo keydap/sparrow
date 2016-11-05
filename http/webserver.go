@@ -591,15 +591,6 @@ func issueToken(w http.ResponseWriter, r *http.Request) {
 func handleResRequest(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("-------------------- Headers received-----------\n%#v\n--------------------------------", r.Header)
 
-	contType := r.Header.Get("Content-Type")
-	if !strings.Contains(strings.ToLower(contType), "charset=utf-8") {
-		msg := fmt.Sprintf("Rejecting request with bad Content-Type header value %s", contType)
-		log.Debugf(msg)
-		err := base.NewBadRequestError(msg)
-		writeError(w, err)
-		return
-	}
-
 	opCtx, err := createOpCtx(r)
 	if err != nil {
 		writeError(w, err)
@@ -616,6 +607,10 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 		searchResource(hc)
 
 	case http.MethodPost:
+		if badContentType(w, r) {
+			return
+		}
+
 		if strings.HasSuffix(hc.Endpoint, "/.search") {
 			searchWithSearchRequest(hc)
 		} else {
@@ -626,11 +621,30 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 		deleteResource(hc)
 
 	case http.MethodPatch:
+		if badContentType(w, r) {
+			return
+		}
 		patchResource(hc)
 
 	case http.MethodPut:
+		if badContentType(w, r) {
+			return
+		}
 		replaceResource(hc)
 	}
+}
+
+func badContentType(w http.ResponseWriter, r *http.Request) bool {
+	contType := r.Header.Get("Content-Type")
+	if !strings.Contains(strings.ToLower(contType), "charset=utf-8") {
+		msg := fmt.Sprintf("Rejecting request with bad Content-Type header value %s", contType)
+		log.Debugf(msg)
+		err := base.NewBadRequestError(msg)
+		writeError(w, err)
+		return true
+	}
+
+	return false
 }
 
 func createOpCtx(r *http.Request) (opCtx *base.OpContext, err error) {
