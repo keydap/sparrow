@@ -216,6 +216,7 @@ func (ca *ComplexAttribute) UnsetPrimaryFlag() {
 
 func (atg *AtGroup) getAttribute(name string) Attribute {
 	var at Attribute
+	found := false
 	if atg.SimpleAts != nil {
 		// the interface will always be non-nil even if the
 		// key is not present
@@ -223,14 +224,20 @@ func (atg *AtGroup) getAttribute(name string) Attribute {
 		// at = atg.SimpleAts[name] -- this will result in a non-nil value even if the key doesn't exist
 		if v, ok := atg.SimpleAts[name]; ok {
 			at = v
+			found = true
 		}
 	}
 
-	if (at == nil) && (atg.ComplexAts != nil) {
+	if !found && (atg.ComplexAts != nil) {
 		log.Debugf("searching complex ats for %s", name)
 		if v, ok := atg.ComplexAts[name]; ok {
 			at = v
+			found = true
 		}
+	}
+
+	if !found {
+		return nil
 	}
 
 	return at
@@ -661,9 +668,11 @@ func (rs *Resource) searchAttr(attrPath string, atg *AtGroup) Attribute {
 			// for accessing all values of the attribute caller should search for the parent alone
 			child := attrPath[pos+1:]
 			atMap := ct.GetFirstSubAt()
-			sa := atMap[child]
+			if v, ok := atMap[child]; ok {
+				return v
+			}
 
-			return sa
+			return nil
 		}
 
 		return nil
