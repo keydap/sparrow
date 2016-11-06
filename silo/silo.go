@@ -1093,7 +1093,7 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 	if strings.Compare(existing.GetVersion(), version) != 0 {
 		msg := fmt.Sprintf("The given version %s of the resource %s doesn't match with stored version", version, rid)
 		log.Debugf(msg)
-		return nil, base.NewConflictError(msg)
+		return nil, base.NewPreCondError(msg)
 	}
 
 	prIdx := sl.getSysIndex(rt.Name, "presence")

@@ -104,6 +104,14 @@ func NewUnAuthorizedError(detail string) *ScimError {
 	return err
 }
 
+func NewPreCondError(detail string) *ScimError {
+	err := NewError()
+	err.Detail = detail
+	err.code = 412
+	err.Status = strconv.Itoa(err.code)
+	return err
+}
+
 func (se ScimError) Code() int {
 	return se.code
 }

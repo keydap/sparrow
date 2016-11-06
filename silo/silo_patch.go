@@ -49,7 +49,7 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 	if strings.Compare(res.GetVersion(), pr.IfNoneMatch) != 0 {
 		msg := fmt.Sprintf("The given version %s of the resource to be patched %s doesn't match with stored version", pr.IfNoneMatch, rid)
 		log.Debugf(msg)
-		return nil, base.NewConflictError(msg)
+		return nil, base.NewPreCondError(msg)
 	}
 
 	mh := &modifyHints{}
