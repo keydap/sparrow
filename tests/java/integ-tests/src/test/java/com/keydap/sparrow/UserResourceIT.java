@@ -245,7 +245,7 @@ public class UserResourceIT extends TestBase {
         // change one readonly attribute, that value should be ignored
         String originalId = user.getId();
         ReflectionUtils.setFieldValue(user, "id", "id-value-must-be-ignored");
-        userResp = client.replaceResource(originalId, user);
+        userResp = client.replaceResource(originalId, user, userResp.getETag());
         assertEquals(HttpStatus.SC_OK, userResp.getHttpCode());
         User replacedUser = userResp.getResource();
         

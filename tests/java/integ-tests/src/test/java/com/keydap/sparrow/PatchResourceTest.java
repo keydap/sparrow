@@ -14,6 +14,8 @@ import com.keydap.sparrow.scim.Device.Location;
 
 import static org.junit.Assert.*;
 
+import java.util.Arrays;
+
 import org.apache.http.HttpStatus;
 
 /**
@@ -38,7 +40,9 @@ public class PatchResourceTest extends TestBase {
     
     @Test
     public void testPatchDevice() {
-        PatchRequest pr = new PatchRequest(thermostat.getId(), Device.class);
+        Response<Device> eTagResp = client.getResource(thermostat.getId(), Device.class);
+
+        PatchRequest pr = new PatchRequest(thermostat.getId(), Device.class, eTagResp.getETag());
         pr.add("location", "{\"latitude\": \"1.1\", \"longitude\": \"2.2\", \"desc\": \"device location\"}");
         pr.setAttributes("location");
         
@@ -56,6 +60,7 @@ public class PatchResourceTest extends TestBase {
         pr.setAttributes(null);
         pr.getOperations().clear();
         pr.remove("location");
+        pr.setIfNoneMatch(resp.getETag());
         resp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_NO_CONTENT, resp.getHttpCode());
     }
