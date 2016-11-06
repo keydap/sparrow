@@ -655,6 +655,9 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 		e := recover()
 		if e != nil {
 			err = e.(error)
+		}
+
+		if err != nil {
 			tx.Rollback()
 			res = nil
 			log.Debugf("failed to insert %s resource [%s]", rt.Name, err)
@@ -1065,6 +1068,9 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 		e := recover()
 		if e != nil {
 			err = e.(error)
+		}
+
+		if err != nil {
 			tx.Rollback()
 			res = nil
 			log.Debugf("failed to replace %s resource [%s]", rt.Name, err)
@@ -1479,6 +1485,9 @@ func (sl *Silo) Authenticate(principal string, password string) (user *base.Reso
 		e := recover()
 		if e != nil {
 			err = e.(error)
+		}
+
+		if err != nil {
 			log.Debugf("Error while authenticating principal %s %#v", principal, err)
 		}
 
