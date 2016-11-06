@@ -27,7 +27,7 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"add", "value":{"price": 9.2, "rating": 1}}]}`, deviceType)
+	pr := getPr(`{"Operations":[{"op":"add", "value":{"price": 9.2, "rating": 1}}]}`, deviceType, rs.GetVersion())
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -41,6 +41,7 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	assertIndexVal(deviceType.Name, "rating", int64(1), true, t)
 
 	// apply the same patch on the already updated resource, resource should not get modified
+	pr.IfNoneMatch = updatedRs.GetVersion()
 	notUpdatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
@@ -59,7 +60,7 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	assertEquals(t, "rating", updatedRs, int64(1))
 
 	// without path, give Value an array instead of a map
-	pr = getPr(`{"Operations":[{"op":"add", "value":[{"price": 9.2, "rating": 1}]}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"add", "value":[{"price": 9.2, "rating": 1}]}]}`, deviceType, updatedRs.GetVersion())
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err == nil {
 		t.Errorf("Patch operation must fail when path is not given and Value is an array instead of an object")
@@ -69,7 +70,7 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	sl.Delete(rs.GetId(), deviceType)
 
 	rs = insertRs(patchDevice)
-	pr = getPr(`{"Operations":[{"op":"add", "path":"price", "value":10.6}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"add", "path":"price", "value":10.6}]}`, deviceType, rs.GetVersion())
 
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -82,7 +83,7 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	assertIndexVal(deviceType.Name, "price", float64(10.6), true, t)
 
 	// test multi-valued simple attribute with path
-	pr = getPr(`{"Operations":[{"op":"add", "path":"repairDates", "value":"2016-05-28T14:19:14Z"}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"add", "path":"repairDates", "value":"2016-05-28T14:19:14Z"}]}`, deviceType, updatedRs.GetVersion())
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with path on a multivalued simple attribute %s", err)
@@ -92,7 +93,7 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	assertEquals(t, "repairDates", updatedRs, millis)
 	assertIndexVal(deviceType.Name, "repairDates", millis, true, t)
 
-	pr = getPr(`{"Operations":[{"op":"add", "path":"repairDates", "value":["2016-05-29T14:19:14Z"]}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"add", "path":"repairDates", "value":["2016-05-29T14:19:14Z"]}]}`, deviceType, updatedRs.GetVersion())
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with path on a multivalued simple attribute %s", err)
@@ -124,7 +125,7 @@ func TestModifyUniqueSimpleAt(t *testing.T) {
 	rid := rs.GetId()
 
 	// now define a patch operation which tries to change value of serialNumber to be that of device1
-	pr := getPr(`{"Operations":[{"op":"add", "value":{"serialNumber": "20"}}]}`, deviceType)
+	pr := getPr(`{"Operations":[{"op":"add", "value":{"serialNumber": "20"}}]}`, deviceType, rs.GetVersion())
 
 	// it must fail
 	_, err := sl.Patch(rid, pr, deviceType)
@@ -147,7 +148,7 @@ func TestPatchAddComplexAT(t *testing.T) {
 
 	rs := insertRs(patchDevice)
 	rid := rs.GetId()
-	pr := getPr(`{"Operations":[{"op":"add", "value":{"location": {"latitude": "1.0", "longitude": "2.0"}}}]}`, deviceType)
+	pr := getPr(`{"Operations":[{"op":"add", "value":{"location": {"latitude": "1.0", "longitude": "2.0"}}}]}`, deviceType, rs.GetVersion())
 
 	updatedRs, err := sl.Patch(rid, pr, deviceType)
 	if err != nil {
@@ -161,6 +162,7 @@ func TestPatchAddComplexAT(t *testing.T) {
 	assertEquals(t, "location.longitude", updatedRs, "2.0")
 
 	// apply the same patch on the already updated resource, resource should not get modified
+	pr.IfNoneMatch = updatedRs.GetVersion()
 	notUpdatedRs, err := sl.Patch(rid, pr, deviceType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req on the already updated resource")
@@ -176,7 +178,7 @@ func TestPatchAddComplexAT(t *testing.T) {
 	}
 
 	//with path now
-	pr = getPr(`{"Operations":[{"op":"add", "path":"location.latitude", "value":"5.0"}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"add", "path":"location.latitude", "value":"5.0"}]}`, deviceType, updatedRs.GetVersion())
 
 	updatedRs, err = sl.Patch(rid, pr, deviceType)
 	if err != nil {
@@ -188,7 +190,7 @@ func TestPatchAddComplexAT(t *testing.T) {
 	assertIndexVal(deviceType.Name, "location.latitude", "5.0", true, t)
 
 	//path with a selector
-	pr = getPr(`{"Operations":[{"op":"add", "path":"location[longitude eq \"2.0\"].latitude", "value":"7.0"}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"add", "path":"location[longitude eq \"2.0\"].latitude", "value":"7.0"}]}`, deviceType, updatedRs.GetVersion())
 
 	updatedRs, err = sl.Patch(rid, pr, deviceType)
 	if err != nil {
@@ -200,7 +202,7 @@ func TestPatchAddComplexAT(t *testing.T) {
 	assertIndexVal(deviceType.Name, "location.latitude", "7.0", true, t)
 
 	//path with a selector
-	pr = getPr(`{"Operations":[{"op":"add", "path":"location[longitude eq \"non-existing-val\"].latitude", "value":"9.0"}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"add", "path":"location[longitude eq \"non-existing-val\"].latitude", "value":"9.0"}]}`, deviceType, updatedRs.GetVersion())
 
 	updatedRs, err = sl.Patch(rid, pr, deviceType)
 	if err == nil {
@@ -216,14 +218,14 @@ func TestPatchAddMultiValComplexAT(t *testing.T) {
 
 	rs := insertRs(patchDevice)
 	rid := rs.GetId()
-	pr := getPr(`{"Operations":[{"op":"add", "value":{"photos": [{"value": "123.jpg", "primary": true}, {"value": "456.jpg", "primary": true}]}}]}`, deviceType)
+	pr := getPr(`{"Operations":[{"op":"add", "value":{"photos": [{"value": "123.jpg", "primary": true}, {"value": "456.jpg", "primary": true}]}}]}`, deviceType, rs.GetVersion())
 
 	updatedRs, err := sl.Patch(rid, pr, deviceType)
 	if err == nil {
 		t.Errorf("Patch request should fail cause multiple primary flags were set")
 	}
 
-	pr = getPr(`{"Operations":[{"op":"add", "value":{"photos": [{"value": "123.jpg", "primary": true}, {"value": "456.jpg", "primary": false}]}}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"add", "value":{"photos": [{"value": "123.jpg", "primary": true}, {"value": "456.jpg", "primary": false}]}}]}`, deviceType, rs.GetVersion())
 
 	updatedRs, err = sl.Patch(rid, pr, deviceType)
 	if err != nil {
@@ -252,7 +254,7 @@ func TestPatchAddMultiValComplexAT(t *testing.T) {
 	sl.Delete(rid, deviceType)
 	rs = insertRs(patchDevice)
 	rid = rs.GetId()
-	pr = getPr(`{"Operations":[{"op":"add", "path": "photos[value eq \"xyz.jpg\"].primary", "value":true}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"add", "path": "photos[value eq \"xyz.jpg\"].primary", "value":true}]}`, deviceType, rs.GetVersion())
 
 	updatedRs, err = sl.Patch(rid, pr, deviceType)
 	if err != nil {
@@ -281,7 +283,7 @@ func TestPatchAddExtensionAts(t *testing.T) {
 	rs := insertRs(patchUser)
 	pr := getPr(`{"Operations":[{"op":"add", "value":
 	               {"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {"employeeNumber": "1", "organization": "keydap" }}
-    		     }]}`, userType)
+    		     }]}`, userType, rs.GetVersion())
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, userType)
 	if err != nil {
@@ -313,7 +315,7 @@ func insertRs(json string) *base.Resource {
 	return rs
 }
 
-func getPr(pr string, rt *schema.ResourceType) *base.PatchReq {
+func getPr(pr string, rt *schema.ResourceType, version string) *base.PatchReq {
 	reader := bytes.NewReader([]byte(pr))
 	req, err := base.ParsePatchReq(reader, rt)
 	if err != nil {
@@ -321,5 +323,6 @@ func getPr(pr string, rt *schema.ResourceType) *base.PatchReq {
 		panic(err)
 	}
 
+	req.IfNoneMatch = version
 	return req
 }

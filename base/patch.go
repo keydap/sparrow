@@ -9,8 +9,9 @@ import (
 )
 
 type PatchReq struct {
-	Schemas    []string
-	Operations []*PatchOp
+	Schemas     []string
+	IfNoneMatch string
+	Operations  []*PatchOp
 }
 
 type PatchOp struct {

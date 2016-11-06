@@ -114,7 +114,9 @@ func searchResource(hc *httpContext) {
 		}
 
 		writeCommonHeaders(hc.w)
-		hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
+		header := hc.w.Header()
+		header.Add("Location", hc.r.RequestURI+"/"+rid)
+		header.Add("Etag", rs.GetVersion())
 		hc.w.WriteHeader(http.StatusOK)
 		hc.w.Write(rs.Serialize())
 		log.Debugf("Found the resource with ID %s", rid)
@@ -319,7 +321,9 @@ func createResource(hc *httpContext) {
 
 	rid := insertedRs.GetId()
 	writeCommonHeaders(hc.w)
-	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
+	header := hc.w.Header()
+	header.Add("Location", hc.r.RequestURI+"/"+rid)
+	header.Add("Etag", insertedRs.GetVersion())
 	hc.w.WriteHeader(http.StatusCreated)
 	d := insertedRs.Serialize()
 	log.Debugf("-------------------\n%s", string(d))
@@ -359,6 +363,7 @@ func replaceResource(hc *httpContext) {
 	// set the ID on the resource first (even if the resource contains an ID it is safe to overwrite it)
 	rs.SetId(rid)
 	replaceCtx := base.ReplaceContext{InRes: rs, OpContext: hc.OpContext}
+	replaceCtx.IfNoneMatch = hc.r.Header.Get("If-None-Match")
 	replacedRs, err := hc.pr.Replace(&replaceCtx)
 	if err != nil {
 		writeError(hc.w, err)
@@ -366,7 +371,9 @@ func replaceResource(hc *httpContext) {
 	}
 
 	writeCommonHeaders(hc.w)
-	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
+	header := hc.w.Header()
+	header.Add("Location", hc.r.RequestURI+"/"+rid)
+	header.Add("Etag", replacedRs.GetVersion())
 	hc.w.WriteHeader(http.StatusOK)
 	hc.w.Write(replacedRs.Serialize())
 	log.Debugf("Successfully replaced the resource with ID %s", rid)
@@ -408,6 +415,7 @@ func patchResource(hc *httpContext) {
 		return
 	}
 
+	patchReq.IfNoneMatch = hc.r.Header.Get("If-None-Match")
 	patchCtx := base.PatchContext{Rid: rid, Rt: rtByPath, Pr: patchReq, OpContext: hc.OpContext}
 	patchedRes, err := hc.pr.Patch(&patchCtx)
 	if err != nil {
@@ -416,7 +424,9 @@ func patchResource(hc *httpContext) {
 	}
 
 	writeCommonHeaders(hc.w)
-	hc.w.Header().Add("Location", hc.r.RequestURI+"/"+rid)
+	header := hc.w.Header()
+	header.Add("Location", hc.r.RequestURI+"/"+rid)
+	header.Add("Etag", patchedRes.GetVersion())
 
 	if reqAttr == "" {
 		hc.w.WriteHeader(http.StatusNoContent)

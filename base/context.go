@@ -28,9 +28,10 @@ type DeleteContext struct {
 }
 
 type ReplaceContext struct {
-	InRes      *Resource
-	Rt         *schema.ResourceType
-	*OpContext // the operation context
+	InRes       *Resource
+	IfNoneMatch string
+	Rt          *schema.ResourceType
+	*OpContext  // the operation context
 }
 
 type PatchContext struct {

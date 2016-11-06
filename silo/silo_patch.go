@@ -6,15 +6,10 @@ import (
 	"reflect"
 	"sparrow/base"
 	"sparrow/schema"
+	"strings"
 )
 
 func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (res *base.Resource, err error) {
-	res, err = sl.Get(rid, rt)
-
-	if err != nil {
-		return nil, err
-	}
-
 	tx, err := sl.db.Begin(true)
 
 	if err != nil {
@@ -27,8 +22,11 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 	defer func() {
 		e := recover()
 		if e != nil {
-			tx.Rollback()
 			err = e.(error)
+		}
+
+		if err != nil {
+			tx.Rollback()
 			res = nil
 			log.Debugf("failed to modify %s resource [%s]", rt.Name, err)
 		} else {
@@ -41,6 +39,18 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 			log.Debugf("Successfully modified resource with id %s", rid)
 		}
 	}()
+
+	res, err = sl.getUsingTx(rid, rt, tx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.Compare(res.GetVersion(), pr.IfNoneMatch) != 0 {
+		msg := fmt.Sprintf("The given version %s of the resource to be patched %s doesn't match with stored version", pr.IfNoneMatch, rid)
+		log.Debugf(msg)
+		return nil, base.NewConflictError(msg)
+	}
 
 	mh := &modifyHints{}
 

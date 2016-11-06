@@ -11,7 +11,7 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"remove", "path": "installedDate"}]}`, deviceType)
+	pr := getPr(`{"Operations":[{"op":"remove", "path": "installedDate"}]}`, deviceType, rs.GetVersion())
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -25,6 +25,7 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 	assertIndexVal(deviceType.Name, "installedDate", utils.GetTimeMillis("2016-05-17T14:19:14Z"), false, t)
 
 	// apply the same patch on the already updated resource, resource should not get modified
+	pr.IfNoneMatch = updatedRs.GetVersion()
 	notUpdatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
@@ -39,7 +40,7 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 		t.Errorf("Patch operation modified though the attribute data is unchanged")
 	}
 
-	pr = getPr(`{"Operations":[{"op":"remove", "path": "location.latitude"}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"remove", "path": "location.latitude"}]}`, deviceType, updatedRs.GetVersion())
 
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -48,7 +49,7 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 
 	assertIndexVal(deviceType.Name, "location.latitude", "19°10'45.4\"N", false, t)
 
-	pr = getPr(`{"Operations":[{"op":"remove", "path": "photos[value eq \"abc.jpg\"].value"}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"remove", "path": "photos[value eq \"abc.jpg\"].value"}]}`, deviceType, updatedRs.GetVersion())
 
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -68,7 +69,7 @@ func TestPatchRemoveComplexAt(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"remove", "path": "repairDates"}]}`, deviceType)
+	pr := getPr(`{"Operations":[{"op":"remove", "path": "repairDates"}]}`, deviceType, rs.GetVersion())
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -83,7 +84,7 @@ func TestPatchRemoveComplexAt(t *testing.T) {
 	assertIndexVal(deviceType.Name, "repairDates", utils.GetTimeMillis("2016-05-11T14:19:14Z"), false, t)
 
 	// multi-valued CA
-	pr = getPr(`{"Operations":[{"op":"remove", "path": "photos[primary eq true]"}]}`, deviceType)
+	pr = getPr(`{"Operations":[{"op":"remove", "path": "photos[primary eq true]"}]}`, deviceType, updatedRs.GetVersion())
 
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -103,7 +104,7 @@ func TestPatchRemoveMultipleVals(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"remove", "path": "photos.value"}]}`, deviceType)
+	pr := getPr(`{"Operations":[{"op":"remove", "path": "photos.value"}]}`, deviceType, rs.GetVersion())
 
 	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
@@ -126,14 +127,14 @@ func TestPatchRemoveReadOnly(t *testing.T) {
 
 	rs := insertRs(patchDevice)
 	rid := rs.GetId()
-	checkRemoveFailure(t, rid, `{"Operations":[{"op":"remove", "path": "id"}]}`)           // mandatory field
-	checkRemoveFailure(t, rid, `{"Operations":[{"op":"remove", "path": "schemas"}]}`)      // mandatory field
-	checkRemoveFailure(t, rid, `{"Operations":[{"op":"remove", "path": "serialNumber"}]}`) // required field
-	checkRemoveFailure(t, rid, `{"Operations":[{"op":"remove", "path": "macId"}]}`)        // immutable field
+	checkRemoveFailure(t, rid, `{"Operations":[{"op":"remove", "path": "id"}]}`, rs)           // mandatory field
+	checkRemoveFailure(t, rid, `{"Operations":[{"op":"remove", "path": "schemas"}]}`, rs)      // mandatory field
+	checkRemoveFailure(t, rid, `{"Operations":[{"op":"remove", "path": "serialNumber"}]}`, rs) // required field
+	checkRemoveFailure(t, rid, `{"Operations":[{"op":"remove", "path": "macId"}]}`, rs)        // immutable field
 }
 
-func checkRemoveFailure(t *testing.T, rid string, patchJson string) {
-	pr := getPr(patchJson, deviceType)
+func checkRemoveFailure(t *testing.T, rid string, patchJson string, rs *base.Resource) {
+	pr := getPr(patchJson, deviceType, rs.GetVersion())
 	_, err := sl.Patch(rid, pr, deviceType)
 	se := err.(*base.ScimError)
 	if se == nil {

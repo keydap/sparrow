@@ -236,7 +236,7 @@ func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resourc
 		return nil, base.NewForbiddenError("Insufficent privileges to replace the resource")
 	}
 
-	return prv.sl.Replace(replaceCtx.InRes)
+	return prv.sl.Replace(replaceCtx.InRes, replaceCtx.IfNoneMatch)
 }
 
 func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err error) {

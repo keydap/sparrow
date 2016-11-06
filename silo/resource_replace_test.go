@@ -39,7 +39,7 @@ func TestReplace(t *testing.T) {
 	upRs, _ := base.ParseResource(restypes, schemas, reader)
 	upRs.SetId(originalRs.GetId())
 
-	newRs, err := sl.Replace(upRs)
+	newRs, err := sl.Replace(upRs, originalRs.GetVersion())
 
 	if err != nil {
 		t.Errorf("Failed to replace resource %s", err)
@@ -110,7 +110,7 @@ func TestReplace(t *testing.T) {
 	upRs, _ = base.ParseResource(restypes, schemas, reader)
 	upRs.SetId(originalRs.GetId())
 
-	newRs, err = sl.Replace(upRs)
+	newRs, err = sl.Replace(upRs, newRs.GetVersion())
 
 	if err == nil {
 		t.Error("Replace operation must fail when an immutable attribute value already exists")
@@ -145,7 +145,7 @@ func TestReplaceExtendedObj(t *testing.T) {
 	upRs, _ := base.ParseResource(restypes, schemas, reader)
 	upRs.SetId(originalRs.GetId())
 
-	newRs, err := sl.Replace(upRs)
+	newRs, err := sl.Replace(upRs, originalRs.GetVersion())
 
 	if err != nil {
 		t.Errorf("Failed to replace user resource")
@@ -174,7 +174,7 @@ func TestReplaceExtendedObj(t *testing.T) {
 	reader = bytes.NewReader([]byte(upUser2))
 	upRs, _ = base.ParseResource(restypes, schemas, reader)
 	upRs.SetId(originalRs.GetId())
-	newRs, err = sl.Replace(upRs)
+	newRs, err = sl.Replace(upRs, newRs.GetVersion())
 	if err != nil {
 		t.Errorf("Failed to update second time %s", err)
 	}

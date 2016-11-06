@@ -153,7 +153,7 @@ func TestGroupReplace(t *testing.T) {
 	subAtMap["value"] = u3Id
 	ca.AddSubAts(subAtMap)
 
-	group, err = sl.Replace(group)
+	group, err = sl.Replace(group, group.GetVersion())
 	if err != nil {
 		t.Error("Failed to replace the group")
 	}
@@ -191,7 +191,7 @@ func TestPatchAdd(t *testing.T) {
 	gid := group.GetId()
 
 	// now patch the group
-	pr := getPr(`{"Operations":[{"op":"add", "value":{"members":[{"value": "`+u2Id+`"}]}}]}`, groupType)
+	pr := getPr(`{"Operations":[{"op":"add", "value":{"members":[{"value": "`+u2Id+`"}]}}]}`, groupType, group.GetVersion())
 	group, err := sl.Patch(gid, pr, groupType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
@@ -210,7 +210,7 @@ func TestPatchAdd(t *testing.T) {
 	u3Id := user3.GetId()
 
 	// now patch the group with path set to members
-	pr = getPr(`{"Operations":[{"op":"add", "path": "members", "value":{"value": "`+u3Id+`"}}]}`, groupType)
+	pr = getPr(`{"Operations":[{"op":"add", "path": "members", "value":{"value": "`+u3Id+`"}}]}`, groupType, group.GetVersion())
 	group, err = sl.Patch(gid, pr, groupType)
 	if err != nil {
 		t.Errorf("Failed to apply patch add req with path")
@@ -247,7 +247,7 @@ func TestPatchReplace(t *testing.T) {
 	checkGroupIndex(gid, t, u1Id)
 
 	// now patch the group
-	pr := getPr(`{"Operations":[{"op":"replace", "value":{"members":[{"value": "`+u2Id+`"}]}}]}`, groupType)
+	pr := getPr(`{"Operations":[{"op":"replace", "value":{"members":[{"value": "`+u2Id+`"}]}}]}`, groupType, group.GetVersion())
 	group, err := sl.Patch(gid, pr, groupType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
@@ -273,7 +273,7 @@ func TestPatchReplace(t *testing.T) {
 	u3Id := user3.GetId()
 
 	// now patch the group with path set to members
-	pr = getPr(`{"Operations":[{"op":"replace", "path": "members", "value":[{"value": "`+u3Id+`"}, {"value": "`+u1Id+`"}]}]}`, groupType)
+	pr = getPr(`{"Operations":[{"op":"replace", "path": "members", "value":[{"value": "`+u3Id+`"}, {"value": "`+u1Id+`"}]}]}`, groupType, group.GetVersion())
 	group, err = sl.Patch(gid, pr, groupType)
 	if err != nil {
 		t.Errorf("Failed to apply patch add req with path")
@@ -319,7 +319,7 @@ func TestPatchRemove(t *testing.T) {
 	checkGroupIndex(gid, t, u1Id, u2Id, u3Id)
 
 	// now patch the group with path set to members
-	pr := getPr(`{"Operations":[{"op":"remove", "path": "members[value eq `+u3Id+`]"}]}`, groupType)
+	pr := getPr(`{"Operations":[{"op":"remove", "path": "members[value eq `+u3Id+`]"}]}`, groupType, group.GetVersion())
 	group, err := sl.Patch(gid, pr, groupType)
 	if err != nil {
 		t.Errorf("Failed to apply patch add req with path")

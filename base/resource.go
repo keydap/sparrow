@@ -373,6 +373,11 @@ func (rs *Resource) GetMeta() *ComplexAttribute {
 	return rs.Core.ComplexAts["meta"]
 }
 
+func (rs *Resource) GetVersion() string {
+	meta := rs.GetMeta().GetFirstSubAt()
+	return meta["version"].Values[0].(string)
+}
+
 func (rs *Resource) HasMember(userOrSubGid string) bool {
 	ca := rs.Core.ComplexAts["members"]
 	if ca == nil {

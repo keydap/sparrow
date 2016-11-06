@@ -1036,7 +1036,7 @@ func (sl *Silo) storeResource(tx *bolt.Tx, res *base.Resource) {
 	}
 }
 
-func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
+func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resource, err error) {
 	err = inRes.CheckMissingRequiredAts()
 	if err != nil {
 		return nil, err
@@ -1076,8 +1076,6 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 			log.Debugf("failed to replace %s resource [%s]", rt.Name, err)
 		} else {
 			tx.Commit()
-			res = inRes
-
 			if isGroup {
 				sl.Engine.UpsertRole(inRes)
 			}
@@ -1090,6 +1088,12 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 
 	if err != nil {
 		return nil, err
+	}
+
+	if strings.Compare(existing.GetVersion(), version) != 0 {
+		msg := fmt.Sprintf("The given version %s of the resource %s doesn't match with stored version", version, rid)
+		log.Debugf(msg)
+		return nil, base.NewConflictError(msg)
 	}
 
 	prIdx := sl.getSysIndex(rt.Name, "presence")
@@ -1156,8 +1160,7 @@ func (sl *Silo) Replace(inRes *base.Resource) (res *base.Resource, err error) {
 	existing.UpdateSchemas()
 
 	sl.storeResource(tx, existing)
-
-	return inRes, nil
+	return existing, nil
 }
 
 func (sl *Silo) deleteGroupMembers(existingMembers *base.ComplexAttribute, groupRid string, tx *bolt.Tx) {
