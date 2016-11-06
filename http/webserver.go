@@ -356,6 +356,8 @@ func replaceResource(hc *httpContext) {
 		return
 	}
 
+	// set the ID on the resource first (even if the resource contains an ID it is safe to overwrite it)
+	rs.SetId(rid)
 	replaceCtx := base.ReplaceContext{InRes: rs, OpContext: hc.OpContext}
 	replacedRs, err := hc.pr.Replace(&replaceCtx)
 	if err != nil {
