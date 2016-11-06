@@ -1016,6 +1016,11 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 		if atType == nil {
 			msg := fmt.Sprintf("Attribute %s doesn't exist in the schema %s", atName, sc.Id)
 			panic(NewBadRequestError(msg))
+			// if we should be lenient then continue without considering this attribute
+			// but default is strict processing
+			//log.Debugf(msg)
+			//delete(obj, k)
+			//continue
 		} else {
 			log.Debugf("found atType %s\n", atType.Name)
 		}
