@@ -113,12 +113,36 @@ func searchResource(hc *httpContext) {
 			return
 		}
 
+		err = hc.r.ParseForm()
+		if err != nil {
+			writeError(hc.w, err)
+			return
+		}
+
+		attributes := hc.r.Form.Get("attributes")
+		exclAttributes := hc.r.Form.Get("excludedAttributes")
+
+		var jsonData []byte
+
+		if len(attributes) != 0 && len(exclAttributes) != 0 {
+			err := base.NewBadRequestError("The parameters 'attributes' and 'excludedAttributes' cannot be set for fetching a resource")
+			writeError(hc.w, err)
+			return
+		}
+
+		attrLst, exclAttrLst := parseAttrParams(attributes, exclAttributes, rtByPath)
+		if attrLst != nil {
+			jsonData = rs.FilterAndSerialize(attrLst, true)
+		} else {
+			jsonData = rs.FilterAndSerialize(exclAttrLst, false)
+		}
+
 		writeCommonHeaders(hc.w)
 		header := hc.w.Header()
 		header.Add("Location", hc.r.RequestURI+"/"+rid)
 		header.Add("Etag", rs.GetVersion())
 		hc.w.WriteHeader(http.StatusOK)
-		hc.w.Write(rs.Serialize())
+		hc.w.Write(jsonData)
 		log.Debugf("Found the resource with ID %s", rid)
 		return
 	}
@@ -212,41 +236,7 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 		return
 	}
 
-	var attrLst []*base.AttributeParam
-	var exclAttrLst []*base.AttributeParam
-
-	if len(sr.Attributes) != 0 {
-		attrLst = parseAttrParam(sr.Attributes, rTypes)
-	} else {
-		exclAttrSet, subAtPresent := base.SplitAttrCsv(sr.ExcludedAttributes, rTypes)
-
-		if exclAttrSet == nil {
-			// in this case compute the never return attribute list
-			exclAttrSet = make(map[string]int)
-			subAtPresent = true
-		}
-
-		// the mandatory attributes cannot be excluded
-		for _, rt := range rTypes {
-			for k, _ := range rt.AtsAlwaysRtn {
-				if _, ok := exclAttrSet[k]; ok {
-					delete(exclAttrSet, k)
-				}
-			}
-
-			for k, _ := range rt.AtsNeverRtn {
-				exclAttrSet[k] = 1
-			}
-
-			for k, _ := range rt.AtsRequestRtn {
-				if _, ok := exclAttrSet[k]; !ok {
-					exclAttrSet[k] = 1
-				}
-			}
-		}
-
-		exclAttrLst = base.ConvertToParamAttributes(exclAttrSet, subAtPresent)
-	}
+	attrLst, exclAttrLst := parseAttrParams(sr.Attributes, sr.ExcludedAttributes, rTypes...)
 
 	sc := &base.SearchContext{}
 	sc.Filter = filter
@@ -769,4 +759,41 @@ func keyFunc(jt *jwt.Token) (key interface{}, err error) {
 
 	prv := providers[domain.(string)]
 	return prv.PubKey, nil
+}
+
+func parseAttrParams(attributes string, excludedAttributes string, rTypes ...*schema.ResourceType) (attrLst []*base.AttributeParam, exclAttrLst []*base.AttributeParam) {
+	if len(attributes) != 0 {
+		attrLst = parseAttrParam(attributes, rTypes)
+	} else {
+		exclAttrSet, subAtPresent := base.SplitAttrCsv(excludedAttributes, rTypes)
+
+		if exclAttrSet == nil {
+			// in this case compute the never return attribute list
+			exclAttrSet = make(map[string]int)
+			subAtPresent = true
+		}
+
+		// the mandatory attributes cannot be excluded
+		for _, rt := range rTypes {
+			for k, _ := range rt.AtsAlwaysRtn {
+				if _, ok := exclAttrSet[k]; ok {
+					delete(exclAttrSet, k)
+				}
+			}
+
+			for k, _ := range rt.AtsNeverRtn {
+				exclAttrSet[k] = 1
+			}
+
+			for k, _ := range rt.AtsRequestRtn {
+				if _, ok := exclAttrSet[k]; !ok {
+					exclAttrSet[k] = 1
+				}
+			}
+		}
+
+		exclAttrLst = base.ConvertToParamAttributes(exclAttrSet, subAtPresent)
+	}
+
+	return attrLst, exclAttrLst
 }
