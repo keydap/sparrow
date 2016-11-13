@@ -12,6 +12,7 @@ import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.TimeZone;
 
+import org.apache.http.HttpStatus;
 import org.junit.BeforeClass;
 
 import com.keydap.sparrow.auth.SparrowAuthenticator;
@@ -54,7 +55,7 @@ public abstract class TestBase {
     }
     
     public static <T> void deleteAll(Class<T> resClass) {
-        SearchResponse<T> resp = client.searchResource("id pr", resClass, "id");
+        SearchResponse<T> resp = client.searchResource("id pr", resClass, "id", "username");
         List<T> existing = resp.getResources();
         if(existing != null) {
             try {
@@ -62,7 +63,10 @@ public abstract class TestBase {
                 id.setAccessible(true);
                 
                 for(T u : existing) {
-                    client.deleteResource(id.get(u).toString(), resClass);
+                    Response<Boolean> delResp = client.deleteResource(id.get(u).toString(), resClass);
+                    if(delResp.getHttpCode() != HttpStatus.SC_NO_CONTENT) {
+                        //System.out.println(delResp.getHttpBody());
+                    }
                 }
             }
             catch(Exception e) {

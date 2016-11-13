@@ -7,7 +7,8 @@
 package com.keydap.sparrow;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ import org.junit.Test;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.keydap.sparrow.scim.Device;
+import com.keydap.sparrow.scim.Group;
 import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Address;
 import com.keydap.sparrow.scim.User.Email;
@@ -51,7 +53,7 @@ public class SearchResourceTest extends TestBase {
     public static void cleanAndInject() throws Exception {
         deleteAll(User.class);
         deleteAll(Device.class);
-        //deleteAll(Group.class);
+        deleteAll(Group.class);
 
         // 'admin' user is the existing user, hence NOT inserted 
         // from here. It is present only to help some tests pass
