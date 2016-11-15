@@ -113,6 +113,16 @@ func searchResource(hc *httpContext) {
 			return
 		}
 
+		ifNoneMatch := hc.r.Header.Get("If-None-Match")
+		if len(ifNoneMatch) != 0 {
+			version := rs.GetVersion()
+			if strings.Compare(ifNoneMatch, version) == 0 {
+				hc.w.Header().Add("Etag", version)
+				hc.w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+
 		err = hc.r.ParseForm()
 		if err != nil {
 			writeError(hc.w, err)
