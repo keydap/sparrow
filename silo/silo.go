@@ -1146,9 +1146,8 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 		for scId, exExt := range existing.Ext {
 			if _, ok := inRes.Ext[scId]; !ok {
 				sl.deleteFromAtGroup(rt.Name, rid, tx, prIdx, nil, exExt)
+				delete(existing.Ext, scId)
 			}
-
-			delete(existing.Ext, scId)
 		}
 	}
 
