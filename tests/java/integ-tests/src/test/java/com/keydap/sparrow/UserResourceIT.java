@@ -32,6 +32,7 @@ import com.google.gson.JsonPrimitive;
 import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Address;
 import com.keydap.sparrow.scim.User.Email;
+import com.keydap.sparrow.scim.User.EnterpriseUser;
 import com.keydap.sparrow.scim.User.Meta;
 import com.keydap.sparrow.scim.User.Name;
 
@@ -305,6 +306,7 @@ public class UserResourceIT extends TestBase {
         assertEquals(oldMeta.getCreated(), newMeta.getCreated());
         
         ReflectionUtils.setFieldValue(user, "meta", null);
+        ReflectionUtils.setFieldValue(user, "password", null);
         ReflectionUtils.setFieldValue(patchedUser, "meta", null);
         assertReflectionEquals(user, patchedUser, ReflectionComparatorMode.LENIENT_ORDER);
         
@@ -395,6 +397,51 @@ public class UserResourceIT extends TestBase {
         assertEquals(HttpStatus.SC_PRECONDITION_FAILED, resp.getHttpCode());
     }
     
+    /**
+     * 7.1  Retrieve a user - full user should be returned.  Verify no writeOnly attributes (eg - password) are returned
+     * 
+     */
+    @Test
+    public void testSearch() {
+        User user = buildUser();
+        Response<User> resp = client.addResource(user);
+        user = resp.getResource();
+        resp = client.getResource(user.getId(), User.class);
+        user = resp.getResource();
+        assertNull(user.getPassword());
+        
+        resp = client.getResource(user.getId(), resp.getETag(), User.class);
+        assertEquals(HttpStatus.SC_NOT_MODIFIED, resp.getHttpCode());
+        assertNull(resp.getResource());
+        
+        EnterpriseUser eu = new EnterpriseUser();
+        eu.setCostCenter("costamesa");
+        eu.setDepartment("nationalparks");
+        eu.setDivision("westernghats");
+        eu.setEmployeeNumber("1");
+        
+        user.setEnterpriseUser(eu);
+        //System.out.println(client.serialize(user));
+        resp = client.replaceResource(user.getId(), user, resp.getETag());
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+
+        resp = client.getResource(user.getId(), User.class);
+        
+        resp = client.getResource(user.getId(), User.class, true, "username", "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber");
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        System.out.println(resp.getHttpBody());
+        user = resp.getResource();
+        assertNull(user.getEmails());
+        assertNull(user.getPassword());
+        assertNotNull(user.getUserName());
+        assertNotNull(user.getId());
+        assertNull(user.getMeta());
+        assertNotNull(user.getEnterpriseUser().getEmployeeNumber());
+        
+        resp = client.getResource("not-found", User.class);
+        assertEquals(HttpStatus.SC_NOT_FOUND, resp.getHttpCode());
+    }
+    
     private Email searchMails(User user, String mailType) {
         List<Email> emails = user.getEmails();
         for(Email m : emails) {
@@ -435,6 +482,8 @@ public class UserResourceIT extends TestBase {
         emails.add(workMail);
         
         user.setEmails(emails);
+        
+        user.setPassword(randomAlphabetic(11));
         
         return user;
     }
