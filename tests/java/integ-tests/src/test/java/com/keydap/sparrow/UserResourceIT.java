@@ -7,13 +7,14 @@
 package com.keydap.sparrow;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.unitils.reflectionassert.ReflectionAssert.assertLenientEquals;
 import static org.unitils.reflectionassert.ReflectionAssert.assertReflectionEquals;
 
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -398,11 +399,17 @@ public class UserResourceIT extends TestBase {
     }
     
     /**
-     * 7.1  Retrieve a user - full user should be returned.  Verify no writeOnly attributes (eg - password) are returned
-     * 
+     * 7.1 Retrieve a user - full user should be returned.  Verify no writeOnly attributes (eg - password) are returned
+     * 7.2 Retrieve a user with If-None-Match etag that matches - should return 304
+     * 7.3 Retrieve a user with If-None-Match etag that does not match - should return user
+     * 7.4 Retrieve a user with attributes query param (both core and extended attributes) - verify only requested attributes are returned
+     * 7.5 Retrieve a user with excludedAttributes query param (both core and extended attributes) - verify only requested attributes are returned
+     * 7.6 Retrieve a user that does not exist - should return a 404
+     * 7.7 Retrieve a user with a filter query param that matches the user
+     * 7.8 Retrieve a user with a filter query param that does not match the user
      */
     @Test
-    public void testSearch() {
+    public void testGetResource() {
         User user = buildUser();
         Response<User> resp = client.addResource(user);
         user = resp.getResource();
@@ -429,7 +436,6 @@ public class UserResourceIT extends TestBase {
         
         resp = client.getResource(user.getId(), User.class, true, "username", "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber");
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
-        System.out.println(resp.getHttpBody());
         user = resp.getResource();
         assertNull(user.getEmails());
         assertNull(user.getPassword());
@@ -437,54 +443,115 @@ public class UserResourceIT extends TestBase {
         assertNotNull(user.getId());
         assertNull(user.getMeta());
         assertNotNull(user.getEnterpriseUser().getEmployeeNumber());
+
+        // now excluded attributes
+        resp = client.getResource(user.getId(), User.class, false, "username", "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber");
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        user = resp.getResource();
+        assertNotNull(user.getEmails());
+        assertNull(user.getPassword());
+        assertNull(user.getUserName());
+        assertNotNull(user.getMeta());
+        eu = user.getEnterpriseUser();
+        assertNull(eu.getEmployeeNumber());
+        assertNotNull(eu.getCostCenter());
+        assertNotNull(eu.getDepartment());
+        assertNotNull(eu.getDivision());
+
+        SearchResponse<User> sresp = client.searchResource("id eq \"" + user.getId() + "\"", User.class);
+        assertEquals(HttpStatus.SC_OK, sresp.getHttpCode());
+        user = sresp.getResources().get(0);
+        assertNotNull(user.getEmails());
+        assertNotNull(user.getEnterpriseUser());
+        
+        String id = user.getId();
+        sresp = client.searchResource("not id eq \"" + id + "\"", User.class);
+        if(!sresp.getResources().isEmpty()) {
+            user = sresp.getResources().get(0);
+            assertNotEquals(id, user.getId());
+        }
         
         resp = client.getResource("not-found", User.class);
         assertEquals(HttpStatus.SC_NOT_FOUND, resp.getHttpCode());
     }
     
-    private Email searchMails(User user, String mailType) {
-        List<Email> emails = user.getEmails();
-        for(Email m : emails) {
-            if(m.getType().equalsIgnoreCase(mailType)) {
-                return m;
+    /**
+     * <pre>
+     * 8.1  Retrieve full list of users (no filters or count) - results should be capped by maxResults
+     * <strike>8.2 Retrieve a list of users with count and startIndex - should return paged result with correct total
+     * 8.3 Retrieve a list of users with attributes query param (both core and extended attributes) - verify only requested attributes are returned
+     * 8.4 Retrieve a list of users with excludedAttributes query param (both core and extended attributes) - verify only requested attributes are returned
+     * 8.5 Retrieve a list of users filtered with a simple attribute</strike>
+     * 8.6 Retrieve a list of users filtered with a complex attribute value (name.familyName)
+     * 8.7 Retrieve a list of users filtered with a multi-valued attribute value (emails.value)
+     * 8.8 Retrieve a list of users filtered with a complex multi-valued grouping operator - addresses[type eq “home” and locality eq “Redwood Shores”]
+     * <strike>8.9-8.16    Repeat above with POST to /Users/.search</strike>
+     * </pre>
+     */
+    @Test
+    public void testSearch() {
+        User user = buildUser();
+        Address home = new Address();
+        home.setCountry("India");
+        home.setLocality("Hyderabad");
+        home.setType("home");
+        user.setAddresses(Collections.singletonList(home));
+        
+        Response<User> resp = client.addResource(user);
+        user = resp.getResource();
+        
+        SearchResponse<User> sResp = client.searchResource(User.class);
+        assertEquals(HttpStatus.SC_OK, sResp.getHttpCode());
+        // can't check for the maxResults here, that will be done in a perf
+        // test cause of the large number of resources that need to be injected
+        // to test the search limit
+        assertFalse(sResp.getResources().isEmpty());
+        
+        sResp = client.searchResource("id eq \"" + user.getId() + "\"", User.class, true, "name.familyName");
+        System.out.println(sResp.getHttpBody());
+        for(User u : sResp.getResources()) {
+            Name n = u.getName();
+            assertNotNull(n.getFamilyName());
+            assertNull(n.getFormatted());
+            assertNull(n.getGivenName());
+            assertNull(n.getHonorificPrefix());
+            assertNull(n.getHonorificSuffix());
+            assertNull(n.getMiddleName());
+            assertNull(u.getEmails());
+            assertNull(u.getAddresses());
+        }
+        
+        sResp = client.searchResource("id eq \"" + user.getId() + "\"", User.class, true, "emails.value");
+        for(User u : sResp.getResources()) {
+            assertNull(u.getUserName());
+            assertNull(u.getName());
+            assertNull(u.getAddresses());
+            for(Email e : u.getEmails()) {
+                assertNotNull(e.getValue());
+                assertNull(e.getDisplay());
+                assertNull(e.getType());
             }
         }
         
-        return null;
+        sResp = client.searchResource("addresses[type eq \"home\" and locality eq \"" + home.getLocality() + "\"]", User.class);
+        List<User> users = sResp.getResources();
+        assertEquals(1, users.size());
+        assertReflectionEquals(home, users.get(0).getAddresses().get(0), ReflectionComparatorMode.LENIENT_ORDER);
     }
     
-    private User buildUser() {
-        String username = randomAlphabetic(5);
-        User user = new User();
-        user.setUserName(username);
-
-        Name name = new Name();
-        name.setFamilyName(username);
-        name.setGivenName(username);
-        name.setHonorificPrefix("Mr.");
-        name.setFormatted(name.getHonorificPrefix() + " " + name.getGivenName() + " " + name.getFamilyName());
-        user.setName(name);
+    @Test
+    public void testDelete() {
+        User user = buildUser();
+        Response<User> resp = client.addResource(user);
+        user = resp.getResource();
         
-        List<Email> emails = new ArrayList<Email>();
+        Response<Boolean> delResp = client.deleteResource(user.getId(), User.class);
+        assertEquals(HttpStatus.SC_NO_CONTENT, delResp.getHttpCode());
         
-        Email homeMail = new Email();
-        homeMail.setDisplay("Home Email");
-        homeMail.setType("home");
-        String s = randomAlphabetic(5);
-        homeMail.setValue(s + "@home.com" );
-        emails.add(homeMail);
+        delResp = client.deleteResource(user.getId(), User.class);
+        assertEquals(HttpStatus.SC_NOT_FOUND, delResp.getHttpCode());
         
-        Email workMail = new Email();
-        workMail.setDisplay("Work Email");
-        workMail.setType("work");
-        s = randomAlphabetic(5);
-        workMail.setValue(s + "@work.com" );
-        emails.add(workMail);
-        
-        user.setEmails(emails);
-        
-        user.setPassword(randomAlphabetic(11));
-        
-        return user;
+        resp = client.addResource(user);
+        assertEquals(HttpStatus.SC_CREATED, resp.getHttpCode());
     }
 }

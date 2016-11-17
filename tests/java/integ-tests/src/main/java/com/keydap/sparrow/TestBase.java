@@ -9,6 +9,7 @@ package com.keydap.sparrow;
 import java.lang.reflect.Field;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.TimeZone;
 
@@ -19,6 +20,10 @@ import com.keydap.sparrow.auth.SparrowAuthenticator;
 import com.keydap.sparrow.scim.Device;
 import com.keydap.sparrow.scim.Group;
 import com.keydap.sparrow.scim.User;
+import com.keydap.sparrow.scim.User.Email;
+import com.keydap.sparrow.scim.User.Name;
+
+import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.junit.Assert.*;
 
 /**
@@ -73,5 +78,51 @@ public abstract class TestBase {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    protected Email searchMails(User user, String mailType) {
+        List<Email> emails = user.getEmails();
+        for(Email m : emails) {
+            if(m.getType().equalsIgnoreCase(mailType)) {
+                return m;
+            }
+        }
+        
+        return null;
+    }
+    
+    protected User buildUser() {
+        String username = randomAlphabetic(5);
+        User user = new User();
+        user.setUserName(username);
+
+        Name name = new Name();
+        name.setFamilyName(username);
+        name.setGivenName(username);
+        name.setHonorificPrefix("Mr.");
+        name.setFormatted(name.getHonorificPrefix() + " " + name.getGivenName() + " " + name.getFamilyName());
+        user.setName(name);
+        
+        List<Email> emails = new ArrayList<Email>();
+        
+        Email homeMail = new Email();
+        homeMail.setDisplay("Home Email");
+        homeMail.setType("home");
+        String s = randomAlphabetic(5);
+        homeMail.setValue(s + "@home.com" );
+        emails.add(homeMail);
+        
+        Email workMail = new Email();
+        workMail.setDisplay("Work Email");
+        workMail.setType("work");
+        s = randomAlphabetic(5);
+        workMail.setValue(s + "@work.com" );
+        emails.add(workMail);
+        
+        user.setEmails(emails);
+        
+        user.setPassword(randomAlphabetic(11));
+        
+        return user;
     }
 }
