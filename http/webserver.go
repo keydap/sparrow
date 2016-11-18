@@ -578,6 +578,9 @@ func issueToken(w http.ResponseWriter, r *http.Request) {
 
 	ar.ClientIP = r.RemoteAddr
 	normDomain := strings.ToLower(strings.TrimSpace(ar.Domain))
+	if len(normDomain) == 0 {
+		normDomain = defaultDomain
+	}
 	pr := providers[normDomain]
 
 	if pr == nil {
