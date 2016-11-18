@@ -1496,7 +1496,7 @@ func (sl *Silo) Authenticate(principal string, password string) (user *base.Reso
 		tx.Rollback()
 	}()
 
-	rid := idx.GetRid([]byte(principal), tx)
+	rid := idx.GetRid(idx.convert(principal), tx)
 
 	if len(rid) == 0 {
 		return nil, fmt.Errorf("User with principal %s not found", principal)
