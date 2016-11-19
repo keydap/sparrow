@@ -120,6 +120,7 @@ public abstract class TestBase {
         emails.add(workMail);
         
         user.setEmails(emails);
+        user.setActive(true);
         
         user.setPassword(randomAlphabetic(11));
         
