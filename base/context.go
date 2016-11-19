@@ -42,14 +42,14 @@ type PatchContext struct {
 }
 
 type SearchContext struct {
-	ParamFilter    string // the given filter parameter
-	ParamAttrs     string // requested list of attributes
-	ParamExclAttrs string // requested list of attributes to be excluded
-
-	Filter     *FilterNode            // the search filter
-	ResTypes   []*schema.ResourceType // the resource types
-	Attrs      []string               // attributes to sent
-	*OpContext                        // the operation context
+	ParamFilter    string                 // the given filter parameter
+	ParamAttrs     string                 // requested list of attributes
+	ParamExclAttrs string                 // requested list of attributes to be excluded
+	MaxResults     int                    // the maximum number of results returned for a search request
+	Filter         *FilterNode            // the search filter
+	ResTypes       []*schema.ResourceType // the resource types
+	Attrs          []string               // attributes to sent
+	*OpContext                            // the operation context
 }
 
 type ListResponse struct {
