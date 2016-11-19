@@ -1175,17 +1175,23 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 	return existing, nil
 }
 
-func (sl *Silo) deleteGroupMembers(existingMembers *base.ComplexAttribute, groupRid string, tx *bolt.Tx) {
+func (sl *Silo) deleteGroupMembers(existingMembers *base.ComplexAttribute, groupRid string, tx *bolt.Tx) bool {
 	if existingMembers == nil {
-		return
+		return false
 	}
 
+	updated := false
 	for _, subAtMap := range existingMembers.SubAts {
-		sl._deleteGroupMembers(subAtMap, groupRid, tx)
+		tmp := sl._deleteGroupMembers(subAtMap, groupRid, tx)
+		if !updated {
+			updated = tmp
+		}
 	}
+
+	return updated
 }
 
-func (sl *Silo) _deleteGroupMembers(memberSubAtMap map[string]*base.SimpleAttribute, groupRid string, tx *bolt.Tx) {
+func (sl *Silo) _deleteGroupMembers(memberSubAtMap map[string]*base.SimpleAttribute, groupRid string, tx *bolt.Tx) bool {
 	refId := memberSubAtMap["value"].Values[0].(string)
 	refType := "User"
 	refTypeAt := memberSubAtMap["type"]
@@ -1219,9 +1225,12 @@ func (sl *Silo) _deleteGroupMembers(memberSubAtMap map[string]*base.SimpleAttrib
 				}
 				user.UpdateLastModTime()
 				sl.storeResource(tx, user)
+				return updated
 			}
 		}
 	}
+
+	return false
 }
 
 func (sl *Silo) deleteFromAtGroup(resName string, rid string, tx *bolt.Tx, prIdx *Index, inAtg *base.AtGroup, exAtg *base.AtGroup) {
