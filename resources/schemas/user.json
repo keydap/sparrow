@@ -556,7 +556,7 @@
                     "caseExact":false,
                     "mutability":"readOnly",
                     "returned":"default",
-                    "uniqueness":"none"
+                    "uniqueness":"server"
                 },
                 {
                     "name":"$ref",

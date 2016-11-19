@@ -30,7 +30,7 @@
                     "caseExact":false,
                     "mutability":"immutable",
                     "returned":"default",
-                    "uniqueness":"none"
+                    "uniqueness":"server"
                 },
                 {
                     "name":"$ref",
