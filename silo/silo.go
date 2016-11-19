@@ -730,6 +730,15 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 		}
 	}
 
+	if rt.Name == "User" {
+		acType := rt.GetAtType("active")
+		activeAt := inRes.GetAttr(acType.NormName)
+		if activeAt == nil {
+			sa := base.NewSimpleAt(acType, true)
+			inRes.AddSimpleAt(sa)
+		}
+	}
+
 	sl.storeResource(tx, inRes)
 
 	return inRes, nil
@@ -969,6 +978,10 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 							val := gatMap["value"].Values[0].(string)
 							if val == rid {
 								delete(groups.SubAts, i)
+								if len(groups.SubAts) == 0 {
+									res.DeleteAttr("groups")
+								}
+
 								if ugroupIdx != nil {
 									ugroupIdx.remove(val, refId, tx)
 								}
@@ -1201,6 +1214,9 @@ func (sl *Silo) _deleteGroupMembers(memberSubAtMap map[string]*base.SimpleAttrib
 			}
 
 			if updated {
+				if len(groups.SubAts) == 0 {
+					user.DeleteAttr("groups")
+				}
 				user.UpdateLastModTime()
 				sl.storeResource(tx, user)
 			}
@@ -1505,6 +1521,16 @@ func (sl *Silo) Authenticate(principal string, password string) (user *base.Reso
 	user, err = sl.getUsingTx(rid, rt, tx)
 	if err != nil {
 		return nil, err
+	}
+
+	active := false
+	activeAt := user.GetAttr("active")
+	if activeAt != nil {
+		active = activeAt.GetSimpleAt().Values[0].(bool)
+	}
+
+	if !active {
+		return nil, base.NewForbiddenError("Account is not active")
 	}
 
 	at := user.GetAttr("password")
