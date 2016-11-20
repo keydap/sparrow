@@ -34,10 +34,10 @@ public abstract class TestBase {
     
     static String baseApiUrl = "http://localhost:7090/v2";
     
-    static ScimClient client;
+    static SparrowClient client;
     
     /** the anonymous client */
-    static ScimClient unAuthClient;
+    static SparrowClient unAuthClient;
     
     static DateFormat utcDf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");//RFC3339
 
@@ -47,7 +47,7 @@ public abstract class TestBase {
     public static void createClient() throws Exception {
         authenticator = new SparrowAuthenticator("admin", "example.COM", "secret");
 
-        client = new ScimClient(baseApiUrl, authenticator);
+        client = new SparrowClient(baseApiUrl, authenticator);
         client.register(User.class, Group.class, Device.class);
         utcDf.setTimeZone(TimeZone.getTimeZone("UTC"));
 
@@ -55,7 +55,7 @@ public abstract class TestBase {
         assertNotNull(authenticator.getToken());
         //System.out.println(authenticator.getToken());
         
-        unAuthClient = new ScimClient(baseApiUrl);
+        unAuthClient = new SparrowClient(baseApiUrl);
         unAuthClient.register(User.class, Group.class, Device.class);
     }
     

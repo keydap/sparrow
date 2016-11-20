@@ -63,7 +63,7 @@ public class UsecaseIT extends TestBase {
         
         // setting domain to null will make the server use the default domain
         Authenticator auth = new SparrowAuthenticator(username, null, password);
-        ScimClient sc = new ScimClient(baseApiUrl, auth);
+        SparrowClient sc = new SparrowClient(baseApiUrl, auth);
         sc.authenticate();
         
         PatchRequest pr = new PatchRequest(user.getId(), User.class);

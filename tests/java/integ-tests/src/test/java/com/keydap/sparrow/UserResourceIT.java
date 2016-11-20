@@ -124,7 +124,7 @@ public class UserResourceIT extends TestBase {
         json.addProperty("xyz-attribute", "unknown");
         
         HttpPost post = new HttpPost(baseApiUrl + "/Users");
-        StringEntity entity = new StringEntity(json.toString(), ScimClient.MIME_TYPE);
+        StringEntity entity = new StringEntity(json.toString(), SparrowClient.MIME_TYPE);
         post.setEntity(entity);
 
         Response<User> resp = client.sendRawRequest(post, User.class);

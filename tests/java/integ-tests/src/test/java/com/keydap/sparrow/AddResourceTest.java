@@ -152,7 +152,7 @@ public class AddResourceTest extends TestBase {
         json.addProperty("installedDate", "1947-08-14T18:30:00");
         
         HttpPost post = new HttpPost(baseApiUrl + "/Devices");
-        post.setEntity(new StringEntity(json.toString(), ScimClient.MIME_TYPE));
+        post.setEntity(new StringEntity(json.toString(), SparrowClient.MIME_TYPE));
         
         Response<Device> resp = client.sendRawRequest(post, Device.class);
         
@@ -166,7 +166,7 @@ public class AddResourceTest extends TestBase {
         json.addProperty("rating", "2.7");
         
         HttpPost post = new HttpPost(baseApiUrl + "/Devices");
-        post.setEntity(new StringEntity(json.toString(), ScimClient.MIME_TYPE));
+        post.setEntity(new StringEntity(json.toString(), SparrowClient.MIME_TYPE));
         
         Response<Device> resp = client.sendRawRequest(post, Device.class);
         
@@ -180,7 +180,7 @@ public class AddResourceTest extends TestBase {
         json.addProperty("price", "2.0");
         
         HttpPost post = new HttpPost(baseApiUrl + "/Devices");
-        post.setEntity(new StringEntity(json.toString(), ScimClient.MIME_TYPE));
+        post.setEntity(new StringEntity(json.toString(), SparrowClient.MIME_TYPE));
         
         Response<Device> resp = client.sendRawRequest(post, Device.class);
         
