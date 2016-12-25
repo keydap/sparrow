@@ -3,7 +3,9 @@ package oauth
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"sparrow/utils"
+	"strings"
 )
 
 const (
@@ -26,11 +28,11 @@ const (
 var urlEncoder = base64.URLEncoding.WithPadding(base64.NoPadding)
 
 type Client struct {
-	Id     string //
-	Secret string
-	Time   int64
-	Desc   string
-	RedUri string
+	Id     string `json:"id"`
+	Secret string `json:"secret"`
+	Time   int64  `json:"time"`
+	Desc   string `json:"desc"`
+	RedUri string `json:"redUri"`
 }
 
 type AuthorizationReq struct {
@@ -47,7 +49,7 @@ type AuthorizationResp struct {
 }
 
 type ErrorResp struct {
-	Error string `json:"error"`
+	Err   string `json:"error"`
 	Desc  string `json:"error_description"`
 	Uri   string `json:"error_uri"`
 	State string `json:"state"`
@@ -79,4 +81,33 @@ func newRandStr() string {
 	b := make([]byte, 32)
 	rand.Read(b)
 	return urlEncoder.EncodeToString(b)
+}
+
+func (ep *ErrorResp) Serialize() []byte {
+	data, err := json.Marshal(ep)
+	if err != nil {
+		return []byte(err.Error())
+	}
+
+	return data
+}
+
+func (ep *ErrorResp) Error() string {
+	return string(ep.Serialize())
+}
+
+func (ep *ErrorResp) BuildErrorUri(redUri string) string {
+	if !strings.ContainsRune(redUri, '?') {
+		redUri += "?"
+	} else {
+		redUri += "&"
+	}
+
+	redUri += "error=" + ep.Err
+
+	if len(ep.State) != 0 {
+		redUri += "state=" + ep.State
+	}
+
+	return redUri
 }

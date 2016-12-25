@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 	logger "github.com/juju/loggo"
+	"html/template"
 	"net/http"
 	"os"
 	"sparrow/base"
+	"sparrow/oauth"
 	"sparrow/provider"
 	"sparrow/schema"
 	"strconv"
@@ -23,10 +26,18 @@ var DIR_PERM os.FileMode = 0744 //rwxr--r--
 
 var TENANT_HEADER = "X-Sparrow-Tenant-Id"
 var SCIM_JSON_TYPE = "application/scim+json; charset=UTF-8"
-var API_BASE = "/v2" // NO slash at the end
+var JSON_TYPE = "application/json; charset=UTF-8"
+var FORM_URL_ENCODED_TYPE = "application/x-www-form-urlencoded"
+
+var API_BASE = "/v2"       // NO slash at the end
+var OAUTH_BASE = "/oauth2" // NO slash at the end
 var commaByte = []byte{','}
 
 var defaultDomain = "example.com"
+var srvConf *serverConf
+var templates map[string]*template.Template
+var osl *oauth.OauthSilo
+var cs *sessions.CookieStore
 
 func init() {
 	log = logger.GetLogger("sparrow.scim.http")
@@ -43,7 +54,8 @@ func Start(srvHome string) {
 
 	log.Debugf("Starting server...")
 
-	srvConf := initHome(srvHome)
+	srvConf = initHome(srvHome)
+	templates = parseTemplates(srvConf.TmplDir)
 
 	router := mux.NewRouter()
 	router.StrictSlash(true)
@@ -85,6 +97,11 @@ func Start(srvHome string) {
 			scimRouter.HandleFunc("/Schemas/"+sc.Id, getSchemas).Methods("GET")
 		}
 	}
+
+	// OAuth2 requests
+	oauthRouter := router.PathPrefix(OAUTH_BASE).Subrouter()
+	oauthRouter.HandleFunc("/authorize", authorize).Methods("GET")
+	oauthRouter.HandleFunc("/create-client", createClient).Methods("POST")
 
 	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.Port)
 	if srvConf.Https {

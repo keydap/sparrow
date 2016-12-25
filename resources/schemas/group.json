@@ -83,6 +83,17 @@
                     "mutability":"immutable",
                     "returned":"default",
                     "uniqueness":"none"
+                },
+                {
+                    "name":"restypes",
+                    "type":"string",
+                    "multiValued":true,
+                    "description":"Comma separated values of the ResourceTypes on which this permission applies",
+                    "required":false,
+                    "caseExact":false,
+                    "mutability":"immutable",
+                    "returned":"default",
+                    "uniqueness":"none"
                 }
             ],
             "mutability":"readWrite",

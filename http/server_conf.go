@@ -6,9 +6,13 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/gorilla/securecookie"
+	"github.com/gorilla/sessions"
+	"html/template"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sparrow/oauth"
 	"sparrow/provider"
 	"sparrow/utils"
 	"strings"
@@ -20,6 +24,8 @@ type serverConf struct {
 	Ipaddress   string `json:"ipaddress"`
 	CertFile    string `json:"certificate"`
 	PrivKeyFile string `json:"privatekey"`
+	TmplDir     string // template directory
+	OauthDir    string // template directory
 	CertChain   []*x509.Certificate
 	PrivKey     crypto.PrivateKey
 	PubKey      crypto.PublicKey
@@ -41,10 +47,20 @@ func initHome(srvHome string) *serverConf {
 	log.Debugf("Checking server's configuration directory %s", srvConfDir)
 	utils.CheckAndCreate(srvConfDir)
 
+	tmplDir := filepath.Join(srvHome, "templates")
+	log.Debugf("Checking server's templates directory %s", tmplDir)
+	utils.CheckAndCreate(tmplDir)
+
+	oauthDir := filepath.Join(srvHome, "oauth")
+	log.Debugf("Checking server's oauth directory %s", oauthDir)
+	utils.CheckAndCreate(oauthDir)
+
 	srvConfPath := filepath.Join(srvConfDir, "server.json")
 	_, err := os.Stat(srvConfPath)
 
 	sc := &serverConf{}
+	sc.TmplDir = tmplDir
+	sc.OauthDir = oauthDir
 
 	if err != nil {
 		err = ioutil.WriteFile(srvConfPath, []byte(DEFAULT_SRV_CONF), 0644)
@@ -105,6 +121,15 @@ func initHome(srvHome string) *serverConf {
 	if len(providers) == 0 {
 		createDefaultDomain(domainsDir, sc)
 	}
+
+	odbFilePath := filepath.Join(sc.OauthDir, "oauth.db")
+	osl, err = oauth.Open(odbFilePath)
+
+	if err != nil {
+		panic(err)
+	}
+
+	cs = sessions.NewCookieStore(securecookie.GenerateRandomKey(32))
 
 	return sc
 }
@@ -241,4 +266,37 @@ func copyDir(src, dest string) {
 			panic(err)
 		}
 	}
+}
+
+func parseTemplates(tmplDir string) map[string]*template.Template {
+	templates := make(map[string]*template.Template)
+
+	dir, err := os.Open(tmplDir)
+	if err == nil {
+		files, err := dir.Readdir(0)
+		if err != nil {
+			log.Warningf("Failed to read template directory %s [%s]", tmplDir, err)
+		} else {
+			for _, f := range files {
+				if f.IsDir() {
+					continue
+				}
+
+				name := f.Name()
+				if strings.HasSuffix(name, ".html") {
+					absFilePath := filepath.Join(tmplDir, name)
+					tmpl, err := template.ParseFiles(absFilePath)
+					if err != nil {
+						log.Warningf("Failed to parse the template %s [%s]", name, err)
+					} else {
+						templates[name] = tmpl
+					}
+				}
+			}
+		}
+	} else {
+		log.Warningf("Failed to open template directory %s [%s]", tmplDir, err)
+	}
+
+	return templates
 }

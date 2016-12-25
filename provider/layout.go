@@ -12,6 +12,7 @@ type Layout struct {
 	SchemaDir   string
 	DataDir     string
 	LogDir      string
+	TmplDir     string // template directory
 	ResTypesDir string
 	name        string
 }
