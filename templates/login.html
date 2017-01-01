@@ -5,7 +5,7 @@
 </head>
 <body>
 	<div>
-		<form method="post" action="login">
+		<form method="post" action="/verifyPassword">
 			<table>
 				<tr>
 					<td><label>User Name:</label></td>
@@ -25,6 +25,11 @@
 					<td><input type="submit" value="Login" /></td>
 					<td><input type="button" value="Cancel" onclick="cancel()" /></td>
 				</tr>
+				{{range $k, $v := .}}
+				<tr>
+					<td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
+				</tr>
+				{{end}}
 			</table>
 		</form>
 	</div>
