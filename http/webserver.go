@@ -102,6 +102,10 @@ func Start(srvHome string) {
 	oauthRouter := router.PathPrefix(OAUTH_BASE).Subrouter()
 	oauthRouter.HandleFunc("/authorize", authorize).Methods("GET")
 	oauthRouter.HandleFunc("/create-client", createClient).Methods("POST")
+	oauthRouter.HandleFunc("/token", sendToken).Methods("GET")
+
+	router.HandleFunc("/login", showLogin).Methods("GET")
+	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
 
 	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.Port)
 	if srvConf.Https {

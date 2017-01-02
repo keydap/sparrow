@@ -39,6 +39,8 @@ var DEFAULT_SRV_CONF string = `{
     "privatekey": "default.key"
 }`
 
+var COOKIE_LOGIN_NAME string = "SPLCN"
+
 func initHome(srvHome string) *serverConf {
 	log.Debugf("Checking server home directory %s", srvHome)
 	utils.CheckAndCreate(srvHome)

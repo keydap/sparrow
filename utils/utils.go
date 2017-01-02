@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	logger "github.com/juju/loggo"
 	"math"
@@ -12,6 +13,8 @@ import (
 var DIR_PERM os.FileMode = 0744 //rwxr--r--
 
 var log logger.Logger
+
+var urlEncoder = base64.URLEncoding.WithPadding(base64.NoPadding)
 
 func init() {
 	log = logger.GetLogger("sparrow.scim.utils")
@@ -111,4 +114,23 @@ func CheckAndCreate(dirName string) {
 		log.Criticalf(s.Error())
 		panic(s)
 	}
+}
+
+func RandBytes() []byte {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return b
+}
+
+func NewRandStr() string {
+	return B64Encode(RandBytes())
+}
+
+func B64Encode(data []byte) string {
+	return urlEncoder.EncodeToString(data)
+}
+
+func B64Decode(val string) []byte {
+	data, _ := urlEncoder.DecodeString(val)
+	return data
 }

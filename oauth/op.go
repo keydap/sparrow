@@ -1,8 +1,6 @@
 package oauth
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"sparrow/utils"
 	"strings"
@@ -25,14 +23,14 @@ const (
 	ERR_TEMPORARILY_UNAVAILABLE   = "temporarily_unavailable"
 )
 
-var urlEncoder = base64.URLEncoding.WithPadding(base64.NoPadding)
-
 type Client struct {
-	Id     string `json:"id"`
-	Secret string `json:"secret"`
-	Time   int64  `json:"time"`
-	Desc   string `json:"desc"`
-	RedUri string `json:"redUri"`
+	Id            string `json:"id"`
+	Secret        string `json:"secret"`
+	Time          int64  `json:"time"`
+	Desc          string `json:"desc"`
+	RedUri        string `json:"redUri"`
+	ServerSecret  []byte `json:"-"` // the secret used as a key
+	HasQueryInUri bool   `json:"-"` // flag to indicate if there is query part in the path
 }
 
 type AuthorizationReq struct {
@@ -60,6 +58,7 @@ type AccessTokenReq struct {
 	Code      string `json:"code"`
 	RedUri    string `json:"redirect_uri"`
 	ClientId  string `json:"client_id"`
+	Secret    string `json:"client_secret"`
 }
 
 type AccessTokenResp struct {
@@ -70,17 +69,12 @@ type AccessTokenResp struct {
 
 func NewClient() *Client {
 	cl := &Client{}
-	cl.Id = newRandStr()
-	cl.Secret = newRandStr()
+	cl.Id = utils.NewRandStr()
+	cl.Secret = utils.NewRandStr()
 	cl.Time = utils.DateTimeMillis()
+	cl.ServerSecret = utils.RandBytes()
 
 	return cl
-}
-
-func newRandStr() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return urlEncoder.EncodeToString(b)
 }
 
 func (ep *ErrorResp) Serialize() []byte {
