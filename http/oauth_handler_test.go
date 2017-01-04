@@ -8,15 +8,31 @@ import (
 )
 
 func TestCodeGeneration(t *testing.T) {
-	key := utils.RandBytes()
+	key := utils.Rand32()
 	ttl := time.Now()
+	id := utils.GenUUID()
 
-	code := newOauthCode(key, ttl)
+	domain := "example.com"
+	var domCode uint32
+	for _, r := range domain {
+		domCode += uint32(r)
+	}
+
+	code := newOauthCode(key, ttl, id, domCode)
 	fmt.Println(code)
 
-	decryptedTtl := decryptOauthCode(code, key)
+	ac := decryptOauthCode(code, key)
 
-	if ttl.Unix() != decryptedTtl.Unix() {
-		t.Errorf("Decrypted value does not match encrypted one %s != %s", ttl, decryptedTtl)
+	if ac.CreatedAt != ttl.Unix() {
+		t.Errorf("Decrypted time does not match encrypted one %s != %s", ac.CreatedAt, ttl.Unix())
 	}
+
+	if ac.Id != id {
+		t.Errorf("Decrypted ID does not match encrypted one %s != %s", id, ac.Id)
+	}
+
+	if ac.DomainCode != domCode {
+		t.Errorf("Decrypted domain code does not match encrypted one %d != %d", domCode, ac.DomainCode)
+	}
+
 }

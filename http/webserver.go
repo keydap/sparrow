@@ -22,6 +22,10 @@ var log logger.Logger
 
 var providers = make(map[string]*provider.Provider)
 
+// a map of providers keyed using the hashcode of the domain name
+// this exists to keep the length of Oauth code fixed to N bytes
+var dcPrvMap = make(map[uint32]*provider.Provider)
+
 var DIR_PERM os.FileMode = 0744 //rwxr--r--
 
 var TENANT_HEADER = "X-Sparrow-Tenant-Id"
@@ -611,7 +615,13 @@ func issueToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ar.Domain = normDomain
-	token, err := pr.Authenticate(ar)
+	user := pr.Authenticate(ar.Username, ar.Password)
+	if user == nil {
+		writeError(w, base.NewBadRequestError("Invalid credentials"))
+		return
+	}
+
+	token, err := pr.GetToken(user.GetId())
 	if err != nil {
 		writeError(w, err)
 		return

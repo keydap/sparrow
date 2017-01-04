@@ -10,6 +10,8 @@ import (
 var (
 	// a bucket that holds the clients.
 	BUC_OAUTH_CLIENTS = []byte("oauth_clients")
+
+	BUC_OAUTH_TOKENS = []byte("oauth_tokens")
 )
 
 type OauthSilo struct {
@@ -31,6 +33,11 @@ func Open(path string) (osl *OauthSilo, err error) {
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(BUC_OAUTH_CLIENTS)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateBucketIfNotExists(BUC_OAUTH_TOKENS)
 		if err != nil {
 			return err
 		}

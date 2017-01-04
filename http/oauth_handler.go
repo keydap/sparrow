@@ -23,34 +23,41 @@ type authFlow struct {
 	PsVerified  bool
 	TfaVerified bool
 	TfaRequired bool
-	Hash        []byte
+	Id          string
+	DomainCode  uint32
 }
 
-func newOauthCode(key []byte, ttl time.Time) string {
-	ttlBytes := utils.Itob(ttl.Unix())
-	ttlBytesLen := len(ttlBytes)
+type authCode struct {
+	Id         string
+	DomainCode uint32
+	CreatedAt  int64
+}
+
+func newOauthCode(key []byte, createdAt time.Time, id string, domainCode uint32) string {
+	iv := utils.RandBytes(aes.BlockSize)
+	dataLen := aes.BlockSize + 36 + 4 + 8
+
+	dst := make([]byte, dataLen)
+	copy(dst, iv)
+	copy(dst[aes.BlockSize:], []byte(id))
+	copy(dst[aes.BlockSize+36:], utils.EncodeUint32(domainCode))
+	copy(dst[aes.BlockSize+36+4:], utils.Itob(createdAt.Unix()))
 
 	block, _ := aes.NewCipher(key)
-	randBytes := utils.RandBytes() // contains 32 bytes
-	iv := randBytes[:aes.BlockSize]
 	cbc := cipher.NewCBCEncrypter(block, iv)
-	dst := make([]byte, aes.BlockSize+ttlBytesLen+8)
-	copy(dst, iv)
-	copy(dst[aes.BlockSize:], ttlBytes)
-	copy(dst[aes.BlockSize+ttlBytesLen:], randBytes[24:])
 
 	cbc.CryptBlocks(dst[aes.BlockSize:], dst[aes.BlockSize:])
 
 	return utils.B64Encode(dst)
 }
 
-func decryptOauthCode(code string, key []byte) *time.Time {
+func decryptOauthCode(code string, key []byte) *authCode {
 	data := utils.B64Decode(code)
 	if data == nil {
 		return nil
 	}
 
-	if len(data) != 32 { // 16 bytes of IV, 8 bytes of time and 8 random bytes
+	if len(data) != 64 {
 		log.Debugf("Invalid authorization code received, insufficent bytes")
 		return nil
 	}
@@ -61,10 +68,13 @@ func decryptOauthCode(code string, key []byte) *time.Time {
 
 	cbc.CryptBlocks(dst, data[aes.BlockSize:])
 
-	unixTime := utils.Btoi(dst[:8])
-	t := time.Unix(unixTime, 0)
+	ac := &authCode{}
 
-	return &t
+	ac.Id = string(dst[:36])
+	ac.DomainCode = utils.DecodeUint32(dst[36:40])
+	ac.CreatedAt = utils.Btoi(dst[40:])
+
+	return ac
 }
 
 func createClient(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +139,7 @@ func authorize(w http.ResponseWriter, r *http.Request) {
 
 	if af != nil {
 		if af.PsVerified {
-			sendOauthCode(w, r)
+			sendOauthCode(w, r, af)
 			return
 		}
 	}
@@ -154,6 +164,14 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 	atr, err := oauth.ParseAccessTokenReq(r)
 	if err != nil {
 		log.Debugf("Sending error to the oauth client %s", atr.ClientId)
+		sendOauthError(w, r, "", err)
+		return
+	}
+
+	if atr.GrantType != "authorization_code" {
+		ep := &oauth.ErrorResp{}
+		ep.Desc = "Unsupported grant type"
+		ep.Err = oauth.ERR_INVALID_REQUEST
 		sendOauthError(w, r, "", err)
 		return
 	}
@@ -198,8 +216,8 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ttl := decryptOauthCode(atr.Code, cl.ServerSecret)
-	if ttl == nil {
+	ac := decryptOauthCode(atr.Code, cl.ServerSecret)
+	if ac == nil {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Invalid code"
 		ep.Err = oauth.ERR_INVALID_REQUEST
@@ -207,8 +225,10 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ttl.Add(10 * time.Minute)
-	if ttl.After(time.Now()) {
+	now := time.Now().Unix()
+	ttl := ac.CreatedAt + 600 // + 10 minutes
+
+	if ttl < now {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Expired authorization grant code"
 		ep.Err = oauth.ERR_INVALID_REQUEST
@@ -216,10 +236,34 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO send the code
+	prv := dcPrvMap[ac.DomainCode]
+	if prv == nil {
+		ep := &oauth.ErrorResp{}
+		ep.Desc = "Invalid code"
+		ep.Err = oauth.ERR_INVALID_REQUEST
+		sendOauthError(w, r, "", err)
+		return
+	}
+
+	token, err := prv.GetToken(ac.Id)
+	if err != nil {
+		ep := &oauth.ErrorResp{}
+		ep.Desc = "Failed to generate token - " + err.Error()
+		ep.Err = oauth.ERR_SERVER_ERROR
+		sendOauthError(w, r, "", err)
+		return
+	}
+
+	tresp := &oauth.AccessTokenResp{}
+	tresp.AcToken = token
+	//tresp.ExpiresIn = // will be same as the Exp value present in token
+	tresp.TokenType = "bearer"
+
+	w.Header().Add("Content-Type", JSON_TYPE)
+	w.Write(tresp.Serialize())
 }
 
-func sendOauthCode(w http.ResponseWriter, r *http.Request) {
+func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow) {
 	areq, err := oauth.ParseAuthzReq(r)
 
 	if err != nil {
@@ -247,7 +291,7 @@ func sendOauthCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ttl := time.Now()
-	code := newOauthCode(cl.ServerSecret, ttl)
+	code := newOauthCode(cl.ServerSecret, ttl, af.Id, af.DomainCode)
 	tmpUri += url.QueryEscape(code)
 
 	state := r.Form.Get("state")
@@ -329,14 +373,31 @@ func showLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func verifyPassword(w http.ResponseWriter, r *http.Request) {
-	prv, _ := getPrFromParam(r)
-	ar := &base.AuthRequest{}
-	ar.Username = r.Form.Get("username")
-	ar.Password = r.Form.Get("password")
-	ar.Domain = prv.Name
+	username := r.Form.Get("username")
+	password := r.Form.Get("password")
 
-	token, err := prv.Authenticate(ar)
-	if err != nil {
+	domain := defaultDomain
+
+	pos := strings.LastIndexByte(username, '@')
+	unameLen := len(username) - 1
+	if pos > 0 && pos != unameLen {
+		username = username[:pos]
+		domain = strings.ToLower(username[pos+1:])
+	}
+
+	prv := providers[domain]
+
+	if prv == nil {
+		login := templates["login.html"]
+		paramMap := copyParams(r)
+		delete(paramMap, "username")
+		delete(paramMap, "password")
+		login.Execute(w, paramMap)
+		return
+	}
+
+	user := prv.Authenticate(username, password)
+	if user == nil {
 		login := templates["login.html"]
 		paramMap := copyParams(r)
 		delete(paramMap, "username")
@@ -349,6 +410,8 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 	af.PsVerified = true
 	// TODO enable it when the account has TFA capability
 	af.TfaRequired = false
+	af.Id = user.GetId()
+	af.DomainCode = prv.DomainCode()
 
 	var buf bytes.Buffer
 
@@ -364,9 +427,9 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 	ck.Path = "/"
 	ck.Value = sessionToken
 
-	r.AddCookie(ck)
+	http.SetCookie(w, ck)
 
-	w.Write([]byte(token))
+	w.Write([]byte("password verified"))
 }
 
 func sendOauthError(w http.ResponseWriter, r *http.Request, redUri string, err error) {

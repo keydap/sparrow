@@ -64,7 +64,7 @@ type AccessTokenReq struct {
 type AccessTokenResp struct {
 	AcToken   string `json:"access_token"`
 	TokenType string `json:"token_type"`
-	ExpiresIn int    `json:"expires_in"`
+	ExpiresIn int    `json:"expires_in,omitempty"`
 }
 
 func NewClient() *Client {
@@ -72,9 +72,18 @@ func NewClient() *Client {
 	cl.Id = utils.NewRandStr()
 	cl.Secret = utils.NewRandStr()
 	cl.Time = utils.DateTimeMillis()
-	cl.ServerSecret = utils.RandBytes()
+	cl.ServerSecret = utils.Rand32()
 
 	return cl
+}
+
+func (atr *AccessTokenResp) Serialize() []byte {
+	data, err := json.Marshal(atr)
+	if err != nil {
+		return []byte(err.Error())
+	}
+
+	return data
 }
 
 func (ep *ErrorResp) Serialize() []byte {

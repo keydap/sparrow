@@ -34,11 +34,11 @@ func Itob(i int64) []byte {
 		v = uint64(i << 1)
 	}
 
-	return encodeUint(v)
+	return encodeUint64(v)
 }
 
 func Btoi(data []byte) int64 {
-	i := decodeUint(data)
+	i := decodeUint64(data)
 	if i&1 != 0 {
 		return ^int64(i >> 1)
 	} else {
@@ -47,15 +47,15 @@ func Btoi(data []byte) int64 {
 }
 
 func Ftob(f float64) []byte {
-	return encodeUint(math.Float64bits(f))
+	return encodeUint64(math.Float64bits(f))
 }
 
 func Btof(data []byte) float64 {
-	fVal := decodeUint(data)
+	fVal := decodeUint64(data)
 	return math.Float64frombits(fVal)
 }
 
-func decodeUint(data []byte) uint64 {
+func decodeUint64(data []byte) uint64 {
 	if len(data) > 8 {
 		panic("Invalid integer bytes, data length exceeds 8")
 	}
@@ -68,7 +68,7 @@ func decodeUint(data []byte) uint64 {
 	return x
 }
 
-func encodeUint(v uint64) []byte {
+func encodeUint64(v uint64) []byte {
 	data := make([]byte, 8)
 	pos := 7
 	for v > 0 {
@@ -78,6 +78,31 @@ func encodeUint(v uint64) []byte {
 	}
 
 	return data
+}
+
+func EncodeUint32(v uint32) []byte {
+	data := make([]byte, 4)
+	pos := 3
+	for v > 0 {
+		data[pos] = uint8(v)
+		pos--
+		v >>= 8
+	}
+
+	return data
+}
+
+func DecodeUint32(data []byte) uint32 {
+	if len(data) > 4 {
+		panic("Invalid integer bytes, data length exceeds 4")
+	}
+
+	var x uint32
+	for _, b := range data {
+		x = x<<8 | uint32(b)
+	}
+
+	return x
 }
 
 func DateTime() string {
@@ -116,14 +141,18 @@ func CheckAndCreate(dirName string) {
 	}
 }
 
-func RandBytes() []byte {
-	b := make([]byte, 32)
+func RandBytes(n int) []byte {
+	b := make([]byte, n)
 	rand.Read(b)
 	return b
 }
 
+func Rand32() []byte {
+	return RandBytes(32)
+}
+
 func NewRandStr() string {
-	return B64Encode(RandBytes())
+	return B64Encode(Rand32())
 }
 
 func B64Encode(data []byte) string {

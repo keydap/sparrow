@@ -841,6 +841,10 @@ func addToIndex(atPath string, sa *base.SimpleAttribute, rid string, idx *Index,
 
 }
 
+func (sl *Silo) GetUser(rid string) (resource *base.Resource, err error) {
+	return sl.Get(rid, sl.resTypes["User"])
+}
+
 func (sl *Silo) Get(rid string, rt *schema.ResourceType) (resource *base.Resource, err error) {
 	tx, err := sl.db.Begin(false)
 	if err != nil {

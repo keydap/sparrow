@@ -191,6 +191,7 @@ func loadProviders(domainsDir string, sc *serverConf) {
 					prv.PubKey = sc.PubKey
 					prv.PrivKey = sc.PrivKey
 					providers[lName] = prv
+					dcPrvMap[prv.DomainCode()] = prv
 				}
 			}
 		}

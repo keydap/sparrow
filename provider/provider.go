@@ -17,16 +17,17 @@ import (
 )
 
 type Provider struct {
-	Schemas   map[string]*schema.Schema       // a map of Schema ID to Schema
-	RsTypes   map[string]*schema.ResourceType // a map of Name to ResourceTye
-	RtPathMap map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
-	config    *conf.Config
-	sl        *silo.Silo
-	layout    *Layout
-	Name      string // the domain name
-	PubKey    crypto.PublicKey
-	PrivKey   crypto.PrivateKey
-	immResIds map[string]int // map of IDs of resources that cannot be deleted
+	Schemas    map[string]*schema.Schema       // a map of Schema ID to Schema
+	RsTypes    map[string]*schema.ResourceType // a map of Name to ResourceTye
+	RtPathMap  map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
+	config     *conf.Config
+	sl         *silo.Silo
+	layout     *Layout
+	Name       string // the domain name
+	PubKey     crypto.PublicKey
+	PrivKey    crypto.PrivateKey
+	immResIds  map[string]int // map of IDs of resources that cannot be deleted
+	domainCode uint32
 }
 
 const adminGroupId = "00000000-1000-0000-0000-000000000000"
@@ -249,17 +250,39 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err
 	return prv.sl.Patch(patchCtx.Rid, patchCtx.Pr, patchCtx.Rt)
 }
 
-func (prv *Provider) Authenticate(ar *base.AuthRequest) (authToken string, err error) {
-	user, err := prv.sl.Authenticate(ar.Username, ar.Password)
+func (prv *Provider) Authenticate(username string, password string) (res *base.Resource) {
+	user, err := prv.sl.Authenticate(username, password)
 
 	if err != nil {
 		msg := "Invalid username or password"
 		log.Debugf(msg)
-		return "", base.NewForbiddenError(msg)
+		return nil
+	}
+
+	return user
+}
+
+func (prv *Provider) GetToken(rid string) (authToken string, err error) {
+	user, err := prv.sl.GetUser(rid)
+	if err != nil {
+		return "", err
 	}
 
 	session := prv.sl.Engine.NewRbacSession(user)
 	authToken = session.ToJwt(prv.PrivKey)
 
 	return authToken, nil
+}
+
+func (prv *Provider) DomainCode() uint32 {
+	if prv.domainCode != 0 {
+		return prv.domainCode
+	}
+
+	prv.domainCode = 0
+	for _, r := range prv.Name {
+		prv.domainCode += uint32(r)
+	}
+
+	return prv.domainCode
 }
