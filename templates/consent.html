@@ -1,0 +1,33 @@
+<html>
+<head>
+<meta charset="utf-8">
+<title>Grant Authorization</title>
+</head>
+<body>
+	<div>
+		<form method="post" action="/oauth2/consent">
+		 <div>Do you want to authorize client {{.name}}</div>
+			<table>
+			<tr>
+			  <td><input type="button" value="Authorize" onclick="authorize()"/></td>
+			  <td><input type="submit" value="Deny"/></td>
+			</tr>
+			<tr>
+			 <td><input type="hidden" id="consent" name="consent" value="deny"/></td>
+			</tr>
+            {{range $k, $v := .}}
+            <tr>
+                <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
+            </tr>
+            {{end}}
+			</table>
+		</form>
+	</div>
+	<script type="text/javascript">
+	   function authorize() {
+	       document.getElementById('consent').value = 'authorize';
+	       document.forms[0].submit();
+	   }
+	</script>
+</body>
+</html>

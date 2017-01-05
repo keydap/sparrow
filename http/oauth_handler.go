@@ -20,11 +20,13 @@ const COOKIE_SUM string = "ps"
 const BASIC_AUTHZ_PREFIX string = "Basic "
 
 type authFlow struct {
-	PsVerified  bool
-	TfaVerified bool
-	TfaRequired bool
-	Id          string
-	DomainCode  uint32
+	PsVerified   bool
+	TfaVerified  bool
+	TfaRequired  bool
+	FromOauth    bool
+	GrantedAuthz bool
+	Id           string
+	DomainCode   uint32
 }
 
 type authCode struct {
@@ -77,7 +79,7 @@ func decryptOauthCode(code string, key []byte) *authCode {
 	return ac
 }
 
-func createClient(w http.ResponseWriter, r *http.Request) {
+func registerClient(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		writeError(w, base.NewBadRequestError(err.Error()))
@@ -100,7 +102,7 @@ func createClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if redUrl.Scheme != "http" || redUrl.Scheme != "https" {
+	if redUrl.Scheme != "http" && redUrl.Scheme != "https" {
 		msg := fmt.Sprintf("Unknown protocol in the redirect URI %s", redUri)
 		log.Debugf(msg)
 		writeError(w, base.NewBadRequestError(msg))
@@ -135,15 +137,10 @@ func authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	af := decodeAfCookie(r)
+	af := &authFlow{}
+	af.FromOauth = true
 
-	if af != nil {
-		if af.PsVerified {
-			sendOauthCode(w, r, af)
-			return
-		}
-	}
-
+	setAuthFlow(af, w)
 	paramMap := make(map[string]string)
 
 	for k, v := range r.Form {
@@ -158,6 +155,33 @@ func authorize(w http.ResponseWriter, r *http.Request) {
 
 	// do a redirect to /login with all the parameters
 	redirect("/login", w, r, paramMap)
+}
+
+func verifyConsent(w http.ResponseWriter, r *http.Request) {
+	af := getAuthFlow(r)
+
+	if af != nil {
+		if af.PsVerified {
+			r.ParseForm()
+			consent := r.Form.Get("consent")
+			if consent == "authorize" {
+				sendOauthCode(w, r, af)
+			} else {
+				clientId := r.Form.Get("client_id")
+				cl := osl.GetClient(clientId)
+				ep := &oauth.ErrorResp{}
+				ep.State = r.Form.Get("state")
+				if cl == nil {
+					ep.Desc = "Invalid client ID " + clientId
+					ep.Err = oauth.ERR_INVALID_REQUEST
+				} else {
+					ep.Desc = "User did not authorize the request"
+					ep.Err = oauth.ERR_ACCESS_DENIED
+				}
+				sendOauthError(w, r, cl.RedUri, ep)
+			}
+		}
+	}
 }
 
 func sendToken(w http.ResponseWriter, r *http.Request) {
@@ -315,7 +339,7 @@ func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow) {
 	*/
 }
 
-func decodeAfCookie(r *http.Request) *authFlow {
+func getAuthFlow(r *http.Request) *authFlow {
 	ck, err := r.Cookie(COOKIE_SUM)
 	if err != nil {
 		return nil
@@ -373,6 +397,13 @@ func showLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func verifyPassword(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		log.Debugf("Failed to parse the oauth request %s", err)
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
 	username := r.Form.Get("username")
 	password := r.Form.Get("password")
 
@@ -387,11 +418,12 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 
 	prv := providers[domain]
 
+	paramMap := copyParams(r)
+	delete(paramMap, "username")
+	delete(paramMap, "password")
+
 	if prv == nil {
 		login := templates["login.html"]
-		paramMap := copyParams(r)
-		delete(paramMap, "username")
-		delete(paramMap, "password")
 		login.Execute(w, paramMap)
 		return
 	}
@@ -399,20 +431,32 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 	user := prv.Authenticate(username, password)
 	if user == nil {
 		login := templates["login.html"]
-		paramMap := copyParams(r)
-		delete(paramMap, "username")
-		delete(paramMap, "password")
 		login.Execute(w, paramMap)
 		return
 	}
 
-	af := &authFlow{}
-	af.PsVerified = true
-	// TODO enable it when the account has TFA capability
-	af.TfaRequired = false
-	af.Id = user.GetId()
-	af.DomainCode = prv.DomainCode()
+	af := getAuthFlow(r)
 
+	if af == nil {
+		af = &authFlow{}
+	}
+
+	if af.FromOauth {
+		af.PsVerified = true
+		// TODO enable it when the account has TFA capability
+		af.TfaRequired = false
+		af.Id = user.GetId()
+		af.DomainCode = prv.DomainCode()
+		setAuthFlow(af, w)
+		login := templates["consent.html"]
+		login.Execute(w, paramMap)
+		return
+	}
+
+	w.Write([]byte("password verified"))
+}
+
+func setAuthFlow(af *authFlow, w http.ResponseWriter) {
 	var buf bytes.Buffer
 
 	enc := gob.NewEncoder(&buf)
@@ -421,15 +465,13 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 	sessionToken := utils.B64Encode(buf.Bytes())
 
 	ck := &http.Cookie{}
-	ck.Expires = time.Now().Add(1 * time.Minute)
+	ck.Expires = time.Now().Add(2 * time.Minute)
 	ck.HttpOnly = true
 	ck.Name = COOKIE_SUM
 	ck.Path = "/"
 	ck.Value = sessionToken
 
 	http.SetCookie(w, ck)
-
-	w.Write([]byte("password verified"))
 }
 
 func sendOauthError(w http.ResponseWriter, r *http.Request, redUri string, err error) {
