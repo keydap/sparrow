@@ -196,7 +196,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Unsupported grant type"
 		ep.Err = oauth.ERR_INVALID_REQUEST
-		sendOauthError(w, r, "", err)
+		sendOauthError(w, r, "", ep)
 		return
 	}
 
@@ -207,7 +207,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 			ep := &oauth.ErrorResp{}
 			ep.Desc = "Unsupported authorization type, only Basic is supported"
 			ep.Err = oauth.ERR_INVALID_REQUEST
-			sendOauthError(w, r, "", err)
+			sendOauthError(w, r, "", ep)
 			return
 		}
 
@@ -217,7 +217,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 			ep := &oauth.ErrorResp{}
 			ep.Desc = "Invalid authorization header"
 			ep.Err = oauth.ERR_INVALID_REQUEST
-			sendOauthError(w, r, "", err)
+			sendOauthError(w, r, "", ep)
 			return
 		}
 
@@ -245,7 +245,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Invalid code"
 		ep.Err = oauth.ERR_INVALID_REQUEST
-		sendOauthError(w, r, "", err)
+		sendOauthError(w, r, "", ep)
 		return
 	}
 
@@ -256,7 +256,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Expired authorization grant code"
 		ep.Err = oauth.ERR_INVALID_REQUEST
-		sendOauthError(w, r, "", err)
+		sendOauthError(w, r, "", ep)
 		return
 	}
 
@@ -265,7 +265,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Invalid code"
 		ep.Err = oauth.ERR_INVALID_REQUEST
-		sendOauthError(w, r, "", err)
+		sendOauthError(w, r, "", ep)
 		return
 	}
 
@@ -274,7 +274,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Failed to generate token - " + err.Error()
 		ep.Err = oauth.ERR_SERVER_ERROR
-		sendOauthError(w, r, "", err)
+		sendOauthError(w, r, "", ep)
 		return
 	}
 
