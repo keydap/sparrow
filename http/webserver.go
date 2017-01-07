@@ -106,7 +106,7 @@ func Start(srvHome string) {
 	oauthRouter := router.PathPrefix(OAUTH_BASE).Subrouter()
 	oauthRouter.HandleFunc("/authorize", authorize).Methods("GET", "POST")
 	oauthRouter.HandleFunc("/register", registerClient).Methods("POST")
-	oauthRouter.HandleFunc("/token", sendToken).Methods("GET")
+	oauthRouter.HandleFunc("/token", sendToken).Methods("POST")
 	oauthRouter.HandleFunc("/consent", verifyConsent).Methods("POST")
 
 	router.HandleFunc("/login", showLogin).Methods("GET")
