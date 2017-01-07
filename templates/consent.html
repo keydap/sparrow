@@ -9,8 +9,8 @@
 		 <div>Do you want to authorize client {{.name}}</div>
 			<table>
 			<tr>
-			  <td><input type="button" value="Authorize" onclick="authorize()"/></td>
-			  <td><input type="submit" value="Deny"/></td>
+			  <td><input type="button" id="authz" value="Authorize" onclick="authorize()"/></td>
+			  <td><input type="submit" id="deny" value="Deny"/></td>
 			</tr>
 			<tr>
 			 <td><input type="hidden" id="consent" name="consent" value="deny"/></td>
