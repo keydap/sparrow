@@ -2,13 +2,13 @@ package http
 
 import (
 	"fmt"
+	"sparrow/oauth"
 	"sparrow/utils"
 	"testing"
 	"time"
 )
 
 func TestCodeGeneration(t *testing.T) {
-	key := utils.Rand32()
 	ttl := time.Now()
 	id := utils.GenUUID()
 
@@ -18,21 +18,30 @@ func TestCodeGeneration(t *testing.T) {
 		domCode += uint32(r)
 	}
 
-	code := newOauthCode(key, ttl, id, domCode)
+	cl := oauth.NewClient()
+
+	code := newOauthCode(cl, ttl, id, domCode)
 	fmt.Println(code)
 
-	ac := decryptOauthCode(code, key)
+	ac := decryptOauthCode(code, cl)
 
 	if ac.CreatedAt != ttl.Unix() {
 		t.Errorf("Decrypted time does not match encrypted one %s != %s", ac.CreatedAt, ttl.Unix())
 	}
 
-	if ac.Id != id {
-		t.Errorf("Decrypted ID does not match encrypted one %s != %s", id, ac.Id)
+	if ac.UserId != id {
+		t.Errorf("Decrypted ID does not match encrypted one %s != %s", id, ac.UserId)
 	}
 
 	if ac.DomainCode != domCode {
 		t.Errorf("Decrypted domain code does not match encrypted one %d != %d", domCode, ac.DomainCode)
 	}
 
+	codeSlice := []byte(code)
+	fmt.Println(code[0] - 1)
+	codeSlice[0] = code[0] - 1
+	ac = decryptOauthCode(string(codeSlice), cl)
+	if ac != nil {
+		t.Errorf("Decoding should fail when code is tampered")
+	}
 }

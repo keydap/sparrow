@@ -2,8 +2,6 @@ package http
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
@@ -16,8 +14,12 @@ import (
 	"time"
 )
 
-const COOKIE_SUM string = "ps"
+// the authflow cookie
+const AUTHFLOW_COOKIE string = "_afc"
 const BASIC_AUTHZ_PREFIX string = "Basic "
+
+// the number of seconds an oauth code is valid for
+const OAUTH_CODE_TTL int = 600
 
 type authFlow struct {
 	PsVerified   bool
@@ -25,58 +27,8 @@ type authFlow struct {
 	TfaRequired  bool
 	FromOauth    bool
 	GrantedAuthz bool
-	Id           string
+	UserId       string
 	DomainCode   uint32
-}
-
-type authCode struct {
-	Id         string
-	DomainCode uint32
-	CreatedAt  int64
-}
-
-func newOauthCode(key []byte, createdAt time.Time, id string, domainCode uint32) string {
-	iv := utils.RandBytes(aes.BlockSize)
-	dataLen := aes.BlockSize + 36 + 4 + 8
-
-	dst := make([]byte, dataLen)
-	copy(dst, iv)
-	copy(dst[aes.BlockSize:], []byte(id))
-	copy(dst[aes.BlockSize+36:], utils.EncodeUint32(domainCode))
-	copy(dst[aes.BlockSize+36+4:], utils.Itob(createdAt.Unix()))
-
-	block, _ := aes.NewCipher(key)
-	cbc := cipher.NewCBCEncrypter(block, iv)
-
-	cbc.CryptBlocks(dst[aes.BlockSize:], dst[aes.BlockSize:])
-
-	return utils.B64Encode(dst)
-}
-
-func decryptOauthCode(code string, key []byte) *authCode {
-	data := utils.B64Decode(code)
-	if data == nil {
-		return nil
-	}
-
-	if len(data) != 64 {
-		log.Debugf("Invalid authorization code received, insufficent bytes")
-		return nil
-	}
-
-	block, _ := aes.NewCipher(key)
-	cbc := cipher.NewCBCDecrypter(block, data[:aes.BlockSize])
-	dst := make([]byte, len(data)-aes.BlockSize)
-
-	cbc.CryptBlocks(dst, data[aes.BlockSize:])
-
-	ac := &authCode{}
-
-	ac.Id = string(dst[:36])
-	ac.DomainCode = utils.DecodeUint32(dst[36:40])
-	ac.CreatedAt = utils.Btoi(dst[40:])
-
-	return ac
 }
 
 func registerClient(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +192,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ac := decryptOauthCode(atr.Code, cl.ServerSecret)
+	ac := decryptOauthCode(atr.Code, cl)
 	if ac == nil {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Invalid code"
@@ -269,7 +221,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := prv.GetToken(ac.Id)
+	token, err := prv.GetToken(ac.UserId)
 	if err != nil {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Failed to generate token - " + err.Error()
@@ -315,7 +267,7 @@ func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow) {
 	}
 
 	ttl := time.Now()
-	code := newOauthCode(cl.ServerSecret, ttl, af.Id, af.DomainCode)
+	code := newOauthCode(cl, ttl, af.UserId, af.DomainCode)
 	tmpUri += url.QueryEscape(code)
 
 	state := r.Form.Get("state")
@@ -324,6 +276,8 @@ func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow) {
 		tmpUri += "&state=" + state
 	}
 
+	// delete the authflow cookie
+	setAuthFlow(nil, w)
 	http.Redirect(w, r, tmpUri, http.StatusFound)
 
 	// ignore the received redirect URI
@@ -340,7 +294,7 @@ func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow) {
 }
 
 func getAuthFlow(r *http.Request) *authFlow {
-	ck, err := r.Cookie(COOKIE_SUM)
+	ck, err := r.Cookie(AUTHFLOW_COOKIE)
 	if err != nil {
 		return nil
 	}
@@ -445,7 +399,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		af.PsVerified = true
 		// TODO enable it when the account has TFA capability
 		af.TfaRequired = false
-		af.Id = user.GetId()
+		af.UserId = user.GetId()
 		af.DomainCode = prv.DomainCode()
 		setAuthFlow(af, w)
 		login := templates["consent.html"]
@@ -457,19 +411,25 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func setAuthFlow(af *authFlow, w http.ResponseWriter) {
-	var buf bytes.Buffer
-
-	enc := gob.NewEncoder(&buf)
-	enc.Encode(af)
-
-	sessionToken := utils.B64Encode(buf.Bytes())
-
 	ck := &http.Cookie{}
-	ck.Expires = time.Now().Add(2 * time.Minute)
 	ck.HttpOnly = true
-	ck.Name = COOKIE_SUM
+	ck.Name = AUTHFLOW_COOKIE
 	ck.Path = "/"
-	ck.Value = sessionToken
+	ck.Value = ""
+
+	if af != nil {
+		var buf bytes.Buffer
+
+		enc := gob.NewEncoder(&buf)
+		enc.Encode(af)
+
+		sessionToken := utils.B64Encode(buf.Bytes())
+
+		ck.Value = sessionToken
+		ck.Expires = time.Now().Add(2 * time.Minute)
+	} else {
+		ck.MaxAge = -1
+	}
 
 	http.SetCookie(w, ck)
 }
