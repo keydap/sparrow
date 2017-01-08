@@ -43,7 +43,7 @@ func TestAddClient(t *testing.T) {
 
 	osl.AddClient(cl)
 
-	loaded, _ := osl.GetClient(cl.Id)
+	loaded := osl.GetClient(cl.Id)
 	if loaded == nil {
 		t.Errorf("Failed to retrieve the client %s", cl.Id)
 	}
