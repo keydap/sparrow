@@ -19,16 +19,17 @@ import (
 )
 
 type serverConf struct {
-	Https       bool   `json:"enable-https"`
-	Port        int    `json:"port"`
-	Ipaddress   string `json:"ipaddress"`
-	CertFile    string `json:"certificate"`
-	PrivKeyFile string `json:"privatekey"`
-	TmplDir     string // template directory
-	OauthDir    string // template directory
-	CertChain   []*x509.Certificate
-	PrivKey     crypto.PrivateKey
-	PubKey      crypto.PublicKey
+	Https              bool   `json:"enable-https"`
+	Port               int    `json:"port"`
+	Ipaddress          string `json:"ipaddress"`
+	CertFile           string `json:"certificate"`
+	PrivKeyFile        string `json:"privatekey"`
+	TmplDir            string // template directory
+	OauthDir           string // template directory
+	CertChain          []*x509.Certificate
+	PrivKey            crypto.PrivateKey
+	PubKey             crypto.PublicKey
+	TokenPurgeInterval int // the number of seconds to wait between successive purges of expired tokens
 }
 
 var DEFAULT_SRV_CONF string = `{
