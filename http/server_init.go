@@ -23,7 +23,8 @@ var DEFAULT_SRV_CONF string = `{
     "port" : 7090,
     "ipaddress" : "0.0.0.0",
     "certificate": "default.cer",
-    "privatekey": "default.key"
+    "privatekey": "default.key",
+    "token-purge-interval": 120
 }`
 
 var COOKIE_LOGIN_NAME string = "SPLCN"

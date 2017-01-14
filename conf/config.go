@@ -18,7 +18,7 @@ type ServerConf struct {
 	CertChain          []*x509.Certificate
 	PrivKey            crypto.PrivateKey
 	PubKey             crypto.PublicKey
-	TokenPurgeInterval int // the number of seconds to wait between successive purges of expired tokens
+	TokenPurgeInterval int `json:"token-purge-interval"` // the number of seconds to wait between successive purges of expired tokens
 }
 
 type AuthenticationScheme struct {
