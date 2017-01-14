@@ -44,6 +44,7 @@ type RbacSession struct {
 	Exp      int64             `json:"exp"`
 	Iat      int64             `json:"iat"`
 	Jti      string            `json:"jti"`
+	Ito      string            `json:"ito"` // The ID of the oAuth client to who this JWT was sent to
 	//Aud      string         `json:"aud"`
 	//Nbf	int64 `json:"nbf"`
 }
