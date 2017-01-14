@@ -3,7 +3,23 @@ package conf
 import (
 	"encoding/json"
 	"io/ioutil"
+	"crypto"
+	"crypto/x509"
 )
+
+type ServerConf struct {
+	Https              bool   `json:"enable-https"`
+	Port               int    `json:"port"`
+	Ipaddress          string `json:"ipaddress"`
+	CertFile           string `json:"certificate"`
+	PrivKeyFile        string `json:"privatekey"`
+	TmplDir            string // template directory
+	OauthDir           string // template directory
+	CertChain          []*x509.Certificate
+	PrivKey            crypto.PrivateKey
+	PubKey             crypto.PublicKey
+	TokenPurgeInterval int // the number of seconds to wait between successive purges of expired tokens
+}
 
 type AuthenticationScheme struct {
 	Description      string

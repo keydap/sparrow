@@ -14,6 +14,7 @@ import (
 	"sparrow/oauth"
 	"sparrow/provider"
 	"sparrow/schema"
+	"sparrow/conf"
 	"strconv"
 	"strings"
 )
@@ -38,7 +39,7 @@ var OAUTH_BASE = "/oauth2" // NO slash at the end
 var commaByte = []byte{','}
 
 var defaultDomain = "example.com"
-var srvConf *serverConf
+var srvConf *conf.ServerConf
 var templates map[string]*template.Template
 var osl *oauth.OauthSilo
 var cs *sessions.CookieStore

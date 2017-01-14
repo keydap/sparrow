@@ -1,7 +1,6 @@
 package http
 
 import (
-	"crypto"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -15,22 +14,9 @@ import (
 	"sparrow/oauth"
 	"sparrow/provider"
 	"sparrow/utils"
+	"sparrow/conf"
 	"strings"
 )
-
-type serverConf struct {
-	Https              bool   `json:"enable-https"`
-	Port               int    `json:"port"`
-	Ipaddress          string `json:"ipaddress"`
-	CertFile           string `json:"certificate"`
-	PrivKeyFile        string `json:"privatekey"`
-	TmplDir            string // template directory
-	OauthDir           string // template directory
-	CertChain          []*x509.Certificate
-	PrivKey            crypto.PrivateKey
-	PubKey             crypto.PublicKey
-	TokenPurgeInterval int // the number of seconds to wait between successive purges of expired tokens
-}
 
 var DEFAULT_SRV_CONF string = `{
     "enable-https" : false,
@@ -42,7 +28,7 @@ var DEFAULT_SRV_CONF string = `{
 
 var COOKIE_LOGIN_NAME string = "SPLCN"
 
-func initHome(srvHome string) *serverConf {
+func initHome(srvHome string) *conf.ServerConf {
 	log.Debugf("Checking server home directory %s", srvHome)
 	utils.CheckAndCreate(srvHome)
 
@@ -61,7 +47,7 @@ func initHome(srvHome string) *serverConf {
 	srvConfPath := filepath.Join(srvConfDir, "server.json")
 	_, err := os.Stat(srvConfPath)
 
-	sc := &serverConf{}
+	sc := &conf.ServerConf{}
 	sc.TmplDir = tmplDir
 	sc.OauthDir = oauthDir
 
@@ -126,7 +112,7 @@ func initHome(srvHome string) *serverConf {
 	}
 
 	odbFilePath := filepath.Join(sc.OauthDir, "oauth.db")
-	osl, err = oauth.Open(odbFilePath)
+	osl, err = oauth.Open(odbFilePath, sc)
 
 	if err != nil {
 		panic(err)
@@ -157,7 +143,7 @@ func pemDecode(srvConfDir string, givenFilePath string) (data []byte, absFilePat
 	return pb.Bytes, givenFilePath, nil
 }
 
-func loadProviders(domainsDir string, sc *serverConf) {
+func loadProviders(domainsDir string, sc *conf.ServerConf) {
 	log.Infof("Loading domains")
 	dir, err := os.Open(domainsDir)
 	if err != nil {
@@ -201,7 +187,7 @@ func loadProviders(domainsDir string, sc *serverConf) {
 	log.Infof("Loaded providers for %d domains", len(providers))
 }
 
-func createDefaultDomain(domainsDir string, sc *serverConf) {
+func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 	log.Infof("Creating default domain")
 
 	defaultDomain := filepath.Join(domainsDir, "example.com")
