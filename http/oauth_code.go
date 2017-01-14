@@ -13,6 +13,13 @@ import (
 
 const macLen int = 32 // length of HMAC
 
+// Represents OAuth code returned to clients
+// this structure helps in identifying the corresponding
+// user for whom this code was issued before generating
+// the access token, hence keeps the server working in a
+// stateless fashion.
+// The use of maps for holding either issued or used codes
+// is inefficient
 type oAuthCode struct {
 	IvAsId     string // the random IV in HEX form. It will be used as the unique ID for each oAuth code
 	UserId     string
