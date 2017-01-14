@@ -228,7 +228,7 @@ func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource)
 		return base.NewForbiddenError("Insufficent privileges to search resources")
 	}
 
-	sc.MaxResults = prv.config.Filter.MaxResults
+	sc.MaxResults = prv.config.Scim.Filter.MaxResults
 	go prv.sl.Search(sc, outPipe)
 
 	return nil

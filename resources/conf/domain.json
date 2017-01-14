@@ -1,58 +1,67 @@
 {
-    "schemas":[
-        "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
-    ],
-    "documentationUri":"http://keydap.com/sparrow/scim",
-    "patch":{
-        "supported":true
-    },
-    "bulk":{
-        "supported":true,
-        "maxOperations":1000,
-        "maxPayloadSize":1048576
-    },
-    "filter":{
-        "supported":true,
-        "maxResults":200
-    },
-    "changePassword":{
-        "supported":true
-    },
-    "sort":{
-        "supported":true
-    },
-    "etag":{
-        "supported":true
-    },
-    
-    "resources": [
-      {
-          "name": "User",
-          "indexfields": ["userName", "name.givenName", "employeeNumber", "organization", "emails.value"]
-      }
-    ],
-    "authenticationSchemes":[
-        {
-            "name":"OAuth Bearer Token",
-            "description":"Authentication scheme using the OAuth Bearer Token Standard",
-            "specUri":"http://www.rfc-editor.org/info/rfc6750",
-            "documentationUri":"http://keydap.com/sparrow/scim",
-            "type":"oauthbearertoken",
-            "primary":true
+    "scim": {
+        "schemas": [
+            "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
+        ],
+
+        "documentationUri": "http://keydap.com/sparrow/scim",
+        "patch": {
+            "supported": true
         },
-        {
-            "name":"HTTP Basic",
-            "description":"Authentication scheme using the HTTP Basic Standard",
-            "specUri":"http://www.rfc-editor.org/info/rfc2617",
-            "documentationUri":"http://keydap.com/sparrow/scim",
-            "type":"httpbasic"
+
+        "bulk": {
+            "supported": false,
+            "maxOperations": 1000,
+            "maxPayloadSize": 1048576
+        },
+
+        "filter": {
+            "supported": true,
+            "maxResults": 200
+        },
+
+        "changePassword": {
+            "supported": true
+        },
+
+        "sort": {
+            "supported": false
+        },
+
+        "etag": {
+            "supported": true
+        },
+
+        "resources": [
+            {
+                "name": "User",
+                "indexfields": [
+                    "userName",
+                    "name.givenName",
+                    "employeeNumber",
+                    "organization",
+                    "emails.value"
+                ]
+            }
+        ],
+
+        "authenticationSchemes": [
+            {
+                "name": "OAuth Bearer Token",
+                "description": "Authentication scheme using the OAuth Bearer Token Standard",
+                "specUri": "http://www.rfc-editor.org/info/rfc6750",
+                "documentationUri": "http://keydap.com/sparrow/scim",
+                "type": "oauthbearertoken",
+                "primary": true
+            }
+        ],
+
+        "meta": {
+            "location": "/v2/ServiceProviderConfig",
+            "resourceType": "ServiceProviderConfig",
+            "created": "2016-01-31T18:09:00Z",
+            "lastModified": "2016-01-31T18:09:00Z",
+            "version": "W\/\"3694e05e9dff594\""
         }
-    ],
-    "meta":{
-        "location":"/v2/ServiceProviderConfig",
-        "resourceType":"ServiceProviderConfig",
-        "created":"2016-01-31T18:09:00Z",
-        "lastModified":"2016-01-31T18:09:00Z",
-        "version":"W\/\"3694e05e9dff594\""
     }
 }

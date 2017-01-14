@@ -393,7 +393,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 	for _, rt := range rtypes {
 
 		var rc *conf.ResourceConf
-		for _, v := range config.Resources {
+		for _, v := range config.Scim.Resources {
 			if v.Name == rt.Name {
 				rc = &v
 				break

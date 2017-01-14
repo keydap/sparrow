@@ -51,6 +51,14 @@ type ResourceConf struct {
 }
 
 type Config struct {
+	Scim  *ScimConfig
+	Oauth *OauthConfig
+}
+
+type OauthConfig struct {
+}
+
+type ScimConfig struct {
 	DocumentationURI      string
 	AuthenticationSchemes []AuthenticationScheme
 	Bulk                  Bulk
@@ -64,35 +72,40 @@ type Config struct {
 }
 
 func DefaultConfig() *Config {
-	cf := &Config{DocumentationURI: "http://keydap.com/sparrow/scim"}
-
+	scim := &ScimConfig{DocumentationURI: "http://keydap.com/sparrow/scim"}
 	oauth := AuthenticationScheme{Type: "oauthbearertoken", Primary: true, Name: "OAuth Bearer Token", Description: "Authentication scheme using the OAuth Bearer Token Standard", SpecURI: "http://www.rfc-editor.org/info/rfc6750", DocumentationURI: "http://keydap.com/sparrow/scim"}
 	basic := AuthenticationScheme{Type: "httpbasic", Name: "HTTP Basic", Description: "Authentication scheme using the HTTP Basic Standard", SpecURI: "http://www.rfc-editor.org/info/rfc2617", DocumentationURI: "http://keydap.com/sparrow/scim"}
-	cf.AuthenticationSchemes = []AuthenticationScheme{oauth, basic}
+	scim.AuthenticationSchemes = []AuthenticationScheme{oauth, basic}
 
 	bulk := Bulk{Supported: true, MaxOperations: 1000, MaxPayloadSize: 1048576}
-	cf.Bulk = bulk
+	scim.Bulk = bulk
 
 	chpw := ChangePassword{Supported: true}
-	cf.ChangePassword = chpw
+	scim.ChangePassword = chpw
 
 	etag := Etag{Supported: true}
-	cf.Etag = etag
+	scim.Etag = etag
 
 	filter := Filter{Supported: true, MaxResults: 200}
-	cf.Filter = filter
+	scim.Filter = filter
 
 	patch := Patch{Supported: true}
-	cf.Patch = patch
+	scim.Patch = patch
 
 	sort := Sort{Supported: true}
-	cf.Sort = sort
+	scim.Sort = sort
 
 	userRc := ResourceConf{Name: "User", IndexFields: []string{"userName", "name.givenName", "employeeNumber", "organization", "emails.value", "groups.value"}}
 	deviceRc := ResourceConf{Name: "Device", IndexFields: []string{"manufacturer", "serialNumber", "rating", "price", "location.latitude", "installedDate", "repairDates", "photos.value"}}
 	groupRc := ResourceConf{Name: "Group", IndexFields: []string{"members.value"}}
 
-	cf.Resources = []ResourceConf{userRc, deviceRc, groupRc}
+	scim.Resources = []ResourceConf{userRc, deviceRc, groupRc}
+
+	oauthCf := &OauthConfig{}
+
+	cf := &Config{}
+	cf.Scim = scim
+	cf.Oauth = oauthCf
 
 	return cf
 }
