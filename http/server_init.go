@@ -11,10 +11,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sparrow/conf"
 	"sparrow/oauth"
 	"sparrow/provider"
 	"sparrow/utils"
-	"sparrow/conf"
 	"strings"
 )
 

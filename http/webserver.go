@@ -11,10 +11,10 @@ import (
 	"net/http"
 	"os"
 	"sparrow/base"
+	"sparrow/conf"
 	"sparrow/oauth"
 	"sparrow/provider"
 	"sparrow/schema"
-	"sparrow/conf"
 	"strconv"
 	"strings"
 )
