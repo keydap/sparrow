@@ -1,4 +1,4 @@
-package http
+package net
 
 import (
 	"crypto/x509"

@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"sparrow/base"
-	"sparrow/http"
+	"sparrow/net"
 	"sparrow/schema"
 	"time"
 )
@@ -20,8 +20,8 @@ var (
 func main() {
 
 	logger.ConfigureLoggers("<root>=debug;")
-	http.Start("/tmp/sparrow")
-	//	http.Start("/Volumes/EVOSSD/sparrow-bench")
+	net.Start("/tmp/sparrow")
+	//	net.Start("/Volumes/EVOSSD/sparrow-bench")
 
 	if false {
 		log := logger.GetLogger("scim.main")
