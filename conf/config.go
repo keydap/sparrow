@@ -1,15 +1,16 @@
 package conf
 
 import (
-	"encoding/json"
-	"io/ioutil"
 	"crypto"
 	"crypto/x509"
+	"encoding/json"
+	"io/ioutil"
 )
 
 type ServerConf struct {
 	Https              bool   `json:"enable-https"`
-	Port               int    `json:"port"`
+	HttpPort           int    `json:"http-port"`
+	LdapPort           int    `json:"ldap-port"`
 	Ipaddress          string `json:"ipaddress"`
 	CertFile           string `json:"certificate"`
 	PrivKeyFile        string `json:"privatekey"`

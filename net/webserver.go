@@ -113,7 +113,7 @@ func Start(srvHome string) {
 	router.HandleFunc("/login", showLogin).Methods("GET")
 	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
 
-	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.Port)
+	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.HttpPort)
 	if srvConf.Https {
 		http.ListenAndServeTLS(hostAddr, srvConf.CertFile, srvConf.PrivKeyFile, router)
 	} else {

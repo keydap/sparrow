@@ -20,7 +20,8 @@ import (
 
 var DEFAULT_SRV_CONF string = `{
     "enable-https" : false,
-    "port" : 7090,
+    "http-port" : 7090,
+    "ldap-port" : 7094,
     "ipaddress" : "0.0.0.0",
     "certificate": "default.cer",
     "privatekey": "default.key",
