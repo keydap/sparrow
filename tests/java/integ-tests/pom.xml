@@ -63,6 +63,18 @@
             <artifactId>jetty-server</artifactId>
             <version>9.4.0.v20161208</version>
         </dependency>
+        
+        <!-- LDAP API -->
+        <dependency>
+            <groupId>org.apache.directory.api</groupId>
+            <artifactId>api-ldap-client-api</artifactId>
+            <version>1.0.0-RC3-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.directory.api</groupId>
+            <artifactId>api-ldap-codec-standalone</artifactId>
+            <version>1.0.0-RC3-SNAPSHOT</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -87,7 +99,7 @@
                 <configuration>
                     <generatePackage>com.keydap.sparrow.scim</generatePackage>
                     <baseUrl>http://localhost:7090/v2</baseUrl>
-                    <skipGeneration>false</skipGeneration>
+                    <skipGeneration>true</skipGeneration>
                 </configuration>
             </plugin>
             <plugin>
