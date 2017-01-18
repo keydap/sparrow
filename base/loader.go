@@ -2,7 +2,9 @@ package base
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sparrow/schema"
 	"strings"
 )
@@ -96,4 +98,47 @@ func LoadResTypes(rtDirPath string, schemas map[string]*schema.Schema) (rsTypes 
 
 	log.Infof("Loaded %d resource types", len(rsTypes))
 	return rsTypes, rtPathMap, nil
+}
+
+func LoadLdapTemplates(ldapTmplPath string, rsTypes map[string]*schema.ResourceType) map[string]*schema.LdapEntryTemplate {
+	tmplMap := make(map[string]*schema.LdapEntryTemplate)
+
+	dir, err := os.Open(ldapTmplPath)
+	if err != nil {
+		log.Criticalf("Could not open LDAP templates directory %s [%s]", ldapTmplPath, err)
+		return tmplMap
+	}
+
+	defer dir.Close()
+
+	files, err := dir.Readdir(-1)
+
+	if err != nil {
+		return tmplMap
+	}
+
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+
+		name := f.Name()
+		if strings.HasSuffix(strings.ToLower(name), ".json") {
+			fPath := filepath.Join(ldapTmplPath, name)
+			tmplData, err := ioutil.ReadFile(fPath)
+			if err != nil {
+				log.Criticalf("Could not read LDAP template content from %s [%s]", fPath, err)
+				continue
+			}
+
+			entry, err := schema.NewLdapTemplate(tmplData, rsTypes)
+			if err != nil {
+				log.Criticalf("Could not parse LDAP template from %s [%s]", fPath, err)
+			} else {
+				tmplMap[entry.Type] = entry
+			}
+		}
+	}
+
+	return tmplMap
 }
