@@ -13,6 +13,7 @@ type Layout struct {
 	DataDir     string
 	LogDir      string
 	TmplDir     string // template directory
+	LdapTmplDir string // LDAP entry templates directory
 	ResTypesDir string
 	name        string
 }
@@ -54,10 +55,13 @@ func NewLayout(baseDir string, create bool) (layout *Layout, err error) {
 	ldir := filepath.Join(baseDir, "logs")
 	utils.CheckAndCreate(ldir)
 
+	ldapDir := filepath.Join(baseDir, "ldap")
+	utils.CheckAndCreate(ldapDir)
+
 	resTypesdir := filepath.Join(baseDir, "resourcetypes")
 	utils.CheckAndCreate(resTypesdir)
 
-	layout = &Layout{ConfDir: cdir, SchemaDir: sdir, DataDir: ddir, LogDir: ldir, ResTypesDir: resTypesdir}
+	layout = &Layout{ConfDir: cdir, SchemaDir: sdir, DataDir: ddir, LogDir: ldir, LdapTmplDir: ldapDir, ResTypesDir: resTypesdir}
 
 	// open the base directory just to get it's name
 	file, _ := os.Open(baseDir) // no error should be reported here
