@@ -14,6 +14,7 @@ import (
 	"sparrow/conf"
 	"sparrow/oauth"
 	"sparrow/provider"
+	"sparrow/schema"
 	"sparrow/utils"
 	"strings"
 )
@@ -21,7 +22,7 @@ import (
 var DEFAULT_SRV_CONF string = `{
     "enable-https" : false,
     "http-port" : 7090,
-    "ldap-port" : 7094,
+    "ldap-port" : 7092,
     "ipaddress" : "0.0.0.0",
     "certificate": "default.cer",
     "privatekey": "default.key",
@@ -209,6 +210,14 @@ func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 
 	confDir := wDir + "/conf"
 	copyDir(confDir, layout.ConfDir)
+
+	// default LDAP templates
+	ldapUserTmpl := filepath.Join(layout.LdapTmplDir, "ldap-user.json")
+	err = ioutil.WriteFile(ldapUserTmpl, []byte(schema.LDAP_User_Entry), 0644)
+	if err != nil {
+		log.Criticalf("Couldn't write the default LDAP user template file %s %#v", ldapUserTmpl, err)
+		panic(err)
+	}
 
 	prv, err := provider.NewProvider(layout)
 	if err != nil {
