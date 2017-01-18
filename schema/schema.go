@@ -69,6 +69,7 @@ type Schema struct {
 	AtsNeverRtn   []string // names of attributes that are never returned
 	AtsAlwaysRtn  []string // names of attributes that are always returned
 	AtsRequestRtn []string // names of attributes that are returned if requested
+	AtsDefaultRtn []string // names of attributes that are returned by default
 }
 
 var log logger.Logger
@@ -189,6 +190,10 @@ func (attr *AttrType) IsImmutable() bool {
 	return attr.Mutability == "immutable"
 }
 
+func (attr *AttrType) IsStringType() bool {
+	return (attr.Type == "string" || attr.Type == "reference")
+}
+
 func (attr *AttrType) Parent() *AttrType {
 	return attr.parent
 }
@@ -233,6 +238,7 @@ func (sc *Schema) collectReturnAttrs() {
 	sc.AtsNeverRtn = make([]string, 0)
 	sc.AtsAlwaysRtn = make([]string, 0)
 	sc.AtsRequestRtn = make([]string, 0)
+	sc.AtsDefaultRtn = make([]string, 0)
 
 	for _, attr := range sc.Attributes {
 		name := strings.ToLower(attr.Name)
@@ -246,6 +252,10 @@ func (sc *Schema) collectReturnAttrs() {
 
 		if attr.Returned == "request" {
 			sc.AtsRequestRtn = append(sc.AtsRequestRtn, name)
+		}
+
+		if attr.Returned == "default" {
+			sc.AtsDefaultRtn = append(sc.AtsDefaultRtn, name)
 		}
 	}
 }
