@@ -22,17 +22,16 @@ var (
 func main() {
 
 	logger.ConfigureLoggers("<root>=debug;")
-	//net.Start("/tmp/sparrow")
+	net.Start("/tmp/sparrow")
 	//	net.Start("/Volumes/EVOSSD/sparrow-bench")
 
-	// ldap
-	srvConf := &conf.ServerConf{}
-	srvConf.LdapPort = 7092
-	srvConf.Ipaddress = "0.0.0.0"
-	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.LdapPort)
-	net.StartLdap(hostAddr)
-
 	if false {
+		// ldap
+		srvConf := &conf.ServerConf{}
+		srvConf.LdapPort = 7092
+		srvConf.Ipaddress = "0.0.0.0"
+		hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.LdapPort)
+		net.StartLdap(hostAddr)
 		log := logger.GetLogger("scim.main")
 		resDir = resDir + "/resources/"
 		sc, err := schema.LoadSchema(resDir + "/schemas/user.json")
