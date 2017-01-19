@@ -271,10 +271,14 @@ func (prv *Provider) GetToken(rid string) (authToken string, err error) {
 		return "", err
 	}
 
-	session := prv.sl.Engine.NewRbacSession(user)
+	session := prv.GenerateSession(user)
 	authToken = session.ToJwt(prv.PrivKey)
 
 	return authToken, nil
+}
+
+func (prv *Provider) GenerateSession(user *base.Resource) *base.RbacSession {
+	return prv.sl.Engine.NewRbacSession(user)
 }
 
 func (prv *Provider) DomainCode() uint32 {
