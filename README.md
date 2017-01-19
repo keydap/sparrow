@@ -10,7 +10,7 @@ Also, IMHO, LDAP's authorization model based on ACIs is very brittle, which brin
 fluent access control(ARBAC) mechanism built right into the identity server.
 And I want an identity server to have the ability to speak over HTTP directly without the need of custom proxies. 
 
-## What feature are available right now?
+## What features are available right now?
 1. All the SCIM v2 features (except for /Bulk and /Me) are implemented.
 2. RBAC0 is supported
 3. Support for JWT. User's authorization data is included in tokens after authentication.
@@ -18,4 +18,4 @@ And I want an identity server to have the ability to speak over HTTP directly wi
 5. A client written is Java is opensourced, see https://github.com/keydap/sparrow-client 
 
 ## What is happening right now
-1. Working on implementing the interoperability tests, preparing for the interop session that may happen in November 2016
+1. Working on implementing support for LDAP bind and search operations
