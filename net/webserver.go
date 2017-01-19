@@ -113,6 +113,9 @@ func Start(srvHome string) {
 	router.HandleFunc("/login", showLogin).Methods("GET")
 	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
 
+	ldapHostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.LdapPort)
+	go StartLdap(ldapHostAddr)
+
 	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.HttpPort)
 	if srvConf.Https {
 		http.ListenAndServeTLS(hostAddr, srvConf.CertFile, srvConf.PrivKeyFile, router)
@@ -811,35 +814,41 @@ func parseAttrParams(attributes string, excludedAttributes string, rTypes ...*sc
 	if len(attributes) != 0 {
 		attrLst = parseAttrParam(attributes, rTypes)
 	} else {
-		exclAttrSet, subAtPresent := base.SplitAttrCsv(excludedAttributes, rTypes)
-
-		if exclAttrSet == nil {
-			// in this case compute the never return attribute list
-			exclAttrSet = make(map[string]int)
-			subAtPresent = true
-		}
-
-		// the mandatory attributes cannot be excluded
-		for _, rt := range rTypes {
-			for k, _ := range rt.AtsAlwaysRtn {
-				if _, ok := exclAttrSet[k]; ok {
-					delete(exclAttrSet, k)
-				}
-			}
-
-			for k, _ := range rt.AtsNeverRtn {
-				exclAttrSet[k] = 1
-			}
-
-			for k, _ := range rt.AtsRequestRtn {
-				if _, ok := exclAttrSet[k]; !ok {
-					exclAttrSet[k] = 1
-				}
-			}
-		}
-
-		exclAttrLst = base.ConvertToParamAttributes(exclAttrSet, subAtPresent)
+		exclAttrLst = parseExcludedAttrs(excludedAttributes, rTypes...)
 	}
 
 	return attrLst, exclAttrLst
+}
+
+func parseExcludedAttrs(excludedAttributes string, rTypes ...*schema.ResourceType) (exclAttrLst []*base.AttributeParam) {
+	exclAttrSet, subAtPresent := base.SplitAttrCsv(excludedAttributes, rTypes)
+
+	if exclAttrSet == nil {
+		// in this case compute the never return attribute list
+		exclAttrSet = make(map[string]int)
+		subAtPresent = true
+	}
+
+	// the mandatory attributes cannot be excluded
+	for _, rt := range rTypes {
+		for k, _ := range rt.AtsAlwaysRtn {
+			if _, ok := exclAttrSet[k]; ok {
+				delete(exclAttrSet, k)
+			}
+		}
+
+		for k, _ := range rt.AtsNeverRtn {
+			exclAttrSet[k] = 1
+		}
+
+		for k, _ := range rt.AtsRequestRtn {
+			if _, ok := exclAttrSet[k]; !ok {
+				exclAttrSet[k] = 1
+			}
+		}
+	}
+
+	exclAttrLst = base.ConvertToParamAttributes(exclAttrSet, subAtPresent)
+
+	return exclAttrLst
 }
