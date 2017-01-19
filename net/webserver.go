@@ -114,7 +114,10 @@ func Start(srvHome string) {
 	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
 
 	ldapHostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.LdapPort)
-	go StartLdap(ldapHostAddr)
+	err := StartLdap(ldapHostAddr)
+	if err != nil {
+		panic(err)
+	}
 
 	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.HttpPort)
 	if srvConf.Https {

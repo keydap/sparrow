@@ -36,7 +36,7 @@ func StartLdap(hostAddr string) error {
 		return err
 	}
 
-	acceptConns(listener)
+	go acceptConns(listener)
 
 	return nil
 }
