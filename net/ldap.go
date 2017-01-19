@@ -154,7 +154,7 @@ func generateResultCode(messageId int, appRespTag ber.Tag, resultCode int, errMs
 	return response
 }
 
-func toSearchContext(packet *ber.Packet, ls *LdapSession) (searchCtx *base.SearchContext, pr *provider.Provider, attrParam []*base.AttributeParam) {
+func toSearchContext(messageId int, packet *ber.Packet, ls *LdapSession) (searchCtx *base.SearchContext, pr *provider.Provider, attrParam []*base.AttributeParam) {
 	opCtx := &base.OpContext{}
 	opCtx.ClientIP = ls.con.RemoteAddr().Network()
 
@@ -172,7 +172,10 @@ func toSearchContext(packet *ber.Packet, ls *LdapSession) (searchCtx *base.Searc
 	pr = providers[domain]
 
 	if pr == nil {
-		// throw error
+		msg := fmt.Sprintf("Invalid base DN '%s'", domain)
+		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultNoSuchObject, msg)
+		ls.con.Write(errResp.Bytes())
+		return nil, nil, nil
 	}
 
 	searchCtx.ResTypes = make([]*schema.ResourceType, 0)
@@ -281,7 +284,12 @@ func toSearchContext(packet *ber.Packet, ls *LdapSession) (searchCtx *base.Searc
 func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	log.Debugf("handling search request from %s", ls.con.RemoteAddr())
 	child := packet.Children[1]
-	sc, pr, attrLst := toSearchContext(child, ls)
+	sc, pr, attrLst := toSearchContext(messageId, child, ls)
+
+	if pr == nil {
+		// the error message was already sent
+		return
+	}
 
 	outPipe := make(chan *base.Resource, 0)
 
@@ -290,7 +298,8 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	err := pr.Search(sc, outPipe)
 	if err != nil {
 		close(outPipe)
-		//writeError(err)
+		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultOther, err.Error())
+		ls.con.Write(errResp.Bytes())
 		return
 	}
 
@@ -317,15 +326,8 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 		se.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, dn, "DN"))
 		attributes := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Entry Attributes")
 
-		ocAtPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "ObjectClass Attribute")
-		ocAtPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, "objectClass", "objectClass"))
-		ocAtValuesPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSet, nil, "ObjectClass Attribute Values")
-
-		for _, oc := range tmpl.ObjectClasses {
-			ocAtValuesPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, oc, oc))
-		}
-		ocAtPacket.AppendChild(ocAtValuesPacket)
-		attributes.AppendChild(ocAtPacket)
+		ocLdapAt := &schema.LdapAttribute{LdapAttrName: "objectClass"}
+		addAttributeStringsPacket(ocLdapAt, attributes, tmpl.ObjectClasses)
 
 		for _, ap := range attrLst {
 			at := rs.GetAttr(ap.Name)
@@ -339,7 +341,8 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 				ldapAt := tmpl.AttrMap[ap.Name]
 				if ldapAt != nil {
 					sa := at.GetSimpleAt()
-					addAttributePacket(ldapAt, attributes, sa.Values)
+					// the varargs is necessary otherwise caller will treat the entire array as one interface value
+					addAttributePacket(ldapAt, attributes, sa.Values...)
 				}
 			} else {
 				ca := at.GetComplexAt()
@@ -367,7 +370,7 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 					}
 
 					if len(values) > 0 {
-						addAttributePacket(ldapAt, attributes, values)
+						addAttributeStringsPacket(ldapAt, attributes, values)
 					}
 				}
 				// FIXME schema URI prefixed attributes won't work in the below scheme
@@ -382,8 +385,6 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 					}
 				}
 			}
-
-			//attributes.AppendChild(child)
 		}
 		count++
 
@@ -392,14 +393,7 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 		ls.con.Write(entryEnvelope.Bytes())
 	}
 
-	entryEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
-	entryEnvelope.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
-
-	sd := ber.Encode(ber.ClassApplication, ber.TypeConstructed, ldap.ApplicationSearchResultDone, nil, "SerchResultDone")
-	sd.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagEnumerated, 0, "Result code"))
-	sd.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, "", "Matched DN"))
-	sd.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, "", "Error message"))
-	entryEnvelope.AppendChild(sd)
+	entryEnvelope := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultSuccess, "")
 	ls.con.Write(entryEnvelope.Bytes())
 }
 
@@ -410,6 +404,17 @@ func addAttributePacket(ldapAt *schema.LdapAttribute, attributes *ber.Packet, sc
 	for _, v := range scimValues {
 		strVal := fmt.Sprintf("%s", v)
 		atValuesPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, strVal, strVal))
+	}
+	atPacket.AppendChild(atValuesPacket)
+	attributes.AppendChild(atPacket)
+}
+
+func addAttributeStringsPacket(ldapAt *schema.LdapAttribute, attributes *ber.Packet, strValues []string) {
+	atPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, ldapAt.LdapAttrName+" Attribute")
+	atPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, ldapAt.LdapAttrName, ldapAt.LdapAttrName))
+	atValuesPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSet, nil, ldapAt.LdapAttrName+" Attribute Values")
+	for _, v := range strValues {
+		atValuesPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, v, v))
 	}
 	atPacket.AppendChild(atValuesPacket)
 	attributes.AppendChild(atPacket)
