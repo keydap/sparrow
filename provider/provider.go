@@ -17,17 +17,18 @@ import (
 )
 
 type Provider struct {
-	Schemas    map[string]*schema.Schema       // a map of Schema ID to Schema
-	RsTypes    map[string]*schema.ResourceType // a map of Name to ResourceTye
-	RtPathMap  map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
-	config     *conf.Config
-	sl         *silo.Silo
-	layout     *Layout
-	Name       string // the domain name
-	PubKey     crypto.PublicKey
-	PrivKey    crypto.PrivateKey
-	immResIds  map[string]int // map of IDs of resources that cannot be deleted
-	domainCode uint32
+	Schemas       map[string]*schema.Schema       // a map of Schema ID to Schema
+	RsTypes       map[string]*schema.ResourceType // a map of Name to ResourceTye
+	RtPathMap     map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
+	LdapTemplates map[string]*schema.LdapEntryTemplate
+	config        *conf.Config
+	sl            *silo.Silo
+	layout        *Layout
+	Name          string // the domain name
+	PubKey        crypto.PublicKey
+	PrivKey       crypto.PrivateKey
+	immResIds     map[string]int // map of IDs of resources that cannot be deleted
+	domainCode    uint32
 }
 
 const adminGroupId = "00000000-1000-0000-0000-000000000000"
@@ -57,6 +58,8 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
 
 	dataFilePath := filepath.Join(layout.DataDir, layout.name)
 
