@@ -59,6 +59,11 @@ func serveClient(con *net.TCPConn) {
 	remoteAddr := con.RemoteAddr().String()
 
 	defer func() {
+		e := recover()
+		if e != nil {
+			log.Criticalf("recovered from panic while serving LDAP client %v", e)
+		}
+
 		log.Debugf("closing connection %s", remoteAddr)
 		con.Close()
 		delete(ldapSessions, remoteAddr)
@@ -97,11 +102,15 @@ func serveClient(con *net.TCPConn) {
 			handleSimpleBind(bindReq, ls, messageId)
 
 		case ldap.ApplicationSearchRequest:
-			//			if ls.token == nil {
-			//				// throw unauthorized error
-			//			}
-			handleSearch(packet, ls)
+			messageId := int(packet.Children[0].Value.(int64))
+			if ls.token == nil {
+				// throw unauthorized error
+				errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultInsufficientAccessRights, "insufficientAccessRights")
+				ls.con.Write(errResp.Bytes())
+				continue
+			}
 
+			handleSearch(messageId, packet, ls)
 		}
 	}
 }
@@ -110,16 +119,39 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 	log.Debugf("handling bind request from %s", ls.con.RemoteAddr())
 	log.Debugf("username = %s , password %s", bindReq.Username, bindReq.Password)
 
+	domain, _ := getDomainAndEndpoint(bindReq.Username)
+
+	pr := providers[domain]
+
+	if pr == nil {
+		errResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultInvalidCredentials, "Invalid username or password")
+		ls.con.Write(errResp.Bytes())
+		return
+	}
+
+	user := pr.Authenticate(bindReq.Username, bindReq.Password)
+	if user == nil {
+		errResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultInvalidCredentials, "Invalid username or password")
+		ls.con.Write(errResp.Bytes())
+		return
+	}
+
+	ls.token = pr.GenerateSession(user)
+	successResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultSuccess, "")
+	ls.con.Write(successResp.Bytes())
+}
+
+func generateResultCode(messageId int, appRespTag ber.Tag, resultCode int, errMsg string) *ber.Packet {
 	response := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
 	response.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
 
-	result := ber.Encode(ber.ClassApplication, ber.TypeConstructed, ldap.ApplicationBindResponse, nil, "Bind response")
-	result.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagEnumerated, 0, "Result code"))
+	result := ber.Encode(ber.ClassApplication, ber.TypeConstructed, appRespTag, nil, "Response")
+	result.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagEnumerated, resultCode, "Result code"))
 	result.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, "", "Matched DN"))
-	result.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, "", "Error message"))
+	result.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, errMsg, "Error message"))
 	response.AppendChild(result)
 
-	ls.con.Write(response.Bytes())
+	return response
 }
 
 func toSearchContext(packet *ber.Packet, ls *LdapSession) (searchCtx *base.SearchContext, pr *provider.Provider, attrParam []*base.AttributeParam) {
@@ -133,30 +165,9 @@ func toSearchContext(packet *ber.Packet, ls *LdapSession) (searchCtx *base.Searc
 	//scope := int(packet.Children[1].Value.(int64))
 
 	// detect ResourceTypes from baseDN
-	rdns := strings.Split(baseDN, ",")
 
-	rdnLen := len(rdns)
-	if rdnLen < 2 {
-		// throw error
-	}
-
-	domain := ""
-
-	for _, v := range rdns {
-		v = strings.ToLower(v)
-		pos := strings.Index(v, "dc=")
-		if pos == 0 {
-			if domain == "" {
-				domain += v[3:]
-			} else {
-				domain += ("." + v[3:])
-			}
-		}
-		pos = strings.Index(v, "ou=")
-		if pos == 0 {
-			searchCtx.Endpoint = "User" //v[3:]
-		}
-	}
+	domain, endPoint := getDomainAndEndpoint(baseDN)
+	searchCtx.Endpoint = endPoint
 
 	pr = providers[domain]
 
@@ -267,12 +278,10 @@ func toSearchContext(packet *ber.Packet, ls *LdapSession) (searchCtx *base.Searc
 	return searchCtx, pr, attrParam
 }
 
-func handleSearch(packet *ber.Packet, ls *LdapSession) {
+func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	log.Debugf("handling search request from %s", ls.con.RemoteAddr())
-	messageId := int(packet.Children[0].Value.(int64))
 	child := packet.Children[1]
 	sc, pr, attrLst := toSearchContext(child, ls)
-	//	log.Debugf("%#v", searchReq)
 
 	outPipe := make(chan *base.Resource, 0)
 
@@ -542,4 +551,31 @@ func findScimName(ldapAtName string, sc *base.SearchContext, pr *provider.Provid
 	}
 
 	return ldapAtName, nil
+}
+
+func getDomainAndEndpoint(baseDN string) (domain string, endPoint string) {
+	rdns := strings.Split(baseDN, ",")
+
+	rdnLen := len(rdns)
+	if rdnLen < 2 {
+		return domain, endPoint
+	}
+
+	for _, v := range rdns {
+		v = strings.ToLower(v)
+		pos := strings.Index(v, "dc=")
+		if pos == 0 {
+			if domain == "" {
+				domain += v[3:]
+			} else {
+				domain += ("." + v[3:])
+			}
+		}
+		pos = strings.Index(v, "ou=")
+		if pos == 0 {
+			endPoint = "User" //v[3:]
+		}
+	}
+
+	return strings.ToLower(domain), endPoint
 }
