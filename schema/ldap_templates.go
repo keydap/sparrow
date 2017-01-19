@@ -44,18 +44,30 @@ const LDAP_User_Entry = `{
 			"ldapAttrName": "sn"
 		},
 		{
+			"scimAttrPath": "name",
+			"ldapAttrName": "cn",
+			"format": "givenName familyName"
+		},
+		{
 			"scimAttrPath": "emails",
 			"ldapAttrName": "mail",
 			"format": "value"
+		},
+		{
+			"scimAttrPath": "addresses",
+			"ldapAttrName": "postalAddress",
+			"format": "streetAddress$locality$region$country$postalCode"
 		}
 	]
 }`
 
 type LdapAttribute struct {
 	ScimAttrPath string
-	AtType       *AttrType
+	AtType       *AttrType `json:"-"`
 	LdapAttrName string
 	Format       string
+	FormatDelim  string   `json:"-"`
+	SubAtNames   []string `json:"-"`
 }
 
 type LdapEntryTemplate struct {
@@ -64,8 +76,8 @@ type LdapEntryTemplate struct {
 	DnAtName        string
 	ObjectClasses   []string
 	Attributes      []*LdapAttribute
-	AttrMap         map[string]*LdapAttribute
-	LdapToScimAtMap map[string]string
+	AttrMap         map[string]*LdapAttribute `json:"-"`
+	LdapToScimAtMap map[string]string         `json:"-"`
 }
 
 func NewLdapTemplate(tmpl []byte, rsTypes map[string]*ResourceType) (entry *LdapEntryTemplate, err error) {
@@ -93,6 +105,10 @@ func NewLdapTemplate(tmpl []byte, rsTypes map[string]*ResourceType) (entry *Ldap
 			return nil, err
 		}
 
+		if ldapAt.AtType.IsComplex() {
+			parseFormat(ldapAt)
+		}
+
 		entry.AttrMap[ldapAt.ScimAttrPath] = ldapAt
 		entry.LdapToScimAtMap[strings.ToLower(ldapAt.LdapAttrName)] = ldapAt.ScimAttrPath
 	}
@@ -100,6 +116,26 @@ func NewLdapTemplate(tmpl []byte, rsTypes map[string]*ResourceType) (entry *Ldap
 	parseDnPrefix(entry)
 
 	return entry, nil
+}
+
+func parseFormat(ldapAt *LdapAttribute) {
+	ldapAt.FormatDelim = "$"
+
+	hasSpace := strings.ContainsRune(ldapAt.Format, ' ')
+	if hasSpace {
+		ldapAt.FormatDelim = " "
+	}
+
+	ldapAt.SubAtNames = make([]string, 0)
+
+	subAts := strings.Split(ldapAt.Format, ldapAt.FormatDelim)
+	for _, s := range subAts {
+		s := strings.TrimSpace(s)
+		if len(s) > 0 {
+			s = strings.ToLower(s)
+			ldapAt.SubAtNames = append(ldapAt.SubAtNames, s)
+		}
+	}
 }
 
 func parseDnPrefix(entry *LdapEntryTemplate) {

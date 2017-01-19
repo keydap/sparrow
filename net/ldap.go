@@ -330,19 +330,48 @@ func handleSearch(packet *ber.Packet, ls *LdapSession) {
 				ldapAt := tmpl.AttrMap[ap.Name]
 				if ldapAt != nil {
 					sa := at.GetSimpleAt()
-					atPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, ldapAt.LdapAttrName+" Attribute")
-					atPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, ldapAt.LdapAttrName, ldapAt.LdapAttrName))
-					atValuesPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSet, nil, ldapAt.LdapAttrName+" Attribute Values")
-					for _, v := range sa.Values {
-						strVal := fmt.Sprintf("%s", v)
-						atValuesPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, strVal, strVal))
-					}
-					atPacket.AppendChild(atValuesPacket)
-					attributes.AppendChild(atPacket)
+					addAttributePacket(ldapAt, attributes, sa.Values)
 				}
 			} else {
 				ca := at.GetComplexAt()
-				//ca.
+				ldapAt := tmpl.AttrMap[ap.Name]
+				if ldapAt != nil {
+					// fill in the format
+					values := make([]string, 0)
+					for _, mapOfSa := range ca.SubAts {
+						formattedVal := ""
+						valPresent := false
+						for _, sn := range ldapAt.SubAtNames {
+							sa, ok := mapOfSa[sn]
+							if ok {
+								formattedVal += fmt.Sprintf("%s", sa.Values[0])
+								valPresent = true
+							}
+
+							formattedVal += ldapAt.FormatDelim
+						}
+
+						if valPresent {
+							fvl := len(formattedVal) - 1
+							values = append(values, formattedVal[:fvl])
+						}
+					}
+
+					if len(values) > 0 {
+						addAttributePacket(ldapAt, attributes, values)
+					}
+				}
+				// FIXME schema URI prefixed attributes won't work in the below scheme
+				// check if any attribute starts with ca.name + "."
+				for _, subAt := range atType.SubAttributes {
+					ldapAt := tmpl.AttrMap[ap.Name+"."+subAt.NormName]
+					if ldapAt != nil {
+						subAtVal := ca.GetValue(subAt.NormName)
+						if subAtVal != nil {
+							addAttributePacket(ldapAt, attributes, subAtVal)
+						}
+					}
+				}
 			}
 
 			//attributes.AppendChild(child)
@@ -363,6 +392,18 @@ func handleSearch(packet *ber.Packet, ls *LdapSession) {
 	sd.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, "", "Error message"))
 	entryEnvelope.AppendChild(sd)
 	ls.con.Write(entryEnvelope.Bytes())
+}
+
+func addAttributePacket(ldapAt *schema.LdapAttribute, attributes *ber.Packet, scimValues ...interface{}) {
+	atPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, ldapAt.LdapAttrName+" Attribute")
+	atPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, ldapAt.LdapAttrName, ldapAt.LdapAttrName))
+	atValuesPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSet, nil, ldapAt.LdapAttrName+" Attribute Values")
+	for _, v := range scimValues {
+		strVal := fmt.Sprintf("%s", v)
+		atValuesPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, strVal, strVal))
+	}
+	atPacket.AppendChild(atValuesPacket)
+	attributes.AppendChild(atPacket)
 }
 
 // converts a packet representation of a LDAP filter into a string representation of SCIM filter
