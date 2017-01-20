@@ -99,7 +99,7 @@
                 <configuration>
                     <generatePackage>com.keydap.sparrow.scim</generatePackage>
                     <baseUrl>http://localhost:7090/v2</baseUrl>
-                    <skipGeneration>true</skipGeneration>
+                    <skipGeneration>false</skipGeneration>
                 </configuration>
             </plugin>
             <plugin>

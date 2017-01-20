@@ -212,14 +212,16 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	log.Debugf("handling search request from %s", ls.con.RemoteAddr())
 	child := packet.Children[1]
 
-	// TODO handle OBJECT scope
-	// if scope == 0
 	ldapReq := toLdapSearchRequest(child)
 
 	// RootDSE search
 	if len(ldapReq.BaseDN) == 0 {
-
+		sendRootDSE(messageId, ls)
+		return
 	}
+
+	// TODO handle OBJECT scope
+	// if scope == 0
 
 	sc, pr, err := toSearchContext(ldapReq, ls)
 
@@ -256,6 +258,31 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	ls.con.Write(entryEnvelope.Bytes())
 }
 
+func sendRootDSE(messageId int, ls *LdapSession) {
+	rootDseEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
+	rootDseEnvelope.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
+
+	se := ber.Encode(ber.ClassApplication, ber.TypeConstructed, ldap.ApplicationSearchResultEntry, nil, "RootDSE")
+	se.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, "", "RootDSE DN"))
+	attributes := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "RootDSE Attributes")
+
+	ocLdapAt := &schema.LdapAttribute{LdapAttrName: "objectClass"}
+	addAttributeStringsPacket(ocLdapAt, attributes, "top", "extensibleObject")
+
+	vendorLdapAt := &schema.LdapAttribute{LdapAttrName: "vendorName"}
+	addAttributeStringsPacket(vendorLdapAt, attributes, "Keydap Software")
+
+	versionLdapAt := &schema.LdapAttribute{LdapAttrName: "vendorVersion"}
+	addAttributeStringsPacket(versionLdapAt, attributes, "1.0") //TODO fix the hardcoded version
+
+	se.AppendChild(attributes)
+	rootDseEnvelope.AppendChild(se)
+	ls.con.Write(rootDseEnvelope.Bytes())
+
+	result := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultSuccess, "")
+	ls.con.Write(result.Bytes())
+}
+
 func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr *provider.Provider, messageId int, ls *LdapSession) {
 	typeName := rs.GetType().Name
 	tmpl := pr.LdapTemplates[typeName]
@@ -279,7 +306,7 @@ func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr
 	attributes := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Entry Attributes")
 
 	ocLdapAt := &schema.LdapAttribute{LdapAttrName: "objectClass"}
-	addAttributeStringsPacket(ocLdapAt, attributes, tmpl.ObjectClasses)
+	addAttributeStringsPacket(ocLdapAt, attributes, tmpl.ObjectClasses...)
 
 	for _, ap := range attrLst {
 		at := rs.GetAttr(ap.Name)
@@ -322,7 +349,7 @@ func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr
 				}
 
 				if len(values) > 0 {
-					addAttributeStringsPacket(ldapAt, attributes, values)
+					addAttributeStringsPacket(ldapAt, attributes, values...)
 				}
 			}
 			// FIXME schema URI prefixed attributes won't work in the below scheme
@@ -356,7 +383,7 @@ func addAttributePacket(ldapAt *schema.LdapAttribute, attributes *ber.Packet, sc
 	attributes.AppendChild(atPacket)
 }
 
-func addAttributeStringsPacket(ldapAt *schema.LdapAttribute, attributes *ber.Packet, strValues []string) {
+func addAttributeStringsPacket(ldapAt *schema.LdapAttribute, attributes *ber.Packet, strValues ...string) {
 	atPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, ldapAt.LdapAttrName+" Attribute")
 	atPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, ldapAt.LdapAttrName, ldapAt.LdapAttrName))
 	atValuesPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSet, nil, ldapAt.LdapAttrName+" Attribute Values")

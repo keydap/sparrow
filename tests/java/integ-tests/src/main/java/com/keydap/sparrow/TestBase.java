@@ -53,7 +53,7 @@ public abstract class TestBase {
 
         client.authenticate();
         assertNotNull(authenticator.getToken());
-        //System.out.println(authenticator.getToken());
+        System.out.println(authenticator.getToken());
         
         unAuthClient = new SparrowClient(baseApiUrl);
         unAuthClient.register(User.class, Group.class, Device.class);
