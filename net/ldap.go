@@ -161,28 +161,21 @@ func generateResultCode(messageId int, appRespTag ber.Tag, resultCode int, errMs
 	return response
 }
 
-func toSearchContext(messageId int, packet *ber.Packet, ls *LdapSession) (searchCtx *base.SearchContext, pr *provider.Provider, attrParam []*base.AttributeParam) {
+func toSearchContext(req ldap.SearchRequest, ls *LdapSession) (searchCtx *base.SearchContext, pr *provider.Provider, err error) {
 	opCtx := &base.OpContext{}
 	opCtx.ClientIP = ls.con.RemoteAddr().Network()
 
 	searchCtx = &base.SearchContext{}
 	searchCtx.OpContext = opCtx
 
-	baseDN := packet.Children[0].Value.(string)
-	//scope := int(packet.Children[1].Value.(int64))
-
 	// detect ResourceTypes from baseDN
-
-	domain, endPoint := getDomainAndEndpoint(baseDN)
+	domain, endPoint := getDomainAndEndpoint(req.BaseDN)
 	searchCtx.Endpoint = endPoint
 
 	pr = providers[domain]
 
 	if pr == nil {
-		msg := fmt.Sprintf("Invalid base DN '%s'", domain)
-		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultNoSuchObject, msg)
-		ls.con.Write(errResp.Bytes())
-		return nil, nil, nil
+		return nil, nil, fmt.Errorf("Invalid base DN '%s'", domain)
 	}
 
 	searchCtx.ResTypes = make([]*schema.ResourceType, 0)
@@ -196,106 +189,50 @@ func toSearchContext(messageId int, packet *ber.Packet, ls *LdapSession) (search
 		}
 	}
 
-	// derefAliases := int(packet.Children[2].Value.(int64))
-	searchCtx.MaxResults = int(packet.Children[3].Value.(int64))
-	// timeLimit := int(packet.Children[4].Value.(int64))
-	// typesOnly := packet.Children[5].Value.(bool)
-	// ldapFilter, err := ldap.DecompileFilter(packet.Children[6])
-
-	scimFilter, _ := ldapToScimFilter(packet.Children[6], searchCtx, pr)
-	// TODO handle OBJECT scope
-	// if scope == 0
-	log.Debugf("SCIM filter %s", scimFilter)
-
-	var err error
-	searchCtx.Filter, err = base.ParseFilter(scimFilter)
-	if err != nil {
-		//throw error
-	}
-
-	reqAttrs := ""
-	hasStar := false
-	hasPlus := false
-
-	attrChildren := packet.Children[7].Children
-	for _, c := range attrChildren {
-		name := strings.TrimSpace(c.Value.(string))
-		name = strings.ToLower(name)
-		if name == "*" {
-			hasStar = true
-			continue
-		}
-
-		if name == "+" {
-			hasPlus = true
-			continue
-		}
-
-		foundScimAt := false
-		for _, rt := range searchCtx.ResTypes {
-			tmpl := pr.LdapTemplates[rt.Name]
-			if tmpl != nil {
-				scimName, ok := tmpl.LdapToScimAtMap[name]
-				if ok {
-					name = scimName
-					foundScimAt = true
-					break
-				}
-			}
-		}
-		if !foundScimAt {
-			log.Debugf("No equivalent SCIM attribute found for the requested LDAP attribute %s", name)
-			continue
-		}
-
-		reqAttrs += (name + ",")
-	}
-
-	searchCtx.ParamAttrs = reqAttrs
-
-	attrSet, subAtPresent := base.SplitAttrCsv(reqAttrs, searchCtx.ResTypes)
-
-	if attrSet == nil {
-		attrSet = make(map[string]int)
-	}
-
-	// the mandatory attributes that will always be returned
-	for _, rt := range searchCtx.ResTypes {
-		for k, _ := range rt.AtsAlwaysRtn {
-			attrSet[k] = 1
-		}
-
-		if hasPlus || hasStar {
-			for k, _ := range rt.AtsRequestRtn {
-				attrSet[k] = 1
-			}
-
-			for k, _ := range rt.AtsDefaultRtn {
-				attrSet[k] = 1
-			}
-		}
-
-		for k, _ := range rt.AtsNeverRtn {
-			if _, ok := attrSet[k]; ok {
-				delete(attrSet, k)
-			}
-		}
-	}
-
-	// sort the names and eliminate redundant values, for example "name, name.familyName" will be reduced to name
-	attrParam = base.ConvertToParamAttributes(attrSet, subAtPresent)
+	searchCtx.MaxResults = req.SizeLimit
 	searchCtx.Session = ls.token
 
-	return searchCtx, pr, attrParam
+	return searchCtx, pr, nil
+}
+
+func toLdapSearchRequest(packet *ber.Packet) ldap.SearchRequest {
+	req := ldap.SearchRequest{}
+	req.BaseDN = strings.TrimSpace(packet.Children[0].Value.(string))
+	req.Scope = int(packet.Children[1].Value.(int64))
+	// derefAliases := int(packet.Children[2].Value.(int64))
+	req.SizeLimit = int(packet.Children[3].Value.(int64))
+	req.TimeLimit = int(packet.Children[4].Value.(int64))
+	req.TypesOnly = packet.Children[5].Value.(bool)
+	// ldapFilter, err := ldap.DecompileFilter(packet.Children[6])
+
+	return req
 }
 
 func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	log.Debugf("handling search request from %s", ls.con.RemoteAddr())
 	child := packet.Children[1]
-	sc, pr, attrLst := toSearchContext(messageId, child, ls)
 
-	if pr == nil {
-		// the error message was already sent
+	// TODO handle OBJECT scope
+	// if scope == 0
+	ldapReq := toLdapSearchRequest(child)
+
+	// RootDSE search
+	if len(ldapReq.BaseDN) == 0 {
+
+	}
+
+	sc, pr, err := toSearchContext(ldapReq, ls)
+
+	if err != nil {
+		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultNoSuchObject, err.Error())
+		ls.con.Write(errResp.Bytes())
+		return
+	}
+
+	attrLst, err := parseFilter(child, sc, pr)
+	if err != nil {
+		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultOther, err.Error())
+		ls.con.Write(errResp.Bytes())
 		return
 	}
 
@@ -303,7 +240,7 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 
 	// search starts a go routine and returns nil error immediately
 	// or returns an error before starting the go routine
-	err := pr.Search(sc, outPipe)
+	err = pr.Search(sc, outPipe)
 	if err != nil {
 		close(outPipe)
 		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultOther, err.Error())
@@ -593,4 +530,92 @@ func getDomainAndEndpoint(baseDN string) (domain string, endPoint string) {
 	}
 
 	return strings.ToLower(domain), endPoint
+}
+
+func parseFilter(packet *ber.Packet, searchCtx *base.SearchContext, pr *provider.Provider) (attrParam []*base.AttributeParam, err error) {
+	scimFilter, err := ldapToScimFilter(packet.Children[6], searchCtx, pr)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debugf("SCIM filter %s", scimFilter)
+
+	searchCtx.Filter, err = base.ParseFilter(scimFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	reqAttrs := ""
+	hasStar := false
+	hasPlus := false
+
+	attrChildren := packet.Children[7].Children
+	for _, c := range attrChildren {
+		name := strings.TrimSpace(c.Value.(string))
+		name = strings.ToLower(name)
+		if name == "*" {
+			hasStar = true
+			continue
+		}
+
+		if name == "+" {
+			hasPlus = true
+			continue
+		}
+
+		foundScimAt := false
+		for _, rt := range searchCtx.ResTypes {
+			tmpl := pr.LdapTemplates[rt.Name]
+			if tmpl != nil {
+				scimName, ok := tmpl.LdapToScimAtMap[name]
+				if ok {
+					name = scimName
+					foundScimAt = true
+					break
+				}
+			}
+		}
+		if !foundScimAt {
+			log.Debugf("No equivalent SCIM attribute found for the requested LDAP attribute %s", name)
+			continue
+		}
+
+		reqAttrs += (name + ",")
+	}
+
+	searchCtx.ParamAttrs = reqAttrs
+
+	attrSet, subAtPresent := base.SplitAttrCsv(reqAttrs, searchCtx.ResTypes)
+
+	if attrSet == nil {
+		attrSet = make(map[string]int)
+	}
+
+	// the mandatory attributes that will always be returned
+	for _, rt := range searchCtx.ResTypes {
+		for k, _ := range rt.AtsAlwaysRtn {
+			attrSet[k] = 1
+		}
+
+		if hasPlus || hasStar {
+			for k, _ := range rt.AtsRequestRtn {
+				attrSet[k] = 1
+			}
+
+			for k, _ := range rt.AtsDefaultRtn {
+				attrSet[k] = 1
+			}
+		}
+
+		for k, _ := range rt.AtsNeverRtn {
+			if _, ok := attrSet[k]; ok {
+				delete(attrSet, k)
+			}
+		}
+	}
+
+	// sort the names and eliminate redundant values, for example "name, name.familyName" will be reduced to name
+	attrParam = base.ConvertToParamAttributes(attrSet, subAtPresent)
+
+	return attrParam, nil
 }
