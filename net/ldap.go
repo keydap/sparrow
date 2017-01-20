@@ -7,6 +7,7 @@ import (
 	ber "gopkg.in/asn1-ber.v1"
 	"io"
 	"net"
+	"runtime/debug"
 	"sparrow/base"
 	"sparrow/provider"
 	"sparrow/schema"
@@ -62,6 +63,7 @@ func serveClient(con *net.TCPConn) {
 		e := recover()
 		if e != nil {
 			log.Criticalf("recovered from panic while serving LDAP client %v", e)
+			debug.PrintStack()
 		}
 
 		log.Debugf("closing connection %s", remoteAddr)
@@ -129,6 +131,11 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 		return
 	}
 
+	rdns := strings.Split(bindReq.Username, ",")
+
+	pos := strings.IndexRune(rdns[0], '=')
+
+	bindReq.Username = rdns[0][pos+1:]
 	user := pr.Authenticate(bindReq.Username, bindReq.Password)
 	if user == nil {
 		errResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultInvalidCredentials, "Invalid username or password")
@@ -277,6 +284,7 @@ func toSearchContext(messageId int, packet *ber.Packet, ls *LdapSession) (search
 
 	// sort the names and eliminate redundant values, for example "name, name.familyName" will be reduced to name
 	attrParam = base.ConvertToParamAttributes(attrSet, subAtPresent)
+	searchCtx.Session = ls.token
 
 	return searchCtx, pr, attrParam
 }
@@ -303,97 +311,99 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 		return
 	}
 
-	count := 0
 	for rs := range outPipe {
-		typeName := rs.GetType().Name
-		tmpl := pr.LdapTemplates[typeName]
-		if tmpl == nil {
-			continue
-		}
-
-		dnAtVal := "at-not-found"
-		dnAt := rs.GetAttr(tmpl.DnAtName)
-		if dnAt != nil {
-			dnAtVal = fmt.Sprintf("%s", dnAt.GetSimpleAt().Values[0])
-		}
-
-		dn := fmt.Sprintf(tmpl.DnPrefix, dnAtVal, pr.Name)
-
-		entryEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
-		entryEnvelope.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
-
-		se := ber.Encode(ber.ClassApplication, ber.TypeConstructed, ldap.ApplicationSearchResultEntry, nil, "SerchResultEntry")
-		se.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, dn, "DN"))
-		attributes := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Entry Attributes")
-
-		ocLdapAt := &schema.LdapAttribute{LdapAttrName: "objectClass"}
-		addAttributeStringsPacket(ocLdapAt, attributes, tmpl.ObjectClasses)
-
-		for _, ap := range attrLst {
-			at := rs.GetAttr(ap.Name)
-			if at == nil {
-				continue
-			}
-
-			atType := at.GetType()
-
-			if atType.IsSimple() {
-				ldapAt := tmpl.AttrMap[ap.Name]
-				if ldapAt != nil {
-					sa := at.GetSimpleAt()
-					// the varargs is necessary otherwise caller will treat the entire array as one interface value
-					addAttributePacket(ldapAt, attributes, sa.Values...)
-				}
-			} else {
-				ca := at.GetComplexAt()
-				ldapAt := tmpl.AttrMap[ap.Name]
-				if ldapAt != nil {
-					// fill in the format
-					values := make([]string, 0)
-					for _, mapOfSa := range ca.SubAts {
-						formattedVal := ""
-						valPresent := false
-						for _, sn := range ldapAt.SubAtNames {
-							sa, ok := mapOfSa[sn]
-							if ok {
-								formattedVal += fmt.Sprintf("%s", sa.Values[0])
-								valPresent = true
-							}
-
-							formattedVal += ldapAt.FormatDelim
-						}
-
-						if valPresent {
-							fvl := len(formattedVal) - 1
-							values = append(values, formattedVal[:fvl])
-						}
-					}
-
-					if len(values) > 0 {
-						addAttributeStringsPacket(ldapAt, attributes, values)
-					}
-				}
-				// FIXME schema URI prefixed attributes won't work in the below scheme
-				// check if any attribute starts with ca.name + "."
-				for _, subAt := range atType.SubAttributes {
-					ldapAt := tmpl.AttrMap[ap.Name+"."+subAt.NormName]
-					if ldapAt != nil {
-						subAtVal := ca.GetValue(subAt.NormName)
-						if subAtVal != nil {
-							addAttributePacket(ldapAt, attributes, subAtVal)
-						}
-					}
-				}
-			}
-		}
-		count++
-
-		se.AppendChild(attributes)
-		entryEnvelope.AppendChild(se)
-		ls.con.Write(entryEnvelope.Bytes())
+		sendSearchResultEntry(rs, attrLst, pr, messageId, ls)
 	}
 
 	entryEnvelope := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultSuccess, "")
+	ls.con.Write(entryEnvelope.Bytes())
+}
+
+func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr *provider.Provider, messageId int, ls *LdapSession) {
+	typeName := rs.GetType().Name
+	tmpl := pr.LdapTemplates[typeName]
+	if tmpl == nil {
+		return
+	}
+
+	dnAtVal := "at-not-found"
+	dnAt := rs.GetAttr(tmpl.DnAtName)
+	if dnAt != nil {
+		dnAtVal = fmt.Sprintf("%s", dnAt.GetSimpleAt().Values[0])
+	}
+
+	dn := fmt.Sprintf(tmpl.DnPrefix, dnAtVal, pr.Name)
+
+	entryEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
+	entryEnvelope.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
+
+	se := ber.Encode(ber.ClassApplication, ber.TypeConstructed, ldap.ApplicationSearchResultEntry, nil, "SerchResultEntry")
+	se.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, dn, "DN"))
+	attributes := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Entry Attributes")
+
+	ocLdapAt := &schema.LdapAttribute{LdapAttrName: "objectClass"}
+	addAttributeStringsPacket(ocLdapAt, attributes, tmpl.ObjectClasses)
+
+	for _, ap := range attrLst {
+		at := rs.GetAttr(ap.Name)
+		if at == nil {
+			continue
+		}
+
+		atType := at.GetType()
+
+		if atType.IsSimple() {
+			ldapAt := tmpl.AttrMap[ap.Name]
+			if ldapAt != nil {
+				sa := at.GetSimpleAt()
+				// the varargs is necessary otherwise caller will treat the entire array as one interface value
+				addAttributePacket(ldapAt, attributes, sa.Values...)
+			}
+		} else {
+			ca := at.GetComplexAt()
+			ldapAt := tmpl.AttrMap[ap.Name]
+			if ldapAt != nil {
+				// fill in the format
+				values := make([]string, 0)
+				for _, mapOfSa := range ca.SubAts {
+					formattedVal := ""
+					valPresent := false
+					for _, sn := range ldapAt.SubAtNames {
+						sa, ok := mapOfSa[sn]
+						if ok {
+							formattedVal += fmt.Sprintf("%s", sa.Values[0])
+							valPresent = true
+						}
+
+						formattedVal += ldapAt.FormatDelim
+					}
+
+					if valPresent {
+						fvl := len(formattedVal) - 1
+						values = append(values, formattedVal[:fvl])
+					}
+				}
+
+				if len(values) > 0 {
+					addAttributeStringsPacket(ldapAt, attributes, values)
+				}
+			}
+			// FIXME schema URI prefixed attributes won't work in the below scheme
+			// check if any attribute starts with ca.name + "."
+			for _, subAt := range atType.SubAttributes {
+				ldapAt := tmpl.AttrMap[ap.Name+"."+subAt.NormName]
+				if ldapAt != nil {
+					subAtVal := ca.GetValue(subAt.NormName)
+					if subAtVal != nil {
+						addAttributePacket(ldapAt, attributes, subAtVal)
+					}
+				}
+			}
+		}
+	}
+
+	se.AppendChild(attributes)
+	entryEnvelope.AppendChild(se)
 	ls.con.Write(entryEnvelope.Bytes())
 }
 
