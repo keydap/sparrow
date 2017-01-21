@@ -16,7 +16,7 @@ const salt_size = 8 //64 bits, common size for all salts
 type HashType uint
 
 const (
-	MD5 HashType = iota
+	MD5 HashType = 1 + iota
 	SHA1
 	SHA256
 	SHA512
@@ -36,6 +36,10 @@ func init() {
 	for k, v := range hashTypeMap {
 		nameHashTypeMap[v] = k
 	}
+}
+
+func FindHashType(algoName string) HashType {
+	return nameHashTypeMap[algoName]
 }
 
 func HashPassword(plaintext string, algo HashType) string {
@@ -84,8 +88,8 @@ func ComparePassword(plaintext string, hashVal string) bool {
 	if len(hashBytes) > salt_size {
 		salt = hashBytes[:salt_size]
 	}
-	
+
 	newHash := _hashPassword(plaintext, salt, nameHashTypeMap[hashAlgo])
-	
+
 	return bytes.Equal(newHash, hashBytes)
 }

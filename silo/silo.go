@@ -34,6 +34,8 @@ var (
 
 var log logger.Logger
 
+var prvConf *conf.Config
+
 func init() {
 	log = logger.GetLogger("sparrow.silo")
 }
@@ -350,6 +352,7 @@ func (idx *Index) convert(val interface{}) []byte {
 }
 
 func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceType, sm map[string]*schema.Schema) (*Silo, error) {
+	prvConf = config
 	db, err := bolt.Open(path, 0644, nil)
 
 	if err != nil {
@@ -731,6 +734,12 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 	}
 
 	if rt.Name == "User" {
+		passwordAt := inRes.GetAttr("password")
+		if passwordAt != nil {
+			vals := passwordAt.GetSimpleAt().Values
+			vals[0] = utils.HashPassword(vals[0].(string), prvConf.PasswdHashType)
+		}
+
 		acType := rt.GetAtType("active")
 		activeAt := inRes.GetAttr(acType.NormName)
 		if activeAt == nil {
@@ -1551,10 +1560,10 @@ func (sl *Silo) Authenticate(principal string, password string) (user *base.Reso
 		return nil, fmt.Errorf("No password present for the user %s", principal)
 	}
 
-	passwd := at.GetSimpleAt().Values[0].(string)
+	hashedPasswd := at.GetSimpleAt().Values[0].(string)
 
 	// compare passwords
-	if strings.Compare(password, passwd) == 0 {
+	if utils.ComparePassword(password, hashedPasswd) {
 		return user, nil
 	}
 

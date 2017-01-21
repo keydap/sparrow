@@ -13,6 +13,7 @@ import (
 	_ "sparrow/rbac"
 	"sparrow/schema"
 	"sparrow/silo"
+	"sparrow/utils"
 	"strings"
 )
 
@@ -58,6 +59,10 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	cf := prv.config
+	cf.PasswdHashAlgo = strings.ToLower(cf.PasswdHashAlgo)
+	cf.PasswdHashType = utils.FindHashType(cf.PasswdHashAlgo)
 
 	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
 

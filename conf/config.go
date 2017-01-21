@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"io/ioutil"
+	"sparrow/utils"
 )
 
 type ServerConf struct {
@@ -69,8 +70,14 @@ type ResourceConf struct {
 }
 
 type Config struct {
-	Scim  *ScimConfig
-	Oauth *OauthConfig
+	Scim           *ScimConfig
+	Oauth          *OauthConfig
+	Ppolicy        *Ppolicy
+	PasswdHashAlgo string `json:"password-hash-algo"`
+	PasswdHashType utils.HashType
+}
+
+type Ppolicy struct {
 }
 
 type OauthConfig struct {
@@ -121,9 +128,14 @@ func DefaultConfig() *Config {
 
 	oauthCf := &OauthConfig{}
 
+	ppolicy := &Ppolicy{}
+
 	cf := &Config{}
 	cf.Scim = scim
 	cf.Oauth = oauthCf
+	cf.Ppolicy = ppolicy
+	cf.PasswdHashAlgo = "sha256"
+	cf.PasswdHashType = utils.SHA256
 
 	return cf
 }
