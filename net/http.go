@@ -45,7 +45,7 @@ var osl *oauth.OauthSilo
 var cs *sessions.CookieStore
 
 func init() {
-	log = logger.GetLogger("sparrow.scim.http")
+	log = logger.GetLogger("sparrow.scim.net")
 }
 
 type httpContext struct {
@@ -55,12 +55,9 @@ type httpContext struct {
 	*base.OpContext
 }
 
-func Start(srvHome string) {
-
-	log.Debugf("Starting server...")
-
-	srvConf = initHome(srvHome)
-	templates = parseTemplates(srvConf.TmplDir)
+func startHttp() {
+	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.HttpPort)
+	log.Infof("Starting http server %s", hostAddr)
 
 	router := mux.NewRouter()
 	router.StrictSlash(true)
@@ -113,13 +110,6 @@ func Start(srvHome string) {
 	router.HandleFunc("/login", showLogin).Methods("GET")
 	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
 
-	ldapHostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.LdapPort)
-	err := StartLdap(ldapHostAddr)
-	if err != nil {
-		panic(err)
-	}
-
-	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.HttpPort)
 	if srvConf.Https {
 		http.ListenAndServeTLS(hostAddr, srvConf.CertFile, srvConf.PrivKeyFile, router)
 	} else {

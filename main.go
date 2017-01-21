@@ -8,10 +8,8 @@ import (
 	"io/ioutil"
 	"os"
 	"sparrow/base"
-	"sparrow/conf"
 	"sparrow/net"
 	"sparrow/schema"
-	"strconv"
 	"time"
 )
 
@@ -26,12 +24,6 @@ func main() {
 	//	net.Start("/Volumes/EVOSSD/sparrow-bench")
 
 	if false {
-		// ldap
-		srvConf := &conf.ServerConf{}
-		srvConf.LdapPort = 7092
-		srvConf.Ipaddress = "0.0.0.0"
-		hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.LdapPort)
-		net.StartLdap(hostAddr)
 		log := logger.GetLogger("scim.main")
 		resDir = resDir + "/resources/"
 		sc, err := schema.LoadSchema(resDir + "/schemas/user.json")

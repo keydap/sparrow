@@ -32,6 +32,20 @@ var DEFAULT_SRV_CONF string = `{
 
 var COOKIE_LOGIN_NAME string = "SPLCN"
 
+func Start(srvHome string) {
+	log.Debugf("Starting server(s)...")
+
+	srvConf = initHome(srvHome)
+	templates = parseTemplates(srvConf.TmplDir)
+
+	err := startLdap()
+	if err != nil {
+		panic(err)
+	}
+
+	startHttp()
+}
+
 func initHome(srvHome string) *conf.ServerConf {
 	log.Debugf("Checking server home directory %s", srvHome)
 	utils.CheckAndCreate(srvHome)
