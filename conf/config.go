@@ -11,6 +11,7 @@ type ServerConf struct {
 	Https              bool   `json:"enable-https"`
 	HttpPort           int    `json:"http-port"`
 	LdapPort           int    `json:"ldap-port"`
+	LdapOverTlsOnly    bool   `json:"ldap-over-tls-only"`
 	Ipaddress          string `json:"ipaddress"`
 	CertFile           string `json:"certificate"`
 	PrivKeyFile        string `json:"privatekey"`

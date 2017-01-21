@@ -104,6 +104,11 @@ func serveClient(ls *LdapSession) {
 
 		switch appMessage.Tag {
 		case ldap.ApplicationBindRequest:
+			secure := isSecure(messageId, ldap.ApplicationBindResponse, ls)
+			if !secure {
+				continue
+			}
+
 			bindReq := &ldap.SimpleBindRequest{}
 			bindReq.Username = string(appMessage.Children[1].ByteValue)
 			bindReq.Password = string(appMessage.Children[2].Data.Bytes())
@@ -111,6 +116,11 @@ func serveClient(ls *LdapSession) {
 			handleSimpleBind(bindReq, ls, messageId)
 
 		case ldap.ApplicationSearchRequest:
+			secure := isSecure(messageId, ldap.ApplicationSearchResultDone, ls)
+			if !secure {
+				continue
+			}
+
 			if ls.token == nil {
 				// throw unauthorized error
 				errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultInsufficientAccessRights, "insufficientAccessRights")
@@ -136,6 +146,17 @@ func serveClient(ls *LdapSession) {
 			//ls.con.Write(errResp.Bytes())
 		}
 	}
+}
+
+func isSecure(messageId int, appRespTag ber.Tag, ls *LdapSession) bool {
+	_, isTlsCon := ls.con.(*tls.Conn)
+	if srvConf.LdapOverTlsOnly && !isTlsCon {
+		errResp := generateResultCode(messageId, appRespTag, ldap.LDAPResultConfidentialityRequired, "operations are allowed only on connections secured using TLS")
+		ls.con.Write(errResp.Bytes())
+		return false
+	}
+
+	return true
 }
 
 func startTls(messageId int, ls *LdapSession) {
