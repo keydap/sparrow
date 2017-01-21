@@ -35,7 +35,7 @@ var (
 var log logger.Logger
 
 func init() {
-	log = logger.GetLogger("sparrow.scim.silo")
+	log = logger.GetLogger("sparrow.silo")
 }
 
 type Silo struct {

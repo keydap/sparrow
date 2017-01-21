@@ -17,7 +17,7 @@ var log logger.Logger
 var urlEncoder = base64.URLEncoding.WithPadding(base64.NoPadding)
 
 func init() {
-	log = logger.GetLogger("sparrow.scim.utils")
+	log = logger.GetLogger("sparrow.utils")
 }
 
 func GenUUID() string {

@@ -32,7 +32,7 @@ type OauthSilo struct {
 var log logger.Logger
 
 func init() {
-	log = logger.GetLogger("sparrow.scim.oauth")
+	log = logger.GetLogger("sparrow.oauth")
 }
 
 func Open(path string, cnf *conf.ServerConf) (osl *OauthSilo, err error) {

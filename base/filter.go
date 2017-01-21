@@ -22,7 +22,7 @@ var log logger.Logger
 
 func init() {
 	logger.ConfigureLoggers("<root>=debug;")
-	log = logger.GetLogger("sparrow.scim.base")
+	log = logger.GetLogger("sparrow.base")
 }
 
 // A structure representing a filter expression

@@ -37,7 +37,7 @@ const adminUserId = "10000000-0000-0000-0000-000000000000"
 var log logger.Logger
 
 func init() {
-	log = logger.GetLogger("sparrow.scim.provider")
+	log = logger.GetLogger("sparrow.provider")
 }
 
 func NewProvider(layout *Layout) (prv *Provider, err error) {

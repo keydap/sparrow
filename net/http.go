@@ -45,7 +45,7 @@ var osl *oauth.OauthSilo
 var cs *sessions.CookieStore
 
 func init() {
-	log = logger.GetLogger("sparrow.scim.net")
+	log = logger.GetLogger("sparrow.net")
 }
 
 type httpContext struct {
