@@ -131,11 +131,7 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 		return
 	}
 
-	rdns := strings.Split(bindReq.Username, ",")
-
-	pos := strings.IndexRune(rdns[0], '=')
-
-	bindReq.Username = rdns[0][pos+1:]
+	bindReq.Username = getUsernameFromDn(bindReq.Username)
 	user := pr.Authenticate(bindReq.Username, bindReq.Password)
 	if user == nil {
 		errResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultInvalidCredentials, "Invalid username or password")
@@ -146,6 +142,14 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 	ls.token = pr.GenerateSession(user)
 	successResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultSuccess, "")
 	ls.con.Write(successResp.Bytes())
+}
+
+func getUsernameFromDn(baseDn string) string {
+	rdns := strings.Split(baseDn, ",")
+
+	pos := strings.IndexRune(rdns[0], '=')
+
+	return rdns[0][pos+1:]
 }
 
 func generateResultCode(messageId int, appRespTag ber.Tag, resultCode int, errMsg string) *ber.Packet {
@@ -220,9 +224,6 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 		return
 	}
 
-	// TODO handle OBJECT scope
-	// if scope == 0
-
 	sc, pr, err := toSearchContext(ldapReq, ls)
 
 	if err != nil {
@@ -231,7 +232,7 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 		return
 	}
 
-	attrLst, err := parseFilter(child, sc, pr)
+	attrLst, err := parseFilter(child, ldapReq, sc, pr)
 	if err != nil {
 		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultOther, err.Error())
 		ls.con.Write(errResp.Bytes())
@@ -559,13 +560,30 @@ func getDomainAndEndpoint(baseDN string) (domain string, endPoint string) {
 	return strings.ToLower(domain), endPoint
 }
 
-func parseFilter(packet *ber.Packet, searchCtx *base.SearchContext, pr *provider.Provider) (attrParam []*base.AttributeParam, err error) {
+func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base.SearchContext, pr *provider.Provider) (attrParam []*base.AttributeParam, err error) {
 	scimFilter, err := ldapToScimFilter(packet.Children[6], searchCtx, pr)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Debugf("SCIM filter %s", scimFilter)
+
+	// handle OBJECT scope
+	if ldapReq.Scope == 0 {
+		if len(searchCtx.Endpoint) == 0 {
+			return nil, errors.New("Invalid base DN for searching at object scope")
+		}
+
+		tmpl := pr.LdapTemplates[searchCtx.Endpoint]
+		if tmpl == nil {
+			return nil, fmt.Errorf("No ldap template configured for resource '%s'", searchCtx.Endpoint)
+		}
+
+		rdnVal := getUsernameFromDn(ldapReq.BaseDN)
+
+		// FIXME not checking the DN attribute's type, just using string
+		scimFilter = tmpl.DnAtName + " eq \"" + rdnVal + "\" AND " + scimFilter
+	}
 
 	searchCtx.Filter, err = base.ParseFilter(scimFilter)
 	if err != nil {
