@@ -1,6 +1,7 @@
 package net
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/go-ldap/ldap"
@@ -15,11 +16,14 @@ import (
 )
 
 type LdapSession struct {
-	con   *net.TCPConn
+	Id    string
+	con   net.Conn
 	token *base.RbacSession
 }
 
 var ldapSessions = make(map[string]*LdapSession)
+
+var tlsConf *tls.Config
 
 func StartLdap(hostAddr string) error {
 	//hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.LdapPort)
@@ -37,6 +41,10 @@ func StartLdap(hostAddr string) error {
 		return err
 	}
 
+	tlsConf = &tls.Config{}
+	tlsCert, _ := tls.LoadX509KeyPair(srvConf.CertFile, srvConf.PrivKeyFile)
+	tlsConf.Certificates = []tls.Certificate{tlsCert}
+
 	go acceptConns(listener)
 
 	return nil
@@ -50,15 +58,17 @@ func acceptConns(listener *net.TCPListener) {
 			continue
 		}
 
-		log.Debugf("Serving new connection from %s", con.RemoteAddr())
-		go serveClient(con)
+		remoteAddr := con.RemoteAddr().String()
+		log.Debugf("Serving new connection from %s", remoteAddr)
+		ls := &LdapSession{}
+		ls.Id = remoteAddr
+		ls.con = con
+		ldapSessions[remoteAddr] = ls
+		go serveClient(ls)
 	}
 }
 
-func serveClient(con *net.TCPConn) {
-
-	remoteAddr := con.RemoteAddr().String()
-
+func serveClient(ls *LdapSession) {
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -66,17 +76,13 @@ func serveClient(con *net.TCPConn) {
 			debug.PrintStack()
 		}
 
-		log.Debugf("closing connection %s", remoteAddr)
-		con.Close()
-		delete(ldapSessions, remoteAddr)
+		log.Debugf("closing connection %s", ls.Id)
+		ls.con.Close()
+		delete(ldapSessions, ls.Id)
 	}()
 
-	ls := &LdapSession{}
-	ls.con = con
-	ldapSessions[remoteAddr] = ls
-
 	for {
-		packet, err := ber.ReadPacket(con)
+		packet, err := ber.ReadPacket(ls.con)
 		if err != nil {
 			if err == io.ErrUnexpectedEOF || err == io.EOF {
 				break
@@ -93,18 +99,18 @@ func serveClient(con *net.TCPConn) {
 			ber.PrintPacket(packet)
 		}
 
-		switch packet.Children[1].Tag {
+		messageId := int(packet.Children[0].Value.(int64))
+		appMessage := packet.Children[1]
+
+		switch appMessage.Tag {
 		case ldap.ApplicationBindRequest:
-			child := packet.Children[1]
 			bindReq := &ldap.SimpleBindRequest{}
-			bindReq.Username = string(child.Children[1].ByteValue)
-			bindReq.Password = string(child.Children[2].Data.Bytes())
-			messageId := int(packet.Children[0].Value.(int64))
+			bindReq.Username = string(appMessage.Children[1].ByteValue)
+			bindReq.Password = string(appMessage.Children[2].Data.Bytes())
 
 			handleSimpleBind(bindReq, ls, messageId)
 
 		case ldap.ApplicationSearchRequest:
-			messageId := int(packet.Children[0].Value.(int64))
 			if ls.token == nil {
 				// throw unauthorized error
 				errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultInsufficientAccessRights, "insufficientAccessRights")
@@ -113,12 +119,32 @@ func serveClient(con *net.TCPConn) {
 			}
 
 			handleSearch(messageId, packet, ls)
+
+		case ldap.ApplicationExtendedRequest:
+			oid := string(appMessage.Children[0].Data.Bytes())
+			if oid == "1.3.6.1.4.1.1466.20037" { // startTLS
+				resp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultSuccess, "")
+				ls.con.Write(resp.Bytes())
+				startTls(messageId, ls)
+			} else {
+				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultOther, "Unsupported extended operation "+oid)
+				ls.con.Write(errResp.Bytes())
+			}
+
+		default:
+			//errResp := generateResultCode(messageId, ?, ldap.LDAPResultOther, "Unsupported operation")
+			//ls.con.Write(errResp.Bytes())
 		}
 	}
 }
 
+func startTls(messageId int, ls *LdapSession) {
+	log.Debugf("securing the connection %s using startTLS", ls.Id)
+	ls.con = tls.Server(ls.con, tlsConf)
+}
+
 func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageId int) {
-	log.Debugf("handling bind request from %s", ls.con.RemoteAddr())
+	log.Debugf("handling bind request from %s", ls.Id)
 	log.Debugf("username = %s , password %s", bindReq.Username, bindReq.Password)
 
 	domain, _ := getDomainAndEndpoint(bindReq.Username)
@@ -167,7 +193,7 @@ func generateResultCode(messageId int, appRespTag ber.Tag, resultCode int, errMs
 
 func toSearchContext(req ldap.SearchRequest, ls *LdapSession) (searchCtx *base.SearchContext, pr *provider.Provider, err error) {
 	opCtx := &base.OpContext{}
-	opCtx.ClientIP = ls.con.RemoteAddr().Network()
+	opCtx.ClientIP = ls.Id
 
 	searchCtx = &base.SearchContext{}
 	searchCtx.OpContext = opCtx
@@ -213,7 +239,7 @@ func toLdapSearchRequest(packet *ber.Packet) ldap.SearchRequest {
 }
 
 func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
-	log.Debugf("handling search request from %s", ls.con.RemoteAddr())
+	log.Debugf("handling search request from %s", ls.Id)
 	child := packet.Children[1]
 
 	ldapReq := toLdapSearchRequest(child)
