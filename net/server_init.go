@@ -219,6 +219,13 @@ func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 		panic(err)
 	}
 
+	ldapGroupTmpl := filepath.Join(layout.LdapTmplDir, "ldap-group.json")
+	err = ioutil.WriteFile(ldapGroupTmpl, []byte(schema.LDAP_Group_Entry), 0644)
+	if err != nil {
+		log.Criticalf("Couldn't write the default LDAP group template file %s %#v", ldapGroupTmpl, err)
+		panic(err)
+	}
+
 	prv, err := provider.NewProvider(layout)
 	if err != nil {
 		panic(err)

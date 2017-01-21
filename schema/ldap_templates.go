@@ -36,6 +36,10 @@ const LDAP_User_Entry = `{
 	"dnPrefix": "uid={{userName}},ou=Users",
 	"attributes": [
 		{
+			"scimAttrPath": "id",
+			"ldapAttrName": "entryUUID"
+		},
+		{
 			"scimAttrPath": "userName",
 			"ldapAttrName": "uid"
 		},
@@ -57,6 +61,27 @@ const LDAP_User_Entry = `{
 			"scimAttrPath": "addresses",
 			"ldapAttrName": "postalAddress",
 			"format": "streetAddress$locality$region$country$postalCode"
+		}
+	]
+}`
+
+const LDAP_Group_Entry = `{
+	"type": "Group",
+	"objectClasses": ["top", "groupOfUniqueNames"],
+	"dnPrefix": "cn={{displayName}},ou=Groups",
+	"attributes": [
+		{
+			"scimAttrPath": "id",
+			"ldapAttrName": "entryUUID"
+		},
+		{
+			"scimAttrPath": "displayName",
+			"ldapAttrName": "cn"
+		},
+		{
+			"scimAttrPath": "members",
+			"ldapAttrName": "uniqueMember",
+			"format": "value"
 		}
 	]
 }`

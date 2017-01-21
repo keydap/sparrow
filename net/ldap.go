@@ -210,7 +210,7 @@ func toSearchContext(req ldap.SearchRequest, ls *LdapSession) (searchCtx *base.S
 
 	searchCtx.ResTypes = make([]*schema.ResourceType, 0)
 
-	rt := pr.RsTypes[searchCtx.Endpoint]
+	rt := pr.RtPathMap[searchCtx.Endpoint]
 	if rt != nil {
 		searchCtx.ResTypes = append(searchCtx.ResTypes, rt)
 	} else {
@@ -567,7 +567,7 @@ func getDomainAndEndpoint(baseDN string) (domain string, endPoint string) {
 		return domain, endPoint
 	}
 
-	for _, v := range rdns {
+	for i, v := range rdns {
 		v = strings.ToLower(v)
 		pos := strings.Index(v, "dc=")
 		if pos == 0 {
@@ -579,7 +579,7 @@ func getDomainAndEndpoint(baseDN string) (domain string, endPoint string) {
 		}
 		pos = strings.Index(v, "ou=")
 		if pos == 0 {
-			endPoint = "User" //v[3:]
+			endPoint = "/" + rdns[i][3:]
 		}
 	}
 
