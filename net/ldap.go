@@ -142,6 +142,7 @@ func serveClient(ls *LdapSession) {
 			}
 
 		default:
+			log.Warningf("Unsupported operation")
 			//errResp := generateResultCode(messageId, ?, ldap.LDAPResultOther, "Unsupported operation")
 			//ls.con.Write(errResp.Bytes())
 		}
