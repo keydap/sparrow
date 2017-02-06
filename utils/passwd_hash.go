@@ -86,7 +86,8 @@ func ComparePassword(plaintext string, hashVal string) bool {
 
 	var salt []byte
 	if len(hashBytes) > salt_size {
-		salt = hashBytes[:salt_size]
+		salt = make([]byte, salt_size)
+		copy(salt, hashBytes[:salt_size])
 	}
 
 	newHash := _hashPassword(plaintext, salt, nameHashTypeMap[hashAlgo])

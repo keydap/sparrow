@@ -14,5 +14,10 @@ func TestPasswordHashing(t *testing.T) {
 		if !result {
 			t.Errorf("Failed to compare the password hashed with %s", v)
 		}
+
+		result = ComparePassword("", hash)
+		if result {
+			t.Errorf("Empty password comparison must fail")
+		}
 	}
 }
