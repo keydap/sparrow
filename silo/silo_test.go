@@ -323,7 +323,7 @@ func TestReloadSilo(t *testing.T) {
 
 func assertPrCount(rs *base.Resource, readTx *bolt.Tx, expected int64, t *testing.T) {
 	prIdx := sl.getSysIndex(userResName, "presence")
-	for _, atName := range config.Resources[0].IndexFields {
+	for _, atName := range config.Scim.Resources[0].IndexFields {
 		// skip if there is no value for the attribute
 		if rs.GetAttr(atName) == nil {
 			continue
