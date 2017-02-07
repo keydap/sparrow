@@ -1234,6 +1234,10 @@ func ParseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 	}
 
 	simpleAtMap, _ := ParseSubAtList(iVal, attrType)
+	if len(simpleAtMap) == 0 {
+		return nil
+	}
+
 	ca.SubAts = make(map[string]map[string]*SimpleAttribute)
 	ca.SubAts[RandStr()] = simpleAtMap
 
