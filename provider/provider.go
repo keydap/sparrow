@@ -87,15 +87,16 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 }
 
 func (prv *Provider) createDefaultResources() error {
+	groupName := "Administrator"
 	_, err := prv.sl.Get(adminGroupId, prv.RsTypes["Group"])
 	if err != nil {
 		adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
 	                "id": "%s",
-				    "displayName": "Administrators",
+				    "displayName": "%s",
 				    "permissions": [{"value": "READ"}, {"value": "CREATE"}, {"value": "UPDATE"}, {"value": "DELETE"}]
 				   }`
 
-		adminGroup = fmt.Sprintf(adminGroup, adminGroupId)
+		adminGroup = fmt.Sprintf(adminGroup, adminGroupId, groupName)
 
 		buf := bytes.NewBufferString(adminGroup)
 
@@ -130,12 +131,13 @@ func (prv *Provider) createDefaultResources() error {
                      ],
                    "groups": [
                        {
-                          "value": "%s"
+                          "value": "%s",
+                          "display": "%s"
                        }
                      ]
                    }`
 
-		adminUser = fmt.Sprintf(adminUser, adminUserId, prv.Name, adminGroupId) // fill in the placeholders
+		adminUser = fmt.Sprintf(adminUser, adminUserId, prv.Name, adminGroupId, groupName) // fill in the placeholders
 		buf := bytes.NewBufferString(adminUser)
 		userRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
 		if err != nil {
