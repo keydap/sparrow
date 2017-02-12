@@ -40,7 +40,7 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 		t.Errorf("Patch operation modified though the attribute data is unchanged")
 	}
 
-	pr = getPr(`{"Operations":[{"op":"remove", "path": "location.latitude"}]}`, deviceType, updatedRs.GetVersion())
+	pr = getPr(`{"Operations":[{"op":"remove", "path": "location.LatiTude"}]}`, deviceType, updatedRs.GetVersion())
 
 	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {

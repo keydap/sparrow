@@ -354,7 +354,7 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 			if pp.ParentType.MultiValued {
 				// delete the sub-attribute from all values
 				for i, subAtMap := range ca.SubAts {
-					if sa, ok := subAtMap[pp.AtType.Name]; ok {
+					if sa, ok := subAtMap[pp.AtType.NormName]; ok {
 						if isMemberVal {
 							sl._deleteGroupMembers(subAtMap, rid, tx)
 						}
@@ -376,7 +376,7 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 	} else {
 		isMembers := (isGroup && pp.AtType.NormName == "members")
 		if pp.Slctr != nil {
-			at := res.GetAttr(pp.AtType.Name)
+			at := res.GetAttr(pp.AtType.NormName)
 			if at.IsSimple() {
 				detail := fmt.Sprintf("The attribute %s associated with the selector %s present in the path of operation %d is not a complex attribute", pp.AtType.Name, pp.Text, po.Index)
 				se := base.NewBadRequestError(detail)
@@ -398,7 +398,7 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 			}
 			mh.markDirty()
 		} else {
-			at := res.DeleteAttr(pp.AtType.Name)
+			at := res.DeleteAttr(pp.AtType.NormName)
 			if at != nil {
 				if at.IsSimple() {
 					sa := at.GetSimpleAt()
@@ -545,12 +545,27 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 	} else { // handle SimpleAttributes
 		if pp.ParentType != nil {
 			var offsets []string
-			tCa := res.GetAttr(pp.ParentType.NormName).GetComplexAt()
+			var tCa *base.ComplexAttribute
+
+			tAt := res.GetAttr(pp.ParentType.NormName)
+
+			// to handle cases where parent is not present but
+			// a sub-attribute is being added using PATCH
+			if tAt == nil {
+				tCa = base.NewComplexAt(pp.ParentType)
+				res.AddComplexAt(tCa)
+			} else {
+				tCa = tAt.GetComplexAt()
+			}
+
 			if pp.Slctr != nil {
 				offsets = findSelectedObj(po, tCa)
 			} else {
 				_, key := tCa.GetFirstSubAtAndKey()
-				offsets = []string{key}
+				// only initialize if the key is not empty
+				if key != "" {
+					offsets = []string{key}
+				}
 			}
 
 			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
@@ -561,22 +576,33 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 				}
 			}
 
-			for _, o := range offsets {
-				tSaMap := tCa.SubAts[o]
-				tSa := tSaMap[pp.AtType.NormName]
+			atPath := pp.ParentType.NormName + "." + sa.Name
 
-				atPath := pp.ParentType.NormName + "." + sa.Name
+			// a new CA was just added above
+			if offsets == nil {
+				atMap := make(map[string]*base.SimpleAttribute)
+				key := base.RandStr()
+				tCa.SubAts[key] = atMap
 
-				if tSa == nil {
-					tSaMap[pp.AtType.NormName] = sa
-					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
-					mh.markDirty()
-				} else if !sa.Equals(tSa) {
-					//re-index
-					sl.dropSAtFromIndex(tSa, atPath, prIdx, rt.Name, rid, tx)
-					tSaMap[pp.AtType.NormName] = sa
-					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
-					mh.markDirty()
+				atMap[pp.AtType.NormName] = sa
+				sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
+				mh.markDirty()
+			} else {
+				for _, o := range offsets {
+					tSaMap := tCa.SubAts[o]
+					tSa := tSaMap[pp.AtType.NormName]
+
+					if tSa == nil {
+						tSaMap[pp.AtType.NormName] = sa
+						sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
+						mh.markDirty()
+					} else if !sa.Equals(tSa) {
+						//re-index
+						sl.dropSAtFromIndex(tSa, atPath, prIdx, rt.Name, rid, tx)
+						tSaMap[pp.AtType.NormName] = sa
+						sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
+						mh.markDirty()
+					}
 				}
 			}
 		} else {
@@ -844,7 +870,7 @@ func findSelectedObj(po *base.PatchOp, tCa *base.ComplexAttribute) []string {
 func deleteAtFromSubAtMap(sl *Silo, pp *base.ParsedPath, tSaMap map[string]*base.SimpleAttribute, key string, ca *base.ComplexAttribute, prIdx *Index, res *base.Resource, rid string, tx *bolt.Tx, mh *modifyHints) {
 	numSubObj := len(ca.SubAts)
 	rt := res.GetType()
-	if sa, ok := tSaMap[pp.AtType.Name]; ok {
+	if sa, ok := tSaMap[pp.AtType.NormName]; ok {
 		delete(tSaMap, sa.Name)
 		sl.dropSAtFromIndex(sa, ca.Name+"."+sa.Name, prIdx, rt.Name, rid, tx)
 		if len(tSaMap) == 0 {

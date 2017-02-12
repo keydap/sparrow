@@ -298,6 +298,15 @@ func TestPatchAddExtensionAts(t *testing.T) {
 	assertEquals(t, "employeeNumber", updatedRs, "1")
 	assertEquals(t, "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber", updatedRs, "1")
 	assertIndexVal(userType.Name, "employeeNumber", "1", true, t)
+
+	// add a sub-attribute when parent is not present
+	pr = getPr(`{"Operations":[{"op":"add", "path": "name.familyNamE", "value": "Mantha"}]}`, userType, updatedRs.GetVersion())
+	updatedRs, err = sl.Patch(rs.GetId(), pr, userType)
+	if err != nil {
+		t.Errorf("Failed to apply patch req with sub-attribute")
+	}
+
+	assertEquals(t, "name.FamilyNamE", updatedRs, "Mantha")
 }
 
 func insertRs(json string) *base.Resource {
