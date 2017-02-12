@@ -754,7 +754,7 @@ func (rs *Resource) AddCA(name string, val ...map[string]interface{}) (err error
 		return fmt.Errorf("Failed to add the complex attribute %s, check the JSON data", name)
 	}
 
-	rs.addComplexAt(ca)
+	rs.AddComplexAt(ca)
 	return nil
 }
 
@@ -774,7 +774,7 @@ func (rs *Resource) AddSimpleAt(sa *SimpleAttribute) {
 	atg.SimpleAts[sa.Name] = sa
 }
 
-func (rs *Resource) addComplexAt(ca *ComplexAttribute) {
+func (rs *Resource) AddComplexAt(ca *ComplexAttribute) {
 	scId := ca.atType.SchemaId
 	if scId == rs.resType.Schema {
 		rs.Core.ComplexAts[ca.Name] = ca
@@ -1047,7 +1047,7 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 		} else if atType.IsComplex() {
 			ca := ParseComplexAttr(atType, v)
 			if ca != nil {
-				rs.addComplexAt(ca)
+				rs.AddComplexAt(ca)
 			}
 		}
 	}
