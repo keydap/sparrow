@@ -120,6 +120,9 @@ func (ar *ArithmeticSelector) Find(ca *ComplexAttribute) []string {
 
 func caCompare(node *FilterNode, ca *ComplexAttribute) []string {
 	indices := make([]string, 0)
+
+	emptyVal := (len(node.Value) == 0)
+
 	for i, subAtMap := range ca.SubAts {
 		sa := subAtMap[node.atType.NormName]
 		if sa != nil {
@@ -127,6 +130,9 @@ func caCompare(node *FilterNode, ca *ComplexAttribute) []string {
 			if matched {
 				indices = append(indices, i)
 			}
+		} else if emptyVal { // still add cause "" and nil are treated as equal in PATCH
+			// the spec is not clear about it so this is Sparrow specific
+			indices = append(indices, i)
 		}
 	}
 
