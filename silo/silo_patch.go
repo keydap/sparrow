@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	"reflect"
+	"runtime/debug"
 	"sparrow/base"
 	"sparrow/schema"
 	"strings"
@@ -28,7 +29,10 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 		if err != nil {
 			tx.Rollback()
 			res = nil
-			log.Debugf("failed to modify %s resource [%s]", rt.Name, err)
+			if log.IsDebugEnabled() {
+				log.Debugf("failed to modify %s resource [%s]", rt.Name, err)
+				debug.PrintStack()
+			}
 		} else {
 			tx.Commit()
 
@@ -490,11 +494,17 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 					for i := 0; i < arrLen; i++ {
 						val := rv.Index(i).Interface()
 						subAtMap, p := base.ParseSubAtList(val, pp.AtType)
+						// to handle cases like { "op": "add", "path": "emails", "value": [ {} ] }
+						if len(subAtMap) == 0 {
+							continue
+						}
+
 						if p {
 							if !prmSet {
 								prmSet = true
 								// reset any other sub-list's primary flag if set
 								tCa.UnsetPrimaryFlag()
+								mh.markDirty()
 							} else {
 								detail := fmt.Sprintf("More than one sub-attribute object has the primary flag set in the %d operation", po.Index)
 								panic(base.NewBadRequestError(detail))
@@ -513,6 +523,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 						}
 
 						sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
+						mh.markDirty()
 					}
 				} else {
 					subAtMap, primary := base.ParseSubAtList(po.Value, pp.AtType)
@@ -534,6 +545,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 
 					// index the subAtMap
 					sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
+					mh.markDirty()
 				}
 			} else { // merge them
 				subAtMap, _ := base.ParseSubAtList(po.Value, pp.AtType)

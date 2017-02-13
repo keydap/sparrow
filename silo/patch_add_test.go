@@ -7,6 +7,7 @@ import (
 	"sparrow/schema"
 	"sparrow/utils"
 	"testing"
+	"time"
 )
 
 var patchDevice = `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],     
@@ -102,6 +103,44 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	millis = utils.GetTimeMillis("2016-05-29T14:19:14Z")
 	assertEquals(t, "repairDates", updatedRs, millis)
 	assertIndexVal(deviceType.Name, "repairDates", millis, true, t)
+
+	// try to add more photos using patch
+	prevVersion := updatedRs.GetVersion()
+
+	// sleep for a second to give a chance to set the new version to a different timstamp
+	// FIXME set the version to a CSN instead of just timestamp
+	time.Sleep(100 * time.Millisecond)
+	pr = getPr(`{"Operations":[{"op":"add", "path":"photos", "value":[{"value": "yet-another-pic.jpg", "primary": false}]}]}`, deviceType, updatedRs.GetVersion())
+	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	if err != nil {
+		t.Errorf("Failed to apply patch req with path on a multivalued photos attribute %s", err)
+	}
+
+	assertIndexVal(deviceType.Name, "photos.value", "yet-another-pic.jpg", true, t)
+	assertIndexVal(deviceType.Name, "photos.value", "abc.jpg", true, t)
+	assertIndexVal(deviceType.Name, "photos.value", "xyz.jpg", true, t)
+
+	curVersion := updatedRs.GetVersion()
+	if prevVersion == curVersion {
+		//FIXME for some reason go test ./... is not reporting
+		// when t.Error() is called, using panic for now
+		panic("Version should have been modified if the patch operation was successful")
+	}
+
+	prevVersion = curVersion
+
+	time.Sleep(100 * time.Millisecond)
+
+	pr = getPr(`{"Operations":[{"op":"add", "path":"photos", "value":[{}]}]}`, deviceType, updatedRs.GetVersion())
+	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	if err != nil {
+		t.Errorf("Failed to apply patch req with path on a multivalued photos attribute and empty value %s", err)
+	}
+
+	curVersion = updatedRs.GetVersion()
+	if prevVersion != curVersion {
+		panic("Version should NOT have been modified cause the patch operation didn't have any meaningful values")
+	}
 }
 
 func TestModifyUniqueSimpleAt(t *testing.T) {
