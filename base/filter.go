@@ -365,7 +365,7 @@ func (fn *FilterNode) SetAtType(atType *schema.AttrType) {
 
 // make fn.Value as interface{} type then the below parsing is not needed
 func (fn *FilterNode) normalize() {
-	if fn.atType == nil || len(fn.Value) == 0 {
+	if fn.atType == nil {
 		return
 	}
 
