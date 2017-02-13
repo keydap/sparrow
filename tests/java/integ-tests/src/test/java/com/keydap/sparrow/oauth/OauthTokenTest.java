@@ -118,6 +118,7 @@ public class OauthTokenTest {
                 }
                 br.close();
                 response.setStatus(HttpServletResponse.SC_OK);
+                response.getWriter().flush();
             }
         };
         
