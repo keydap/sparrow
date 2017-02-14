@@ -43,9 +43,6 @@ func (ci csnImpl) ModificationCount() uint32 {
 
 func (ci csnImpl) String() string {
 	t := ci.now.Format(gtime_format)
-	//	cc := strconv.Itoa()
-	//	sid := strconv.Itoa()
-	//	mc := strconv.Itoa()
 
 	return fmt.Sprintf("%s#%06x#%03x#%06x", t, ci.changeCount, ci.replicaId, ci.modCount)
 }
