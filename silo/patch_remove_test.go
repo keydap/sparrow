@@ -35,7 +35,7 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 	newMeta := notUpdatedRs.GetMeta().GetFirstSubAt()
 
 	assertEquals(t, "meta.created", notUpdatedRs, originalMeta["created"].Values[0])
-	assertEquals(t, "meta.version", notUpdatedRs, fmt.Sprint(originalMeta["lastmodified"].Values[0]))
+	assertEquals(t, "meta.version", notUpdatedRs, fmt.Sprint(originalMeta["version"].Values[0]))
 	if originalMeta["lastmodified"].Values[0] != newMeta["lastmodified"].Values[0] {
 		t.Errorf("Patch operation modified though the attribute data is unchanged")
 	}

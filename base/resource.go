@@ -594,11 +594,10 @@ func Compare(atType *schema.AttrType, saVal interface{}, otherVal interface{}) b
 	panic(fmt.Errorf("Unknown attribute type comparison"))
 }
 
-func (rs *Resource) UpdateLastModTime() {
+func (rs *Resource) UpdateLastModTime(csn Csn) {
 	meta := rs.Core.ComplexAts["meta"].GetFirstSubAt()
-	millis := utils.DateTimeMillis()
-	meta["lastmodified"].Values[0] = millis
-	meta["version"].Values[0] = fmt.Sprint(millis)
+	meta["lastmodified"].Values[0] = csn.TimeMillis()
+	meta["version"].Values[0] = csn.String()
 }
 
 func (rs *Resource) UpdateSchemas() {

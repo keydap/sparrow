@@ -53,7 +53,7 @@ func TestReplace(t *testing.T) {
 	newMeta := newRs.GetMeta().GetFirstSubAt()
 
 	assertEquals(t, "meta.created", newRs, originalMeta["created"].Values[0])
-	assertEquals(t, "meta.version", newRs, fmt.Sprint(newMeta["lastmodified"].Values[0]))
+	assertEquals(t, "meta.version", newRs, fmt.Sprint(newMeta["version"].Values[0]))
 	if originalMeta["lastmodified"].Values[0] == newMeta["lastmodified"].Values[0] {
 		t.Errorf("Replace operation didn't modify value of meta.lastModified attribute")
 	}

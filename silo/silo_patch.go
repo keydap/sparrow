@@ -73,7 +73,7 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 	}
 
 	if mh.modified {
-		res.UpdateLastModTime()
+		res.UpdateLastModTime(sl.cg.NewCsn())
 		sl.storeResource(tx, res)
 	}
 

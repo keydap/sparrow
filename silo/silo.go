@@ -48,6 +48,7 @@ type Silo struct {
 	schemas    map[string]*schema.Schema
 	resTypes   map[string]*schema.ResourceType
 	Engine     *rbac.RbacEngine
+	cg         *csnGenerator
 }
 
 type Index struct {
@@ -492,6 +493,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 
 	sl.Engine = rbac.NewEngine()
 
+	sl.cg = NewCsnGenerator(0) //FIXME replicaID must be configurable
 	// load the roles
 	sl.LoadGroups()
 
@@ -824,7 +826,7 @@ func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string,
 
 				if updated {
 					ugroupIdx.add(groupRid, refId, tx)
-					refRes.UpdateLastModTime()
+					refRes.UpdateLastModTime(sl.cg.NewCsn())
 					sl.storeResource(tx, refRes)
 				}
 			}
@@ -998,7 +1000,7 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 								if ugroupIdx != nil {
 									ugroupIdx.remove(val, refId, tx)
 								}
-								res.UpdateLastModTime()
+								res.UpdateLastModTime(sl.cg.NewCsn())
 								sl.storeResource(tx, res)
 								break
 							}
@@ -1026,7 +1028,7 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 							// removing
 							gmemberIdx.remove(rid, gid, tx)
 						}
-						res.UpdateLastModTime()
+						res.UpdateLastModTime(sl.cg.NewCsn())
 						sl.storeResource(tx, res)
 						break
 					}
@@ -1181,7 +1183,7 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 	sl.deleteFromAtGroup(rt.Name, rid, tx, prIdx, inRes.Core, existing.Core)
 
 	// update last modified time
-	existing.UpdateLastModTime()
+	existing.UpdateLastModTime(sl.cg.NewCsn())
 	existing.UpdateSchemas()
 
 	sl.storeResource(tx, existing)
@@ -1236,7 +1238,7 @@ func (sl *Silo) _deleteGroupMembers(memberSubAtMap map[string]*base.SimpleAttrib
 				if len(groups.SubAts) == 0 {
 					user.DeleteAttr("groups")
 				}
-				user.UpdateLastModTime()
+				user.UpdateLastModTime(sl.cg.NewCsn())
 				sl.storeResource(tx, user)
 				return updated
 			}
