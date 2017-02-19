@@ -33,7 +33,7 @@ func (engine *RbacEngine) NewRbacSession(rs *base.Resource) *base.RbacSession {
 	session.Domain = engine.Domain
 	session.Iat = time.Now().Unix()
 	session.Exp = session.Iat + engine.TokenTtl
-	session.Jti = utils.GenUUID()
+	session.Jti = utils.NewRandShaStr()
 
 	groups := rs.GetAttr("groups")
 	if groups == nil {

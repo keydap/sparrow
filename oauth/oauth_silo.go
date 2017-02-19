@@ -222,6 +222,34 @@ func (osl *OauthSilo) loadRevokedTokens() int {
 	return len(osl.rvTokens)
 }
 
+func (osl *OauthSilo) GetToken(jti string) *base.RbacSession {
+	tx, err := osl.db.Begin(false)
+	if err != nil {
+		log.Warningf("Failed to start readonly transaction for fetching token %s", err)
+		return nil
+	}
+
+	tBucket := tx.Bucket(BUC_ISSUED_TOKENS)
+
+	token := tBucket.Get([]byte(jti))
+	tx.Rollback()
+
+	if len(token) == 0 {
+		return nil
+	}
+
+	var session *base.RbacSession
+	buf := bytes.NewBuffer(token)
+	dec := gob.NewDecoder(buf)
+	err = dec.Decode(&session)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return session
+}
+
 func (osl *OauthSilo) Close() {
 	log.Infof("Closing oauth silo")
 	osl.db.Close()
@@ -230,6 +258,7 @@ func (osl *OauthSilo) Close() {
 }
 
 func removeExpiredTokens(osl *OauthSilo) {
+	log.Debugf("Starting token remover")
 	defer func() {
 		// this can happen when the silo gets closed
 		// but the goroutine is still executing
@@ -253,13 +282,16 @@ func removeExpiredTokens(osl *OauthSilo) {
 
 		cursor := idxBuck.Cursor()
 
-		now := time.Now().Unix()
+		t := time.Now()
+		now := t.Unix()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 			exp := utils.Btoi(v)
-			if exp >= now {
+			if exp <= now {
 				log.Debugf("Removed expired token %s", string(k))
 				idxBuck.Delete(k)
 				tokenBuck.Delete(k)
+			} else {
+				log.Debugf("cookie %d didn't expire at %s", exp, t.Format(time.RFC3339))
 			}
 		}
 

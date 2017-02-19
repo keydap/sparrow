@@ -20,7 +20,7 @@ func TestCodeGeneration(t *testing.T) {
 
 	cl := oauth.NewClient()
 
-	code := newOauthCode(cl, ttl, id, domCode)
+	code := newOauthCode(cl, ttl, id, domCode, OAuth2)
 	fmt.Println(code)
 
 	ac := decryptOauthCode(code, cl)

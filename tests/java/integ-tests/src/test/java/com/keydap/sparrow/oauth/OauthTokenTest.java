@@ -7,7 +7,7 @@
 package com.keydap.sparrow.oauth;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -41,6 +41,7 @@ import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.AbstractHandler;
 import org.junit.AfterClass;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.openqa.selenium.By;
@@ -77,13 +78,27 @@ public class OauthTokenTest {
     static String spResponse = null;
     
     static String code;
+    static String idToken;
     
-    JsonParser parser = new JsonParser();
+    static JsonParser parser = new JsonParser();
     
     static WebDriver browser;
-    
+
+    String clientId;
+
+    String clientSecret;
+
     static {
         System.setProperty("webdriver.gecko.driver", "/Users/dbugger/bin/geckodriver");
+    }
+    
+    @Before
+    public void reset() throws Exception {
+        code = null;
+        idToken = null;
+        if(clientId == null) {
+            registerClient();
+        }
     }
     
     @BeforeClass
@@ -107,7 +122,9 @@ public class OauthTokenTest {
                     return;
                 }
                 
+                System.out.println(baseRequest);
                 code = baseRequest.getParameter("code");
+                idToken = baseRequest.getParameter("id_token");
                 
                 InputStream in = request.getInputStream();
                 BufferedReader br = new BufferedReader(new InputStreamReader(in));
@@ -127,6 +144,18 @@ public class OauthTokenTest {
         server.start();
     }
     
+    private void registerClient() throws Exception {
+        String template = baseOauthUrl + "/register?uri=%s&desc=token-test-client";
+        template = String.format(template, URLEncoder.encode(redirectUri, "utf-8"));
+        HttpPost register = new HttpPost(template);
+        HttpResponse regResp = httpClient.execute(register);
+        assertEquals(HttpStatus.SC_CREATED, regResp.getStatusLine().getStatusCode());
+        JsonObject regObj = parseJson(regResp);
+        
+        clientId = regObj.get("id").getAsString();
+        clientSecret = regObj.get("secret").getAsString();
+    }
+    
     @AfterClass
     public static void stop() throws Exception {
         browser.quit();
@@ -135,17 +164,7 @@ public class OauthTokenTest {
     
     @Test
     public void testOauthTokenReq() throws Exception {
-        String template = baseOauthUrl + "/register?uri=%s&desc=token-test-client";
-        template = String.format(template, URLEncoder.encode(redirectUri, "utf-8"));
-        HttpPost register = new HttpPost(template);
-        HttpResponse regResp = httpClient.execute(register);
-        assertEquals(HttpStatus.SC_CREATED, regResp.getStatusLine().getStatusCode());
-        JsonObject regObj = parseJson(regResp);
-        
-        String clientId = regObj.get("id").getAsString();
-        String secret = regObj.get("secret").getAsString();
-        
-        browser.get(baseOauthUrl + "/authorize?client_id=" + clientId);
+        browser.get(baseOauthUrl + "/authorize?client_id=" + clientId + "&response_type=code");
         
         WebElement username = browser.findElement(By.name("username"));
         username.sendKeys("admin");
@@ -174,8 +193,9 @@ public class OauthTokenTest {
         browser.quit();
         
         assertNotNull(code);
+        assertNull(idToken);
         
-        String basicHeader = "Basic " + Base64.getEncoder().encodeToString((clientId + ":" + secret).getBytes());
+        String basicHeader = "Basic " + Base64.getEncoder().encodeToString((clientId + ":" + clientSecret).getBytes());
         
         HttpPost tokenReq = new HttpPost(baseOauthUrl + "/token");
         tokenReq.addHeader(HttpHeaders.AUTHORIZATION, basicHeader);
@@ -191,7 +211,42 @@ public class OauthTokenTest {
         assertEquals("bearer", token.get("token_type").getAsString());
     }
     
-    private JsonObject parseJson(HttpResponse resp) throws Exception {
+    
+    @Test
+    public void testOpenIdConnectTokenReq() throws Exception {
+        browser.get(baseOauthUrl + "/authorize?client_id=" + clientId + "&response_type=id_token&scope=openid");
+        
+        WebElement username = browser.findElement(By.name("username"));
+        username.sendKeys("admin");
+        
+        WebElement password = browser.findElement(By.name("password"));
+        password.sendKeys("secret");
+        
+        WebElement login = browser.findElement(By.id("login"));
+        login.click();
+        
+        new WebDriverWait(browser, 20).until(new ExpectedCondition<Boolean>() {
+
+            @Override
+            public Boolean apply(WebDriver wd) {
+                String content = wd.getPageSource();
+                //System.out.println(content);
+                return content.contains("authorize()");
+            }
+        });
+        
+        WebElement authorize = browser.findElement(By.id("authz"));
+        authorize.click();
+        
+        Thread.sleep(1000);
+        
+        browser.quit();
+        
+        assertNull(code);
+        assertNotNull(idToken);
+    }
+    
+    private static JsonObject parseJson(HttpResponse resp) throws Exception {
         StatusLine sl = resp.getStatusLine();
         System.out.println(sl);
         

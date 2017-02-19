@@ -1,7 +1,10 @@
 package oauth
 
 import (
+	"crypto"
 	"encoding/json"
+	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"sparrow/utils"
 	"strings"
 )
@@ -34,11 +37,17 @@ type Client struct {
 }
 
 type AuthorizationReq struct {
-	RespType string `json:"response_type"`
-	ClientId string `json:"client_id"`
-	RedUri   string `json:"redirect_uri"`
-	Scope    string `json:"scope"`
-	State    string `json:"state"`
+	RespType string         `json:"response_type"`
+	ClientId string         `json:"client_id"`
+	RedUri   string         `json:"redirect_uri"`
+	Scopes   map[string]int `json:"scope"`
+	State    string         `json:"state"`
+
+	// OIDC specific parameters
+	Nonce        string
+	Display      string
+	Prompt       string
+	ResponseMode string `json:"response_mode"`
 }
 
 type AuthorizationResp struct {
@@ -67,10 +76,25 @@ type AccessTokenResp struct {
 	ExpiresIn int    `json:"expires_in,omitempty"`
 }
 
+type IdToken struct {
+	Jti      string `json:"jti"`
+	Domain   string `json:"d"`
+	Iss      string `json:"iss"`
+	Sub      string `json:"sub"`
+	Aud      string `json:"aud"`
+	Exp      int64  `json:"exp"`
+	Iat      int64  `json:"iat"`
+	AuthTime int64  `json:"auth_time"`
+	Nonce    string `json:"nonce,omitempty"`
+	Acr      string `json:"acr,omitempty"`
+	Amr      string `json:"amr,omitempty"`
+	Azp      string `json:"azp,omitempty"`
+}
+
 func NewClient() *Client {
 	cl := &Client{}
-	cl.Id = utils.NewRandStr()
-	cl.Secret = utils.NewRandStr()
+	cl.Id = utils.NewRandShaStr()
+	cl.Secret = utils.NewRandShaStr()
 	cl.Time = utils.DateTimeMillis()
 	cl.ServerSecret = utils.Rand32()
 
@@ -113,4 +137,22 @@ func (ep *ErrorResp) BuildErrorUri(redUri string) string {
 	}
 
 	return redUri
+}
+
+func (idt IdToken) ToJwt(key crypto.PrivateKey) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, idt)
+	str, err := token.SignedString(key)
+	if err != nil {
+		panic(fmt.Errorf("could not create the JWT from IdToken %#v", err))
+	}
+
+	data, _ := json.Marshal(idt)
+	fmt.Println(string(data))
+
+	return str
+}
+
+// Implementing Valid() makes IdToken a valid Claims instance
+func (idt IdToken) Valid() error {
+	return nil
 }

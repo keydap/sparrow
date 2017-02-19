@@ -13,6 +13,14 @@ import (
 
 const macLen int = 32 // length of HMAC
 
+type CodeType uint8
+
+const (
+	OAuth2 CodeType = iota
+	OIDC
+	SAML2
+)
+
 // Represents OAuth code returned to clients
 // this structure helps in identifying the corresponding
 // user for whom this code was issued before generating
@@ -25,18 +33,21 @@ type oAuthCode struct {
 	UserId     string
 	DomainCode uint32
 	CreatedAt  int64
+	CType      CodeType // due to inclusion of this 1 byte there will be 15 padd bytes to fit the aes block size, can be used in future
 }
 
-func newOauthCode(cl *oauth.Client, createdAt time.Time, userId string, domainCode uint32) string {
+func newOauthCode(cl *oauth.Client, createdAt time.Time, userId string, domainCode uint32, ctype CodeType) string {
 	iv := utils.RandBytes(aes.BlockSize)
 
-	dataLen := macLen + aes.BlockSize + 36 + 4 + 8
+	dataLen := macLen + aes.BlockSize + 36 + 4 + 8 + 1 + 15
 
 	dst := make([]byte, dataLen)
 	copy(dst[macLen:], iv)
 	copy(dst[macLen+aes.BlockSize:], []byte(userId))
 	copy(dst[macLen+aes.BlockSize+36:], utils.EncodeUint32(domainCode))
 	copy(dst[macLen+aes.BlockSize+36+4:], utils.Itob(createdAt.Unix()))
+	dst[macLen+aes.BlockSize+36+4+8] = byte(ctype)
+	// leave the rest of the data as 0s
 
 	block, _ := aes.NewCipher(cl.ServerSecret)
 	cbc := cipher.NewCBCEncrypter(block, iv)
@@ -64,7 +75,7 @@ func decryptOauthCode(code string, cl *oauth.Client) *oAuthCode {
 		return nil
 	}
 
-	if len(data) != 96 {
+	if len(data) != 112 {
 		//AUDIT
 		log.Debugf("Invalid authorization code received, insufficent bytes")
 		return nil
@@ -103,7 +114,9 @@ func decryptOauthCode(code string, cl *oauth.Client) *oAuthCode {
 	ac.IvAsId = fmt.Sprintf("%x", iv)
 	ac.UserId = string(dst[:36])
 	ac.DomainCode = utils.DecodeUint32(dst[36:40])
-	ac.CreatedAt = utils.Btoi(dst[40:])
+	ac.CreatedAt = utils.Btoi(dst[40:48])
+	ac.CType = CodeType(dst[48])
+	// leave the remaining 15 bytes
 
 	return ac
 }

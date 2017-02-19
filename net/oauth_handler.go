@@ -80,75 +80,11 @@ func registerClient(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handles the OAuth2 authorization request
-func authorize(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
-	if err != nil {
-		log.Debugf("Failed to parse the oauth request %s", err)
-		sendOauthError(w, r, "", err)
-		return
-	}
-
-	af := &authFlow{}
-	af.FromOauth = true
-
-	setAuthFlow(af, w)
-	paramMap := make(map[string]string)
-
-	for k, v := range r.Form {
-		if len(v) > 1 {
-			err = fmt.Errorf("Invalid request the parameter %s is included more than once", k)
-			sendOauthError(w, r, "", err)
-			return
-		}
-
-		paramMap[k] = v[0]
-	}
-
-	// do a redirect to /login with all the parameters
-	redirect("/login", w, r, paramMap)
-}
-
-func verifyConsent(w http.ResponseWriter, r *http.Request) {
-	af := getAuthFlow(r)
-
-	if af != nil {
-		if af.PsVerified {
-			r.ParseForm()
-			consent := r.Form.Get("consent")
-			if consent == "authorize" {
-				sendOauthCode(w, r, af)
-			} else {
-				clientId := r.Form.Get("client_id")
-				cl := osl.GetClient(clientId)
-				ep := &oauth.ErrorResp{}
-				ep.State = r.Form.Get("state")
-				if cl == nil {
-					ep.Desc = "Invalid client ID " + clientId
-					ep.Err = oauth.ERR_INVALID_REQUEST
-				} else {
-					ep.Desc = "User did not authorize the request"
-					ep.Err = oauth.ERR_ACCESS_DENIED
-				}
-				sendOauthError(w, r, cl.RedUri, ep)
-			}
-		}
-	}
-}
-
 func sendToken(w http.ResponseWriter, r *http.Request) {
 	atr, err := oauth.ParseAccessTokenReq(r)
 	if err != nil {
 		log.Debugf("Sending error to the oauth client %s", atr.ClientId)
 		sendOauthError(w, r, "", err)
-		return
-	}
-
-	if atr.GrantType != "authorization_code" {
-		ep := &oauth.ErrorResp{}
-		ep.Desc = "Unsupported grant type"
-		ep.Err = oauth.ERR_INVALID_REQUEST
-		sendOauthError(w, r, "", ep)
 		return
 	}
 
@@ -212,6 +148,16 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if ac.CType == OAuth2 {
+		if atr.GrantType != "authorization_code" {
+			ep := &oauth.ErrorResp{}
+			ep.Desc = "Unsupported grant type"
+			ep.Err = oauth.ERR_INVALID_REQUEST
+			sendOauthError(w, r, "", ep)
+			return
+		}
+	}
+
 	prv := dcPrvMap[ac.DomainCode]
 	if prv == nil {
 		ep := &oauth.ErrorResp{}
@@ -221,6 +167,8 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO store oauth tokens in a separate db
+	// keep them separate from SSO sessions db
 	token, err := prv.GetToken(ac.UserId)
 	if err != nil {
 		ep := &oauth.ErrorResp{}
@@ -228,6 +176,11 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		ep.Err = oauth.ERR_SERVER_ERROR
 		sendOauthError(w, r, "", ep)
 		return
+	}
+
+	// if code is for OpenIdConnect then send ID Token and Access Token
+	if ac.CType == OIDC {
+
 	}
 
 	tresp := &oauth.AccessTokenResp{}
@@ -239,25 +192,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 	w.Write(tresp.Serialize())
 }
 
-func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow) {
-	areq, err := oauth.ParseAuthzReq(r)
-
-	if err != nil {
-		log.Debugf("Sending error to the oauth client %s", areq.ClientId)
-		sendOauthError(w, r, areq.RedUri, err)
-		return
-	}
-
-	cl := osl.GetClient(areq.ClientId)
-	if cl == nil {
-		ep := &oauth.ErrorResp{}
-		ep.Desc = "Invalid client ID " + areq.ClientId
-		ep.Err = oauth.ERR_INVALID_REQUEST
-		ep.State = areq.State
-		sendOauthError(w, r, areq.RedUri, ep)
-		return
-	}
-
+func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow, areq *oauth.AuthorizationReq, cl *oauth.Client) {
 	tmpUri := cl.RedUri
 	// send code to the redirect URI
 	if cl.HasQueryInUri {
@@ -266,8 +201,13 @@ func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow) {
 		tmpUri += "?code="
 	}
 
+	cType := OAuth2
+	if _, ok := areq.Scopes["openid"]; ok {
+		cType = OIDC
+	}
+
 	ttl := time.Now()
-	code := newOauthCode(cl, ttl, af.UserId, af.DomainCode)
+	code := newOauthCode(cl, ttl, af.UserId, af.DomainCode, cType)
 	tmpUri += url.QueryEscape(code)
 
 	state := r.Form.Get("state")
@@ -340,74 +280,6 @@ func copyParams(r *http.Request) map[string]string {
 	}
 
 	return paramMap
-}
-
-func showLogin(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	paramMap := copyParams(r)
-
-	ologin := templates["login.html"]
-	ologin.Execute(w, paramMap)
-}
-
-func verifyPassword(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
-	if err != nil {
-		log.Debugf("Failed to parse the oauth request %s", err)
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	username := r.Form.Get("username")
-	password := r.Form.Get("password")
-
-	domain := defaultDomain
-
-	pos := strings.LastIndexByte(username, '@')
-	unameLen := len(username) - 1
-	if pos > 0 && pos != unameLen {
-		username = username[:pos]
-		domain = strings.ToLower(username[pos+1:])
-	}
-
-	prv := providers[domain]
-
-	paramMap := copyParams(r)
-	delete(paramMap, "username")
-	delete(paramMap, "password")
-
-	if prv == nil {
-		login := templates["login.html"]
-		login.Execute(w, paramMap)
-		return
-	}
-
-	user := prv.Authenticate(username, password)
-	if user == nil {
-		login := templates["login.html"]
-		login.Execute(w, paramMap)
-		return
-	}
-
-	af := getAuthFlow(r)
-
-	if af == nil {
-		af = &authFlow{}
-	}
-
-	if af.FromOauth {
-		af.PsVerified = true
-		// TODO enable it when the account has TFA capability
-		af.TfaRequired = false
-		af.UserId = user.GetId()
-		af.DomainCode = prv.DomainCode()
-		setAuthFlow(af, w)
-		login := templates["consent.html"]
-		login.Execute(w, paramMap)
-		return
-	}
-
-	w.Write([]byte("password verified"))
 }
 
 func setAuthFlow(af *authFlow, w http.ResponseWriter) {

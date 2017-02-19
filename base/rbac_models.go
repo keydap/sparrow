@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"time"
 )
 
 // the permissions allowed in Sparrow
@@ -88,6 +89,17 @@ func (session *RbacSession) ToJwt(key crypto.PrivateKey) string {
 	fmt.Println(string(data))
 
 	return str
+}
+
+func (session *RbacSession) IsExpired() bool {
+	now := time.Now().Unix()
+
+	if session.Exp <= 0 {
+		//FIXME never expires, is it wise to allow permanent tokens??
+		return false
+	}
+
+	return session.Exp <= now
 }
 
 //func VerifyJwt(tokenString string) bool {

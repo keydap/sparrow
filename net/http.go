@@ -15,6 +15,7 @@ import (
 	"sparrow/oauth"
 	"sparrow/provider"
 	"sparrow/schema"
+	"sparrow/utils"
 	"strconv"
 	"strings"
 )
@@ -44,8 +45,13 @@ var templates map[string]*template.Template
 var osl *oauth.OauthSilo
 var cs *sessions.CookieStore
 
+var cookieKey []byte
+
+var issuerUrl = ""
+
 func init() {
 	log = logger.GetLogger("sparrow.net")
+	cookieKey = utils.RandBytes(16)
 }
 
 type httpContext struct {
@@ -102,7 +108,11 @@ func startHttp() {
 
 	// OAuth2 requests
 	oauthRouter := router.PathPrefix(OAUTH_BASE).Subrouter()
-	oauthRouter.HandleFunc("/authorize", authorize).Methods("GET", "POST")
+	// match /authorize with any number of query parameters
+	oauthRouter.HandleFunc("/authorize", authorize).Methods("GET", "POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+		return true
+	})
+
 	oauthRouter.HandleFunc("/register", registerClient).Methods("POST")
 	oauthRouter.HandleFunc("/token", sendToken).Methods("POST")
 	oauthRouter.HandleFunc("/consent", verifyConsent).Methods("POST")
@@ -111,8 +121,10 @@ func startHttp() {
 	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
 
 	if srvConf.Https {
+		issuerUrl = "https://" + hostAddr
 		http.ListenAndServeTLS(hostAddr, srvConf.CertFile, srvConf.PrivKeyFile, router)
 	} else {
+		issuerUrl = "http://" + hostAddr
 		http.ListenAndServe(hostAddr, router)
 	}
 }

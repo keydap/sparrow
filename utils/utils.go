@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	logger "github.com/juju/loggo"
@@ -151,8 +152,9 @@ func Rand32() []byte {
 	return RandBytes(32)
 }
 
-func NewRandStr() string {
-	return B64Encode(Rand32())
+func NewRandShaStr() string {
+	hash := sha256.Sum256(RandBytes(16))
+	return B64Encode(hash[:])
 }
 
 func B64Encode(data []byte) string {
