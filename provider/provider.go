@@ -3,10 +3,10 @@ package provider
 import (
 	"bytes"
 	"crypto"
+	"encoding/json"
 	"fmt"
 	_ "github.com/dgrijalva/jwt-go"
 	logger "github.com/juju/loggo"
-	"io/ioutil"
 	"path/filepath"
 	"sparrow/base"
 	"sparrow/conf"
@@ -199,8 +199,7 @@ func (prv *Provider) GetResourceType(name string) (string, error) {
 }
 
 func (prv *Provider) GetConfigJson() (data []byte, err error) {
-	f := filepath.Join(prv.layout.ConfDir, "domain.json")
-	return ioutil.ReadFile(f)
+	return json.Marshal(prv.config.Scim)
 }
 
 func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resource, err error) {
@@ -272,19 +271,17 @@ func (prv *Provider) Authenticate(username string, password string) (res *base.R
 	return user
 }
 
-func (prv *Provider) GetToken(rid string) (authToken string, err error) {
+func (prv *Provider) GenSessionForUserId(rid string) (session *base.RbacSession, err error) {
 	user, err := prv.sl.GetUser(rid)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	session := prv.GenerateSession(user)
-	authToken = session.ToJwt(prv.PrivKey)
-
-	return authToken, nil
+	session = prv.GenSessionForUser(user)
+	return session, nil
 }
 
-func (prv *Provider) GenerateSession(user *base.Resource) *base.RbacSession {
+func (prv *Provider) GenSessionForUser(user *base.Resource) *base.RbacSession {
 	return prv.sl.Engine.NewRbacSession(user)
 }
 
