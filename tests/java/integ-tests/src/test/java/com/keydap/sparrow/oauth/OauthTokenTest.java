@@ -7,7 +7,8 @@
 package com.keydap.sparrow.oauth;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -40,6 +41,7 @@ import org.apache.oltu.oauth2.client.URLConnectionClient;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -82,12 +84,13 @@ public class OauthTokenTest {
     
     static JsonParser parser = new JsonParser();
     
-    static WebDriver browser;
+    WebDriver browser;
 
     String clientId;
 
     String clientSecret;
-
+    String encodedRedirectUri;
+    
     static {
         System.setProperty("webdriver.gecko.driver", "/Users/dbugger/bin/geckodriver");
     }
@@ -96,6 +99,7 @@ public class OauthTokenTest {
     public void reset() throws Exception {
         code = null;
         idToken = null;
+        browser = new FirefoxDriver();
         if(clientId == null) {
             registerClient();
         }
@@ -106,8 +110,6 @@ public class OauthTokenTest {
         httpClient = HttpClientBuilder.create().build();
         oHttpClient = new URLConnectionClient();
     
-        browser = new FirefoxDriver();
-        
         InetSocketAddress isa = new InetSocketAddress(LOCALHOST, PORT);
         server = new Server(isa);
         
@@ -144,9 +146,20 @@ public class OauthTokenTest {
         server.start();
     }
     
+    @After
+    public void teardown() throws Exception {
+        browser.quit();
+    }
+    
+    @AfterClass
+    public static void stop() throws Exception {
+        server.stop();
+    }
+    
     private void registerClient() throws Exception {
         String template = baseOauthUrl + "/register?uri=%s&desc=token-test-client";
-        template = String.format(template, URLEncoder.encode(redirectUri, "utf-8"));
+        encodedRedirectUri = URLEncoder.encode(redirectUri, "utf-8");
+        template = String.format(template, encodedRedirectUri);
         HttpPost register = new HttpPost(template);
         HttpResponse regResp = httpClient.execute(register);
         assertEquals(HttpStatus.SC_CREATED, regResp.getStatusLine().getStatusCode());
@@ -156,15 +169,9 @@ public class OauthTokenTest {
         clientSecret = regObj.get("secret").getAsString();
     }
     
-    @AfterClass
-    public static void stop() throws Exception {
-        browser.quit();
-        server.stop();
-    }
-    
     @Test
     public void testOauthTokenReq() throws Exception {
-        browser.get(baseOauthUrl + "/authorize?client_id=" + clientId + "&response_type=code");
+        browser.get(baseOauthUrl + "/authorize?client_id=" + clientId + "&response_type=code&redirect_uri=" + encodedRedirectUri);
         
         WebElement username = browser.findElement(By.name("username"));
         username.sendKeys("admin");
@@ -214,7 +221,7 @@ public class OauthTokenTest {
     
     @Test
     public void testOpenIdConnectTokenReq() throws Exception {
-        browser.get(baseOauthUrl + "/authorize?client_id=" + clientId + "&response_type=id_token&scope=openid");
+        browser.get(baseOauthUrl + "/authorize?client_id=" + clientId + "&response_type=id_token&scope=openid&redirect_uri=" + encodedRedirectUri);
         
         WebElement username = browser.findElement(By.name("username"));
         username.sendKeys("admin");
