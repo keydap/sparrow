@@ -84,20 +84,22 @@ type OauthConfig struct {
 }
 
 type ScimConfig struct {
-	DocumentationURI      string
-	AuthenticationSchemes []AuthenticationScheme
-	Bulk                  Bulk
-	ChangePassword        ChangePassword
-	Etag                  Etag
-	Filter                Filter
-	Patch                 Patch
-	Sort                  Sort
-	Resources             []ResourceConf
-	Notes                 string
+	Schemas               []string               `json:"schemas"`
+	DocumentationURI      string                 `json:"documentationUri"`
+	AuthenticationSchemes []AuthenticationScheme `json:"authenticationSchemes"`
+	Bulk                  Bulk                   `json:"bulk"`
+	ChangePassword        ChangePassword         `json:"changePassword"`
+	Etag                  Etag                   `json:"etag"`
+	Filter                Filter                 `json:"filter"`
+	Patch                 Patch                  `json:"patch"`
+	Sort                  Sort                   `json:"sort"`
+	Resources             []ResourceConf         `json:"resources"`
+	Notes                 string                 `json:"-"`
 }
 
 func DefaultConfig() *Config {
 	scim := &ScimConfig{DocumentationURI: "http://keydap.com/sparrow/scim"}
+	scim.Schemas = []string{"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"}
 	oauth := AuthenticationScheme{Type: "oauthbearertoken", Primary: true, Name: "OAuth Bearer Token", Description: "Authentication scheme using the OAuth Bearer Token Standard", SpecURI: "http://www.rfc-editor.org/info/rfc6750", DocumentationURI: "http://keydap.com/sparrow/scim"}
 	basic := AuthenticationScheme{Type: "httpbasic", Name: "HTTP Basic", Description: "Authentication scheme using the HTTP Basic Standard", SpecURI: "http://www.rfc-editor.org/info/rfc2617", DocumentationURI: "http://keydap.com/sparrow/scim"}
 	scim.AuthenticationSchemes = []AuthenticationScheme{oauth, basic}
