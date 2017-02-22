@@ -5,18 +5,13 @@ import (
 	"strings"
 )
 
-func ParseAuthzReq(r *http.Request) (areq *AuthorizationReq, err error) {
-	err = r.ParseForm()
-	if err != nil {
-		return nil, err
-	}
-
+func ParseAuthzReq(r *http.Request) (areq *AuthorizationReq) {
 	areq = &AuthorizationReq{}
 	areq.RespType = strings.TrimSpace(r.Form.Get("response_type"))
 
 	areq.ClientId = strings.TrimSpace(r.Form.Get("client_id"))
 
-	areq.RedUri = r.Form.Get("redirect_uri")
+	areq.RedUri = strings.TrimSpace(r.Form.Get("redirect_uri"))
 
 	areq.Scopes = make(map[string]int)
 	scopes := strings.Split(r.Form.Get("scope"), " ")
@@ -26,26 +21,12 @@ func ParseAuthzReq(r *http.Request) (areq *AuthorizationReq, err error) {
 
 	areq.State = r.Form.Get("state")
 
-	areq.Display = r.Form.Get("display")
-	areq.Nonce = r.Form.Get("nonce")
-	areq.Prompt = r.Form.Get("prompt")
-	areq.ResponseMode = r.Form.Get("response_mode")
+	areq.Display = strings.TrimSpace(r.Form.Get("display"))
+	areq.Nonce = strings.TrimSpace(r.Form.Get("nonce"))
+	areq.Prompt = strings.TrimSpace(r.Form.Get("prompt"))
+	areq.ResponseMode = strings.TrimSpace(r.Form.Get("response_mode"))
 
-	if areq.RespType == "" {
-		ep := &ErrorResp{}
-		ep.Desc = "No response_type parameter is present"
-		ep.Err = ERR_INVALID_REQUEST
-		return areq, ep
-	}
-
-	if areq.RespType == "" {
-		ep := &ErrorResp{}
-		ep.Desc = "No client_id parameter is present"
-		ep.Err = ERR_INVALID_REQUEST
-		return areq, ep
-	}
-
-	return areq, nil
+	return areq
 }
 
 func ParseAccessTokenReq(r *http.Request) (atr *AccessTokenReq, err error) {

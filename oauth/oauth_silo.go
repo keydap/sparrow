@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"github.com/boltdb/bolt"
 	logger "github.com/juju/loggo"
+	"runtime/debug"
 	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/utils"
@@ -13,13 +14,17 @@ import (
 
 var (
 	// a bucket that holds the clients.
-	BUC_OAUTH_CLIENTS = []byte("oauth_clients")
+	BUC_SERVICE_PROVIDERS = []byte("service_providers")
 
-	BUC_ISSUED_TOKENS = []byte("issued_tokens")
+	BUC_SSO_SESSIONS = []byte("sso_sessions")
 
-	BUC_REVOKED_TOKENS = []byte("revoked_tokens")
+	BUC_OAUTH_SESSIONS = []byte("oauth_sessions")
 
-	BUC_IDX_TOKEN_BY_JTI = []byte("idx_token_by_jti")
+	BUC_REVOKED_OAUTH_SESSIONS = []byte("revoked_oauth_sessions")
+
+	BUC_IDX_OAUTH_SESSION_BY_JTI = []byte("idx_token_by_jti")
+
+	BUC_IDX_SSO_SESSION_BY_JTI = []byte("idx_session_by_jti")
 )
 
 var srvConf *conf.ServerConf
@@ -43,22 +48,32 @@ func Open(path string, cnf *conf.ServerConf) (osl *OauthSilo, err error) {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(BUC_OAUTH_CLIENTS)
+		_, err := tx.CreateBucketIfNotExists(BUC_SERVICE_PROVIDERS)
 		if err != nil {
 			return err
 		}
 
-		_, err = tx.CreateBucketIfNotExists(BUC_ISSUED_TOKENS)
+		_, err = tx.CreateBucketIfNotExists(BUC_OAUTH_SESSIONS)
 		if err != nil {
 			return err
 		}
 
-		_, err = tx.CreateBucketIfNotExists(BUC_REVOKED_TOKENS)
+		_, err = tx.CreateBucketIfNotExists(BUC_SSO_SESSIONS)
 		if err != nil {
 			return err
 		}
 
-		_, err = tx.CreateBucketIfNotExists(BUC_IDX_TOKEN_BY_JTI)
+		_, err = tx.CreateBucketIfNotExists(BUC_REVOKED_OAUTH_SESSIONS)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateBucketIfNotExists(BUC_IDX_OAUTH_SESSION_BY_JTI)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateBucketIfNotExists(BUC_IDX_SSO_SESSION_BY_JTI)
 		if err != nil {
 			return err
 		}
@@ -77,9 +92,11 @@ func Open(path string, cnf *conf.ServerConf) (osl *OauthSilo, err error) {
 	osl.rvTokens = make(map[string]bool)
 
 	// load revoked tokens
-	osl.loadRevokedTokens()
+	osl.loadRevokedSessions()
 
-	go removeExpiredTokens(osl)
+	go removeExpiredSessions(osl, BUC_OAUTH_SESSIONS, BUC_IDX_OAUTH_SESSION_BY_JTI)
+
+	go removeExpiredSessions(osl, BUC_SSO_SESSIONS, BUC_IDX_SSO_SESSION_BY_JTI)
 
 	return osl, nil
 }
@@ -95,7 +112,7 @@ func (osl *OauthSilo) AddClient(cl *Client) {
 	}
 
 	err = osl.db.Update(func(tx *bolt.Tx) error {
-		clBucket := tx.Bucket(BUC_OAUTH_CLIENTS)
+		clBucket := tx.Bucket(BUC_SERVICE_PROVIDERS)
 		return clBucket.Put([]byte(cl.Id), buf.Bytes())
 	})
 
@@ -107,7 +124,7 @@ func (osl *OauthSilo) AddClient(cl *Client) {
 
 func (osl *OauthSilo) DeleteClient(id string) error {
 	err := osl.db.Update(func(tx *bolt.Tx) error {
-		clBucket := tx.Bucket(BUC_OAUTH_CLIENTS)
+		clBucket := tx.Bucket(BUC_SERVICE_PROVIDERS)
 		return clBucket.Delete([]byte(id))
 	})
 
@@ -121,7 +138,7 @@ func (osl *OauthSilo) DeleteClient(id string) error {
 func (osl *OauthSilo) GetClient(id string) (cl *Client) {
 
 	err := osl.db.View(func(tx *bolt.Tx) error {
-		clBucket := tx.Bucket(BUC_OAUTH_CLIENTS)
+		clBucket := tx.Bucket(BUC_SERVICE_PROVIDERS)
 		data := clBucket.Get([]byte(id))
 		var err error
 		if data != nil {
@@ -140,7 +157,15 @@ func (osl *OauthSilo) GetClient(id string) (cl *Client) {
 	return cl
 }
 
-func (osl *OauthSilo) StoreToken(session *base.RbacSession) {
+func (osl *OauthSilo) StoreOauthSession(session *base.RbacSession) {
+	osl._storeSession(BUC_OAUTH_SESSIONS, BUC_IDX_OAUTH_SESSION_BY_JTI, session)
+}
+
+func (osl *OauthSilo) StoreSsoSession(session *base.RbacSession) {
+	osl._storeSession(BUC_SSO_SESSIONS, BUC_IDX_SSO_SESSION_BY_JTI, session)
+}
+
+func (osl *OauthSilo) _storeSession(bucketName []byte, idxBuckName []byte, session *base.RbacSession) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(session)
@@ -152,7 +177,7 @@ func (osl *OauthSilo) StoreToken(session *base.RbacSession) {
 
 	tx, err := osl.db.Begin(true)
 	if err != nil {
-		log.Warningf("Failed to begin transaction in token silo %s", err)
+		log.Warningf("Failed to begin transaction in session silo %s", err)
 		panic(err)
 	}
 
@@ -161,24 +186,30 @@ func (osl *OauthSilo) StoreToken(session *base.RbacSession) {
 		if e != nil {
 			err = e.(error)
 			log.Warningf("Panicked while trying to store RBAC session %s", e)
+			debug.PrintStack()
 			tx.Rollback()
 		} else {
 			tx.Commit()
 		}
 	}()
 
-	clBucket := tx.Bucket(BUC_ISSUED_TOKENS)
-	err = clBucket.Put([]byte(session.Jti), buf.Bytes())
+	clBucket := tx.Bucket(bucketName)
+	key := []byte(session.Jti)
+	err = clBucket.Put(key, buf.Bytes())
 
 	if err != nil {
 		log.Warningf("Failed to save RBAC session %s", err)
 		panic(err)
 	}
+
+	idxBuck := tx.Bucket(idxBuckName)
+	expTime := utils.Itob(session.Exp)
+	idxBuck.Put(key, expTime)
 }
 
-func (osl *OauthSilo) RevokeToken(session *base.RbacSession) {
+func (osl *OauthSilo) RevokeOauthSession(session *base.RbacSession) {
 	err := osl.db.Update(func(tx *bolt.Tx) error {
-		tBucket := tx.Bucket(BUC_REVOKED_TOKENS)
+		tBucket := tx.Bucket(BUC_REVOKED_OAUTH_SESSIONS)
 		now := time.Now().Unix()
 		key := []byte(session.Jti)
 
@@ -193,25 +224,25 @@ func (osl *OauthSilo) RevokeToken(session *base.RbacSession) {
 	})
 
 	if err != nil {
-		log.Warningf("Failed to save revoked token %s", err)
+		log.Warningf("Failed to save revoked oauth session %s", err)
 		panic(err)
 	}
 }
 
-func (osl *OauthSilo) IsRevokedToken(session *base.RbacSession) bool {
+func (osl *OauthSilo) IsRevokedSession(session *base.RbacSession) bool {
 	_, ok := osl.rvTokens[session.Jti]
 
 	return ok
 }
 
-func (osl *OauthSilo) loadRevokedTokens() int {
+func (osl *OauthSilo) loadRevokedSessions() int {
 	tx, err := osl.db.Begin(false)
 	if err != nil {
 		log.Warningf("Failed to start readonly transaction for loading revoked tokens %s", err)
 		return 0
 	}
 
-	tBucket := tx.Bucket(BUC_REVOKED_TOKENS)
+	tBucket := tx.Bucket(BUC_REVOKED_OAUTH_SESSIONS)
 	cursor := tBucket.Cursor()
 	for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
 		osl.rvTokens[string(k)] = true
@@ -222,14 +253,22 @@ func (osl *OauthSilo) loadRevokedTokens() int {
 	return len(osl.rvTokens)
 }
 
-func (osl *OauthSilo) GetToken(jti string) *base.RbacSession {
+func (osl *OauthSilo) GetOauthSession(jti string) *base.RbacSession {
+	return osl._getSession(BUC_OAUTH_SESSIONS, jti)
+}
+
+func (osl *OauthSilo) GetSsoSession(jti string) *base.RbacSession {
+	return osl._getSession(BUC_SSO_SESSIONS, jti)
+}
+
+func (osl *OauthSilo) _getSession(bucketName []byte, jti string) *base.RbacSession {
 	tx, err := osl.db.Begin(false)
 	if err != nil {
 		log.Warningf("Failed to start readonly transaction for fetching token %s", err)
 		return nil
 	}
 
-	tBucket := tx.Bucket(BUC_ISSUED_TOKENS)
+	tBucket := tx.Bucket(bucketName)
 
 	token := tBucket.Get([]byte(jti))
 	tx.Rollback()
@@ -250,6 +289,38 @@ func (osl *OauthSilo) GetToken(jti string) *base.RbacSession {
 	return session
 }
 
+func (osl *OauthSilo) DeleteToken(jti string) bool {
+	log.Debugf("Deleting token %s", jti)
+	return osl._deleteSession(BUC_OAUTH_SESSIONS, BUC_IDX_OAUTH_SESSION_BY_JTI, jti)
+}
+
+func (osl *OauthSilo) DeleteSsoSession(jti string) bool {
+	log.Debugf("Deleting SSO session %s", jti)
+	return osl._deleteSession(BUC_SSO_SESSIONS, BUC_IDX_SSO_SESSION_BY_JTI, jti)
+}
+
+func (osl *OauthSilo) _deleteSession(bucketName []byte, idxBuckName []byte, jti string) bool {
+	tx, err := osl.db.Begin(true)
+	if err != nil {
+		log.Warningf("Failed to start write transaction for deleting token %s", err)
+		return false
+	}
+
+	tBucket := tx.Bucket(bucketName)
+	key := []byte(jti)
+	tBucket.Delete(key)
+
+	idxBuck := tx.Bucket(idxBuckName)
+	idxBuck.Delete(key)
+
+	err = tx.Commit()
+	if err != nil {
+		panic(err)
+	}
+
+	return true
+}
+
 func (osl *OauthSilo) Close() {
 	log.Infof("Closing oauth silo")
 	osl.db.Close()
@@ -257,8 +328,8 @@ func (osl *OauthSilo) Close() {
 	osl.rvTokens = nil
 }
 
-func removeExpiredTokens(osl *OauthSilo) {
-	log.Debugf("Starting token remover")
+func removeExpiredSessions(osl *OauthSilo, buckName []byte, idxBuckName []byte) {
+	log.Debugf("Starting session remover")
 	defer func() {
 		// this can happen when the silo gets closed
 		// but the goroutine is still executing
@@ -273,12 +344,12 @@ func removeExpiredTokens(osl *OauthSilo) {
 
 		tx, err := osl.db.Begin(true)
 		if err != nil {
-			log.Warningf("Failed to open a read-only transaction for removing expired tokens %s", err)
+			log.Warningf("Failed to open a read-only transaction for removing expired sessions %s", err)
 			continue
 		}
 
-		idxBuck := tx.Bucket(BUC_IDX_TOKEN_BY_JTI)
-		tokenBuck := tx.Bucket(BUC_ISSUED_TOKENS)
+		idxBuck := tx.Bucket(idxBuckName)
+		tokenBuck := tx.Bucket(buckName)
 
 		cursor := idxBuck.Cursor()
 
@@ -291,7 +362,7 @@ func removeExpiredTokens(osl *OauthSilo) {
 				idxBuck.Delete(k)
 				tokenBuck.Delete(k)
 			} else {
-				log.Debugf("cookie %d didn't expire at %s", exp, t.Format(time.RFC3339))
+				//log.Debugf("token %d didn't expire at %s", exp, t.Format(time.RFC3339))
 			}
 		}
 
