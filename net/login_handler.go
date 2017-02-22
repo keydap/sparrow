@@ -18,6 +18,7 @@ func authorize(w http.ResponseWriter, r *http.Request) {
 	session := getSession(r)
 	if session != nil {
 		// valid session exists serve the code or id_token
+		log.Debugf("Valid session exists, sending the final response")
 		sendFinalResponse(w, r, session, nil)
 		return
 	}
@@ -99,8 +100,8 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session := prv.GenerateSession(user)
-	osl.StoreToken(session)
+	session := prv.GenSessionForUser(user)
+	osl.StoreSsoSession(session)
 
 	cookie := &http.Cookie{}
 	cookie.Path = "/"
@@ -162,18 +163,38 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 
 // STEP 4 Authorization Server sends the End-User back to the Client with an Authorization Code
 func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.RbacSession, af *authFlow) {
-	areq, err := oauth.ParseAuthzReq(r)
-
+	err := r.ParseForm()
 	if err != nil {
-		log.Debugf("Sending error to the oauth client %s %#v", areq.ClientId, err)
-		sendOauthError(w, r, areq.RedUri, err)
+		log.Debugf("Failed to parse the form, sending error to the user agent")
+		sendOauthError(w, r, "", err)
 		return
 	}
+
+	areq := oauth.ParseAuthzReq(r)
+
+	valid := isValidAuthzReq(w, r, areq)
+
+	if !valid {
+		return
+	}
+
+	log.Debugf("Received authorization request is valid, searching for client")
 
 	cl := osl.GetClient(areq.ClientId)
 	if cl == nil {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Invalid client ID " + areq.ClientId
+		log.Debugf(ep.Desc)
+		ep.Err = oauth.ERR_INVALID_REQUEST
+		ep.State = areq.State
+		sendOauthError(w, r, areq.RedUri, ep)
+		return
+	}
+
+	if cl.RedUri != areq.RedUri {
+		ep := &oauth.ErrorResp{}
+		ep.Desc = "Mismatched redirect URI. Registered URI of the client is not matching with the value of redirect_uri parameter"
+		log.Debugf(ep.Desc)
 		ep.Err = oauth.ERR_INVALID_REQUEST
 		ep.State = areq.State
 		sendOauthError(w, r, areq.RedUri, ep)
@@ -251,6 +272,8 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 		tmpUri += "&state=" + state
 	}
 
+	log.Debugf("redirecting to the client with response")
+
 	// delete the authflow cookie
 	setAuthFlow(nil, w)
 	http.Redirect(w, r, tmpUri, http.StatusFound)
@@ -286,11 +309,39 @@ func getSession(r *http.Request) *base.RbacSession {
 	ssoCookie, _ := r.Cookie(SSO_COOKIE)
 
 	if ssoCookie != nil {
-		session := osl.GetToken(ssoCookie.Value)
+		session := osl.GetSsoSession(ssoCookie.Value)
 		if (session != nil) && !session.IsExpired() {
 			return session
 		}
 	}
 
 	return nil
+}
+
+func isValidAuthzReq(w http.ResponseWriter, r *http.Request, areq *oauth.AuthorizationReq) bool {
+	log.Debugf("Validating authorization request")
+
+	errStr := ""
+	if areq.RespType == "" {
+		errStr = "No response_type parameter is present. "
+	}
+
+	if (areq.RespType != "code") && (areq.RespType != "code id_token") && (areq.RespType != "id_token") {
+		errStr = "Unsupported response type " + areq.RespType + ". Only 'code', 'code id_token' and 'id_token' are supported. "
+	}
+
+	if areq.RespType == "" {
+		errStr += "No client_id parameter is present. "
+	}
+
+	if len(errStr) == 0 {
+		return true
+	}
+
+	ep := &oauth.ErrorResp{}
+	ep.Desc = errStr
+	ep.Err = oauth.ERR_INVALID_REQUEST
+	sendOauthError(w, r, areq.RedUri, ep)
+
+	return false
 }

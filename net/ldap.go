@@ -188,7 +188,7 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 		return
 	}
 
-	ls.token = pr.GenerateSession(user)
+	ls.token = pr.GenSessionForUser(user)
 	successResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultSuccess, "")
 	ls.con.Write(successResp.Bytes())
 }

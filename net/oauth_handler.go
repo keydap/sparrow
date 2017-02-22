@@ -167,9 +167,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO store oauth tokens in a separate db
-	// keep them separate from SSO sessions db
-	token, err := prv.GetToken(ac.UserId)
+	token, err := prv.GenSessionForUserId(ac.UserId)
 	if err != nil {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Failed to generate token - " + err.Error()
@@ -178,13 +176,10 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// if code is for OpenIdConnect then send ID Token and Access Token
-	if ac.CType == OIDC {
-
-	}
+	osl.StoreOauthSession(token)
 
 	tresp := &oauth.AccessTokenResp{}
-	tresp.AcToken = token
+	tresp.AcToken = token.Jti
 	//tresp.ExpiresIn = // will be same as the Exp value present in token
 	tresp.TokenType = "bearer"
 

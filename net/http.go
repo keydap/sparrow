@@ -631,17 +631,14 @@ func issueToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := pr.GetToken(user.GetId())
-	if err != nil {
-		writeError(w, err)
-		return
-	}
+	token := pr.GenSessionForUser(user)
+	osl.StoreOauthSession(token)
 
-	log.Debugf("Issued token %s by %s", token, ar.Domain)
+	log.Debugf("Issued token %s by %s", token.Jti, ar.Domain)
 	// write the token
 	headers := w.Header()
 	headers.Add("Content-Type", "text/plain")
-	w.Write([]byte(token))
+	w.Write([]byte(token.Jti))
 }
 
 func handleResRequest(w http.ResponseWriter, r *http.Request) {
@@ -784,8 +781,6 @@ func parseAttrParam(attrParam string, rTypes []*schema.ResourceType) []*base.Att
 }
 
 func parseToken(token string) (session *base.RbacSession, err error) {
-	session = &base.RbacSession{}
-
 	// strip the prefix "Bearer " from token
 	spacePos := strings.IndexRune(token, ' ')
 	if spacePos > 0 {
@@ -795,11 +790,10 @@ func parseToken(token string) (session *base.RbacSession, err error) {
 		}
 	}
 
-	_, err = jwt.ParseWithClaims(token, session, keyFunc)
+	session = osl.GetOauthSession(token)
 
-	if err != nil {
-		log.Debugf("Failed to parse the token %s [%#v]", token, err)
-		return nil, err
+	if session == nil {
+		log.Debugf("Failed to fetch the session associated with token %s", token)
 	}
 
 	return session, nil
