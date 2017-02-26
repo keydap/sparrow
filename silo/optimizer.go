@@ -371,7 +371,7 @@ func equalityScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, s
 
 	idx := sl.indices[rt.Name][node.Name]
 	if idx != nil {
-		count := idx.keyCount(node.Value, tx)
+		count := idx.keyCount(node.NormValue, tx)
 		log.Debugf("Found index on attribute %s of resource type %s, count for key %s = %d", node.Name, rt.Name, node.Value, count)
 		return count
 	} else {

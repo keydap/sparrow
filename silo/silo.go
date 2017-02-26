@@ -104,14 +104,15 @@ func (idx *Index) cursor(tx *bolt.Tx) *bolt.Cursor {
 }
 
 // Gets the number of values associated with the given key present in the index
-func (idx *Index) keyCount(key string, tx *bolt.Tx) int64 {
+func (idx *Index) keyCount(key interface{}, tx *bolt.Tx) int64 {
 	log.Debugf("getting count of value %s in the index %s", key, idx.Name)
 	buck := tx.Bucket(idx.BnameBytes)
 	var count int64
 	count = 0
 
 	if idx.AllowDupKey {
-		countKey := []byte(strings.ToLower(key) + "_count")
+		str := fmt.Sprint(key)
+		countKey := []byte(strings.ToLower(str) + "_count")
 		cb := buck.Get(countKey)
 		if cb != nil {
 			count = utils.Btoi(cb)
