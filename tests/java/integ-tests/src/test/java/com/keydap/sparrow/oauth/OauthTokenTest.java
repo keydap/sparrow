@@ -148,6 +148,7 @@ public class OauthTokenTest {
     
     @After
     public void teardown() throws Exception {
+        browser.close();
         browser.quit();
     }
     
@@ -197,8 +198,6 @@ public class OauthTokenTest {
         
         Thread.sleep(1000);
         
-        browser.quit();
-        
         assertNotNull(code);
         assertNull(idToken);
         
@@ -246,8 +245,6 @@ public class OauthTokenTest {
         authorize.click();
         
         Thread.sleep(1000);
-        
-        browser.quit();
         
         assertNull(code);
         assertNotNull(idToken);
