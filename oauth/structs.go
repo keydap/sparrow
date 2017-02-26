@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"sparrow/saml"
 	"sparrow/utils"
 	"strings"
 )
@@ -27,13 +28,15 @@ const (
 )
 
 type Client struct {
-	Id            string `json:"id"`
-	Secret        string `json:"secret"`
-	Time          int64  `json:"time"`
-	Desc          string `json:"desc"`
-	RedUri        string `json:"redUri"`
-	ServerSecret  []byte `json:"-"` // the secret used as a key
-	HasQueryInUri bool   `json:"-"` // flag to indicate if there is query part in the path
+	Id            string                `json:"id"`
+	Secret        string                `json:"secret"`
+	Time          int64                 `json:"time"`
+	Desc          string                `json:"desc"`
+	RedUri        string                `json:"redUri"`
+	ServerSecret  []byte                `json:"-"` // the secret used as a key
+	HasQueryInUri bool                  `json:"-"` // flag to indicate if there is query part in the path
+	SamlGroupConf saml.SamlGroupConfig  `json:"samlGroupConf"`
+	SamlAtConf    []saml.SamlAttrConfig `json:"samlAtConf"`
 }
 
 type AuthorizationReq struct {

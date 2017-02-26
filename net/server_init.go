@@ -20,14 +20,15 @@ import (
 )
 
 var DEFAULT_SRV_CONF string = `{
-    "enable-https" : false,
-    "http-port" : 7090,
-    "ldap-port" : 7092,
-    "ldap-over-tls-only" : true,
-    "ipaddress" : "0.0.0.0",
-    "certificate": "default.cer",
-    "privatekey": "default.key",
-    "token-purge-interval": 120
+	"serverId": 0,
+    "enableHttps" : false,
+    "httpPort" : 7090,
+    "ldapPort" : 7092,
+    "ldapOverTlsOnly" : true,
+    "ipAddress" : "0.0.0.0",
+    "certificateFile": "default.cer",
+    "privatekeyFile": "default.key",
+    "tokenPurgeInterval": 120
 }`
 
 var COOKIE_LOGIN_NAME string = "SPLCN"
@@ -195,6 +196,7 @@ func loadProviders(domainsDir string, sc *conf.ServerConf) {
 				} else {
 					prv.PubKey = sc.PubKey
 					prv.PrivKey = sc.PrivKey
+					prv.ServerId = sc.ServerId
 					providers[lName] = prv
 					dcPrvMap[prv.DomainCode()] = prv
 				}
@@ -248,8 +250,9 @@ func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 
 	prv.PubKey = sc.PubKey
 	prv.PrivKey = sc.PrivKey
-
+	prv.ServerId = sc.ServerId
 	providers[layout.Name()] = prv
+	dcPrvMap[prv.DomainCode()] = prv
 }
 
 func copyDir(src, dest string) {

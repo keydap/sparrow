@@ -27,7 +27,7 @@ var ldapSessions = make(map[string]*LdapSession)
 var tlsConf *tls.Config
 
 func startLdap() error {
-	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.LdapPort)
+	hostAddr := srvConf.IpAddress + ":" + strconv.Itoa(srvConf.LdapPort)
 
 	log.Infof("Starting ldap server %s", hostAddr)
 	laddr, err := net.ResolveTCPAddr("tcp", hostAddr)

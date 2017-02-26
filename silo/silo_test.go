@@ -14,7 +14,7 @@ import (
 )
 
 var dbFilePath = "/tmp/silo_test.db"
-var config = conf.DefaultConfig()
+var config = conf.DefaultDomainConfig()
 var resDir, _ = os.Getwd()
 var sl *Silo
 var uCount int
@@ -98,7 +98,7 @@ func initSilo() {
 	os.Remove(dbFilePath)
 
 	var err error
-	sl, err = Open(dbFilePath, config, restypes, schemas)
+	sl, err = Open(dbFilePath, 0, config, restypes, schemas)
 
 	if err != nil {
 		fmt.Println("Failed to open silo\n", err)

@@ -1,6 +1,7 @@
 package silo
 
 import (
+	"runtime/debug"
 	"bytes"
 	"encoding/gob"
 	"fmt"
@@ -34,7 +35,7 @@ var (
 
 var log logger.Logger
 
-var prvConf *conf.Config
+var prvConf *conf.DomainConfig
 
 func init() {
 	log = logger.GetLogger("sparrow.silo")
@@ -352,7 +353,7 @@ func (idx *Index) convert(val interface{}) []byte {
 	return vData
 }
 
-func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceType, sm map[string]*schema.Schema) (*Silo, error) {
+func Open(path string, serverId uint16, config *conf.DomainConfig, rtypes map[string]*schema.ResourceType, sm map[string]*schema.Schema) (*Silo, error) {
 	prvConf = config
 	db, err := bolt.Open(path, 0644, nil)
 
@@ -493,7 +494,7 @@ func Open(path string, config *conf.Config, rtypes map[string]*schema.ResourceTy
 
 	sl.Engine = rbac.NewEngine()
 
-	sl.cg = NewCsnGenerator(0) //FIXME replicaID must be configurable
+	sl.cg = NewCsnGenerator(serverId)
 	// load the roles
 	sl.LoadGroups()
 
@@ -1404,7 +1405,10 @@ func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) erro
 		e := recover()
 		if e != nil {
 			err = e.(error)
-			log.Debugf("Error while searching for resources %s", err.Error())
+			if log.IsDebugEnabled() {
+				log.Debugf("Error while searching for resources %s", err.Error())
+				debug.PrintStack()
+			}
 		}
 
 		close(outPipe)

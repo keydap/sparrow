@@ -62,7 +62,7 @@ type httpContext struct {
 }
 
 func startHttp() {
-	hostAddr := srvConf.Ipaddress + ":" + strconv.Itoa(srvConf.HttpPort)
+	hostAddr := srvConf.IpAddress + ":" + strconv.Itoa(srvConf.HttpPort)
 	log.Infof("Starting http server %s", hostAddr)
 
 	router := mux.NewRouter()

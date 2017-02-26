@@ -18,11 +18,12 @@ import (
 )
 
 type Provider struct {
+	ServerId      uint16
 	Schemas       map[string]*schema.Schema       // a map of Schema ID to Schema
 	RsTypes       map[string]*schema.ResourceType // a map of Name to ResourceTye
 	RtPathMap     map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
 	LdapTemplates map[string]*schema.LdapEntryTemplate
-	config        *conf.Config
+	config        *conf.DomainConfig
 	sl            *silo.Silo
 	layout        *Layout
 	Name          string // the domain name
@@ -55,7 +56,7 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 		return nil, err
 	}
 
-	prv.config, err = conf.ParseConfig(filepath.Join(layout.ConfDir, "domain.json"))
+	prv.config, err = conf.ParseDomainConfig(filepath.Join(layout.ConfDir, "domain.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +69,7 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	dataFilePath := filepath.Join(layout.DataDir, layout.name)
 
-	prv.sl, err = silo.Open(dataFilePath, prv.config, prv.RsTypes, prv.Schemas)
+	prv.sl, err = silo.Open(dataFilePath, prv.ServerId, prv.config, prv.RsTypes, prv.Schemas)
 
 	if err != nil {
 		return nil, err
