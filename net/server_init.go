@@ -71,7 +71,7 @@ func initHome(srvHome string) *conf.ServerConf {
 	sc.OauthDir = oauthDir
 
 	if err != nil {
-		err = ioutil.WriteFile(srvConfPath, []byte(DEFAULT_SRV_CONF), 0644)
+		err = ioutil.WriteFile(srvConfPath, []byte(DEFAULT_SRV_CONF), utils.FILE_PERM)
 		if err != nil {
 			log.Criticalf("Couldn't write the default server configuration file %s %#v", srvConfPath, err)
 			panic(err)
@@ -230,14 +230,14 @@ func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 
 	// default LDAP templates
 	ldapUserTmpl := filepath.Join(layout.LdapTmplDir, "ldap-user.json")
-	err = ioutil.WriteFile(ldapUserTmpl, []byte(schema.LDAP_User_Entry), 0644)
+	err = ioutil.WriteFile(ldapUserTmpl, []byte(schema.LDAP_User_Entry), utils.FILE_PERM)
 	if err != nil {
 		log.Criticalf("Couldn't write the default LDAP user template file %s %#v", ldapUserTmpl, err)
 		panic(err)
 	}
 
 	ldapGroupTmpl := filepath.Join(layout.LdapTmplDir, "ldap-group.json")
-	err = ioutil.WriteFile(ldapGroupTmpl, []byte(schema.LDAP_Group_Entry), 0644)
+	err = ioutil.WriteFile(ldapGroupTmpl, []byte(schema.LDAP_Group_Entry), utils.FILE_PERM)
 	if err != nil {
 		log.Criticalf("Couldn't write the default LDAP group template file %s %#v", ldapGroupTmpl, err)
 		panic(err)

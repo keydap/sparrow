@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-var DIR_PERM os.FileMode = 0744 //rwxr--r--
+const DIR_PERM os.FileMode = 0744 //rwxr--r--
 
-var FILE_PERM os.FileMode = 0644 //rw-r--r--
+const FILE_PERM os.FileMode = 0644 //rw-r--r--
 
 var log logger.Logger
 
