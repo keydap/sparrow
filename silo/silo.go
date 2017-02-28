@@ -1,11 +1,11 @@
 package silo
 
 import (
-	"runtime/debug"
 	"bytes"
 	"encoding/gob"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/rbac"

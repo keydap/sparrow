@@ -13,6 +13,8 @@ import (
 
 var DIR_PERM os.FileMode = 0744 //rwxr--r--
 
+var FILE_PERM os.FileMode = 0644 //rw-r--r--
+
 var log logger.Logger
 
 var urlEncoder = base64.URLEncoding.WithPadding(base64.NoPadding)

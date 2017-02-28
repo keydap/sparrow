@@ -18,8 +18,6 @@ type Layout struct {
 	name        string
 }
 
-var DIR_PERM os.FileMode = 0744 //rwxr--r--
-
 func NewLayout(baseDir string, create bool) (layout *Layout, err error) {
 	err = os.Chdir(baseDir)
 	if err != nil && !create {
@@ -28,7 +26,7 @@ func NewLayout(baseDir string, create bool) (layout *Layout, err error) {
 	}
 
 	if create {
-		err := os.MkdirAll(baseDir, DIR_PERM)
+		err := os.MkdirAll(baseDir, utils.DIR_PERM)
 		if err != nil {
 			log.Criticalf("Failed to create the base directory %s [%#v]", baseDir, err)
 			return nil, err

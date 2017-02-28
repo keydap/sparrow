@@ -9,7 +9,6 @@ import (
 	logger "github.com/juju/loggo"
 	"html/template"
 	"net/http"
-	"os"
 	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/oauth"
@@ -27,8 +26,6 @@ var providers = make(map[string]*provider.Provider)
 // a map of providers keyed using the hashcode of the domain name
 // this exists to keep the length of Oauth code fixed to N bytes
 var dcPrvMap = make(map[uint32]*provider.Provider)
-
-var DIR_PERM os.FileMode = 0744 //rwxr--r--
 
 var TENANT_HEADER = "X-Sparrow-Tenant-Id"
 var SCIM_JSON_TYPE = "application/scim+json; charset=UTF-8"

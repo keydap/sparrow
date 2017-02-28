@@ -225,8 +225,8 @@ func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 	rtDir := wDir + "/types"
 	copyDir(rtDir, layout.ResTypesDir)
 
-	confDir := wDir + "/conf"
-	copyDir(confDir, layout.ConfDir)
+	//confDir := wDir + "/conf"
+	//copyDir(confDir, layout.ConfDir)
 
 	// default LDAP templates
 	ldapUserTmpl := filepath.Join(layout.LdapTmplDir, "ldap-user.json")
@@ -273,7 +273,7 @@ func copyDir(src, dest string) {
 		sFile := filepath.Join(src, f.Name())
 		tFile := filepath.Join(dest, f.Name())
 		if f.IsDir() {
-			err = os.Mkdir(tFile, DIR_PERM)
+			err = os.Mkdir(tFile, utils.DIR_PERM)
 			if err != nil {
 				panic(err)
 			}
@@ -286,7 +286,7 @@ func copyDir(src, dest string) {
 			panic(err)
 		}
 
-		err = ioutil.WriteFile(tFile, data, DIR_PERM)
+		err = ioutil.WriteFile(tFile, data, utils.FILE_PERM)
 
 		if err != nil {
 			panic(err)

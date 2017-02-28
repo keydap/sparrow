@@ -7,6 +7,8 @@ import (
 	"fmt"
 	_ "github.com/dgrijalva/jwt-go"
 	logger "github.com/juju/loggo"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sparrow/base"
 	"sparrow/conf"
@@ -56,7 +58,20 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 		return nil, err
 	}
 
-	prv.config, err = conf.ParseDomainConfig(filepath.Join(layout.ConfDir, "domain.json"))
+	dConfPath := filepath.Join(layout.ConfDir, "domain.json")
+	_, err = os.Stat(dConfPath)
+
+	// store the config if not present
+	if err != nil && os.IsNotExist(err) {
+		data, _ := json.Marshal(conf.DefaultDomainConfig())
+		err = ioutil.WriteFile(dConfPath, data, utils.FILE_PERM)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// parse again, just to be sure that the DefaultDomainConfig() produced correct config
+	prv.config, err = conf.ParseDomainConfig(dConfPath)
 	if err != nil {
 		return nil, err
 	}
