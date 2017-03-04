@@ -2,3 +2,6 @@
 .classpath
 target
 .settings
+net/static_html.go
+net/static_resourcetypes.go
+net/static_schemas.go

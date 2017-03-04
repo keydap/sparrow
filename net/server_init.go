@@ -58,6 +58,7 @@ func initHome(srvHome string) *conf.ServerConf {
 	tmplDir := filepath.Join(srvHome, "templates")
 	log.Debugf("Checking server's templates directory %s", tmplDir)
 	utils.CheckAndCreate(tmplDir)
+	writeDefaultHtmlTemplates(tmplDir)
 
 	oauthDir := filepath.Join(srvHome, "oauth")
 	log.Debugf("Checking server's oauth directory %s", oauthDir)
@@ -216,32 +217,19 @@ func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 		panic(err)
 	}
 
-	wDir, _ := os.Getwd()
-	wDir += "/resources"
+	writeSchemas(layout.SchemaDir)
 
-	schemaDir := wDir + "/schemas"
-	copyDir(schemaDir, layout.SchemaDir)
-
-	rtDir := wDir + "/types"
-	copyDir(rtDir, layout.ResTypesDir)
+	writeResourceTypes(layout.ResTypesDir)
 
 	//confDir := wDir + "/conf"
 	//copyDir(confDir, layout.ConfDir)
 
 	// default LDAP templates
 	ldapUserTmpl := filepath.Join(layout.LdapTmplDir, "ldap-user.json")
-	err = ioutil.WriteFile(ldapUserTmpl, []byte(schema.LDAP_User_Entry), utils.FILE_PERM)
-	if err != nil {
-		log.Criticalf("Couldn't write the default LDAP user template file %s %#v", ldapUserTmpl, err)
-		panic(err)
-	}
+	writeFile(ldapUserTmpl, schema.LDAP_User_Entry)
 
 	ldapGroupTmpl := filepath.Join(layout.LdapTmplDir, "ldap-group.json")
-	err = ioutil.WriteFile(ldapGroupTmpl, []byte(schema.LDAP_Group_Entry), utils.FILE_PERM)
-	if err != nil {
-		log.Criticalf("Couldn't write the default LDAP group template file %s %#v", ldapGroupTmpl, err)
-		panic(err)
-	}
+	writeFile(ldapGroupTmpl, schema.LDAP_Group_Entry)
 
 	prv, err := provider.NewProvider(layout)
 	if err != nil {
@@ -325,4 +313,47 @@ func parseTemplates(tmplDir string) map[string]*template.Template {
 	}
 
 	return templates
+}
+
+func writeDefaultHtmlTemplates(tmplDir string) {
+	// login.html
+	loginTmpl := filepath.Join(tmplDir, "login.html")
+	writeFile(loginTmpl, login_html)
+
+	// consent.html
+	consentTmpl := filepath.Join(tmplDir, "consent.html")
+	writeFile(consentTmpl, consent_html)
+}
+
+func writeFile(name string, content string) {
+	err := ioutil.WriteFile(name, []byte(content), utils.FILE_PERM)
+	if err != nil {
+		log.Criticalf("Couldn't write the file %s %#v", name, err)
+		panic(err)
+	}
+}
+
+func writeSchemas(schemaDir string) {
+	device := filepath.Join(schemaDir, "device.json")
+	writeFile(device, device_schema)
+
+	entUser := filepath.Join(schemaDir, "enterprise-user.json")
+	writeFile(entUser, enterprise_user_schema)
+
+	group := filepath.Join(schemaDir, "group.json")
+	writeFile(group, group_schema)
+
+	user := filepath.Join(schemaDir, "user.json")
+	writeFile(user, user_schema)
+}
+
+func writeResourceTypes(rtDir string) {
+	device := filepath.Join(rtDir, "device.json")
+	writeFile(device, device_type)
+
+	group := filepath.Join(rtDir, "group.json")
+	writeFile(group, group_type)
+
+	user := filepath.Join(rtDir, "user.json")
+	writeFile(user, user_type)
 }
