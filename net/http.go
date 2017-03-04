@@ -702,11 +702,18 @@ func createOpCtx(r *http.Request) (opCtx *base.OpContext, err error) {
 
 	authzHeader := r.Header.Get("Authorization")
 	if len(authzHeader) == 0 {
-		// return Unauthorized error
-		return nil, base.NewUnAuthorizedError("Missing Authorization header")
+		// check for SSO cookie
+		cookie, _ := r.Cookie(SSO_COOKIE)
+		if cookie != nil {
+			authzHeader = cookie.Value
+			opCtx.Sso = true
+		} else {
+			// return Unauthorized error
+			return nil, base.NewUnAuthorizedError("Missing Authorization header")
+		}
 	}
 
-	session, err := parseToken(authzHeader)
+	session, err := parseToken(authzHeader, opCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -777,22 +784,33 @@ func parseAttrParam(attrParam string, rTypes []*schema.ResourceType) []*base.Att
 	return nil
 }
 
-func parseToken(token string) (session *base.RbacSession, err error) {
-	// strip the prefix "Bearer " from token
-	spacePos := strings.IndexRune(token, ' ')
-	if spacePos > 0 {
-		spacePos++
-		if spacePos < len(token)-1 {
-			token = token[spacePos:]
+func parseToken(token string, opCtx *base.OpContext) (session *base.RbacSession, err error) {
+	if opCtx.Sso {
+		session = osl.GetSsoSession(token)
+	} else {
+		// strip the prefix "Bearer " from token
+		spacePos := strings.IndexRune(token, ' ')
+		if spacePos > 0 {
+			spacePos++
+			if spacePos < len(token)-1 {
+				token = token[spacePos:]
+			}
 		}
-	}
 
-	session = osl.GetOauthSession(token)
+		session = osl.GetOauthSession(token)
+	}
 
 	if session == nil {
 		log.Debugf("Failed to fetch the session associated with token %s", token)
+		return nil, base.NewForbiddenError("Failed to fetch the session associated with token")
 	}
 
+	if session.IsExpired() {
+		log.Debugf("Expired session %s", token)
+		return nil, base.NewForbiddenError("Expired session token")
+	}
+
+	//TODO update the last accesstime if it is a SSO session
 	return session, nil
 }
 

@@ -6,6 +6,7 @@ import (
 
 type OpContext struct {
 	Session  *RbacSession
+	Sso      bool
 	ClientIP string
 	Endpoint string
 }
