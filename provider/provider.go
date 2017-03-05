@@ -25,7 +25,7 @@ type Provider struct {
 	RsTypes       map[string]*schema.ResourceType // a map of Name to ResourceTye
 	RtPathMap     map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
 	LdapTemplates map[string]*schema.LdapEntryTemplate
-	config        *conf.DomainConfig
+	Config        *conf.DomainConfig
 	sl            *silo.Silo
 	layout        *Layout
 	Name          string // the domain name
@@ -63,7 +63,7 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	// store the config if not present
 	if err != nil && os.IsNotExist(err) {
-		data, _ := json.Marshal(conf.DefaultDomainConfig())
+		data, _ := json.MarshalIndent(conf.DefaultDomainConfig(), "", "    ")
 		err = ioutil.WriteFile(dConfPath, data, utils.FILE_PERM)
 		if err != nil {
 			panic(err)
@@ -71,12 +71,12 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	}
 
 	// parse again, just to be sure that the DefaultDomainConfig() produced correct config
-	prv.config, err = conf.ParseDomainConfig(dConfPath)
+	prv.Config, err = conf.ParseDomainConfig(dConfPath)
 	if err != nil {
 		return nil, err
 	}
 
-	cf := prv.config
+	cf := prv.Config
 	cf.PasswdHashAlgo = strings.ToLower(cf.PasswdHashAlgo)
 	cf.PasswdHashType = utils.FindHashType(cf.PasswdHashAlgo)
 
@@ -84,7 +84,7 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	dataFilePath := filepath.Join(layout.DataDir, layout.name)
 
-	prv.sl, err = silo.Open(dataFilePath, prv.ServerId, prv.config, prv.RsTypes, prv.Schemas)
+	prv.sl, err = silo.Open(dataFilePath, prv.ServerId, prv.Config, prv.RsTypes, prv.Schemas)
 
 	if err != nil {
 		return nil, err
@@ -215,7 +215,7 @@ func (prv *Provider) GetResourceType(name string) (string, error) {
 }
 
 func (prv *Provider) GetConfigJson() (data []byte, err error) {
-	return json.Marshal(prv.config.Scim)
+	return json.Marshal(prv.Config.Scim)
 }
 
 func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resource, err error) {
@@ -253,7 +253,7 @@ func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource)
 		return base.NewForbiddenError("Insufficent privileges to search resources")
 	}
 
-	sc.MaxResults = prv.config.Scim.Filter.MaxResults
+	sc.MaxResults = prv.Config.Scim.Filter.MaxResults
 	go prv.sl.Search(sc, outPipe)
 
 	return nil

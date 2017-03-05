@@ -105,7 +105,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 
 	cookie := &http.Cookie{}
 	cookie.Path = "/"
-	cookie.Expires = time.Now().Add(600 * time.Second)
+	cookie.Expires = time.Now().Add(time.Duration(prv.Config.Oauth.SsoSessionIdleTime) * time.Second)
 	cookie.HttpOnly = true
 	cookie.Name = SSO_COOKIE
 	cookie.Value = session.Jti
