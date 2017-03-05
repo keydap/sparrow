@@ -70,7 +70,7 @@ func startHttp() {
 
 	scimRouter.HandleFunc("/token", issueToken).Methods("POST")
 	//scimRouter.HandleFunc("/revoke", handleRevoke).Methods("DELETE")
-	scimRouter.HandleFunc("/Me", handleResRequest).Methods("GET", "POST", "PUT", "PATCH", "DELETE")
+	scimRouter.HandleFunc("/Me", selfServe).Methods("GET", "POST", "PUT", "PATCH", "DELETE")
 
 	// generic service provider methods
 	scimRouter.HandleFunc("/ServiceProviderConfig", getSrvProvConf).Methods("GET")
@@ -597,6 +597,36 @@ func getSchemas(w http.ResponseWriter, r *http.Request) {
 }
 
 func selfServe(w http.ResponseWriter, r *http.Request) {
+	log.Debugf("-------------------- Headers received on /Me -----------\n%#v\n--------------------------------", r.Header)
+
+	opCtx, err := createOpCtx(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	pr := providers[opCtx.Session.Domain]
+	log.Debugf("handling %s request on %s for the domain %s", r.Method, r.RequestURI, pr.Name)
+
+	//hc := &httpContext{w, r, pr, opCtx}
+
+	switch r.Method {
+	case http.MethodGet:
+		getCtx := &base.GetContext{}
+		getCtx.OpContext = opCtx
+		getCtx.Rid = opCtx.Session.Sub
+		getCtx.Rt = pr.RsTypes["User"]
+		user, err := pr.GetResource(getCtx)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+
+		//user.FilterAndSerialize(getCtx.Rt., include)
+
+		writeCommonHeaders(w)
+		w.Write(user.Serialize())
+	}
 }
 
 func issueToken(w http.ResponseWriter, r *http.Request) {
