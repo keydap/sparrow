@@ -11,3 +11,9 @@ go get github.com/gorilla/mux
 #go get github.com/fernet/fernet-go
 #JWT
 go get github.com/dgrijalva/jwt-go
+
+go get github.com/go-ldap/ldap
+
+go get github.com/gorilla/securecookie
+
+go get github.com/gorilla/sessions
