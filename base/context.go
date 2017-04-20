@@ -18,6 +18,7 @@ type CreateContext struct {
 
 type GetContext struct {
 	Rid        string
+	Username   string
 	Rt         *schema.ResourceType
 	*OpContext // the operation context
 }
