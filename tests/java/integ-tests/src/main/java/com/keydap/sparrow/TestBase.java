@@ -32,9 +32,9 @@ import static org.junit.Assert.*;
  */
 public abstract class TestBase {
     
-    static String baseApiUrl = "http://localhost:7090/v2";
+    protected static String baseApiUrl = "http://localhost:7090/v2";
     
-    static SparrowClient client;
+    protected static SparrowClient client;
     
     /** the anonymous client */
     static SparrowClient unAuthClient;
