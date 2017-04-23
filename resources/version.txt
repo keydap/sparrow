@@ -1,0 +1,12 @@
+package net
+
+
+const version = `
+Name     : Sparrow Identity Server
+Version  : $version
+Revision : $revision
+Time     : $time
+
+SCIM API Base URI  : /v2
+OAuth API Base URI : /oauth2
+`

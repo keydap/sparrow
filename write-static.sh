@@ -31,6 +31,14 @@ writeResourceTypes() {
   writeConst "user_type" "resources/types/user.json" $targetFile
 }
 
+copyVersionFile() {
+    cp resources/version.txt net/version.go
+}
+
+copyVersionFile() {
+    cp resources/version.txt net/version.go
+}
+
 printf "Writing HTML templates\n"
 writeHtml
 
@@ -39,3 +47,8 @@ writeSchemas
 
 printf "Writing resourcetype\n"
 writeResourceTypes
+
+printf "Copying version file\n"
+copyVersionFile
+printf "Copying version file\n"
+copyVersionFile
