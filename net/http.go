@@ -64,6 +64,7 @@ func startHttp() {
 
 	router := mux.NewRouter()
 	router.StrictSlash(true)
+	router.HandleFunc("/", serveVersionInfo).Methods("GET")
 
 	// scim requests
 	scimRouter := router.PathPrefix(API_BASE).Subrouter()
@@ -627,6 +628,10 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 		writeCommonHeaders(w)
 		w.Write(user.Serialize())
 	}
+}
+
+func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(version))
 }
 
 func issueToken(w http.ResponseWriter, r *http.Request) {
