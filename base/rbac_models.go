@@ -21,6 +21,8 @@ const PERM_DELETE string = "DELETE"
 
 const PERM_CHANGE_ATTRIBUTE string = "CHANGE_ATTRIBUTE"
 
+var admin_perm_array []string = []string{PERM_CREATE, PERM_DELETE, PERM_READ, PERM_UPDATE}
+
 type RbacUser struct {
 	Rid   string
 	Roles map[string]string // <roleID, displayName> key-value pairs
@@ -76,6 +78,17 @@ func (session *RbacSession) _PermAllowed(perm string) bool {
 	_, ok := session.EffPerms[perm]
 
 	return ok
+}
+
+func (session *RbacSession) IsAdmin() bool {
+	for _, perm := range admin_perm_array {
+		_, ok := session.EffPerms[perm]
+		if !ok {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (session *RbacSession) ToJwt(key crypto.PrivateKey) string {

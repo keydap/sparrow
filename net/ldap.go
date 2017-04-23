@@ -12,17 +12,16 @@ import (
 	"sparrow/base"
 	"sparrow/provider"
 	"sparrow/schema"
+	"sparrow/utils"
 	"strconv"
 	"strings"
 )
 
 type LdapSession struct {
-	Id    string
-	con   net.Conn
-	token *base.RbacSession
+	Id  string
+	con net.Conn
+	*base.OpContext
 }
-
-var ldapSessions = make(map[string]*LdapSession)
 
 var tlsConf *tls.Config
 
@@ -62,9 +61,9 @@ func acceptConns(listener *net.TCPListener) {
 		remoteAddr := con.RemoteAddr().String()
 		log.Debugf("Serving new connection from %s", remoteAddr)
 		ls := &LdapSession{}
-		ls.Id = remoteAddr
+		ls.OpContext = &base.OpContext{}
+		ls.ClientIP = remoteAddr
 		ls.con = con
-		ldapSessions[remoteAddr] = ls
 		go serveClient(ls)
 	}
 }
@@ -77,9 +76,8 @@ func serveClient(ls *LdapSession) {
 			debug.PrintStack()
 		}
 
-		log.Debugf("closing connection %s", ls.Id)
+		log.Debugf("closing connection %s", ls.ClientIP)
 		ls.con.Close()
-		delete(ldapSessions, ls.Id)
 	}()
 
 	for {
@@ -122,7 +120,7 @@ func serveClient(ls *LdapSession) {
 				continue
 			}
 
-			if ls.token == nil {
+			if ls.Session == nil {
 				// throw unauthorized error
 				errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultInsufficientAccessRights, "insufficientAccessRights")
 				ls.con.Write(errResp.Bytes())
@@ -137,6 +135,12 @@ func serveClient(ls *LdapSession) {
 				resp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultSuccess, "")
 				ls.con.Write(resp.Bytes())
 				startTls(messageId, ls)
+			} else if oid == "1.3.6.1.4.1.4203.1.11.1" { // PasswordModify
+				secure := isSecure(messageId, ldap.ApplicationExtendedResponse, ls)
+				if !secure {
+					continue
+				}
+				modifyPassword(messageId, appMessage.Children[1], ls)
 			} else {
 				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultOther, "Unsupported extended operation "+oid)
 				ls.con.Write(errResp.Bytes())
@@ -153,7 +157,7 @@ func serveClient(ls *LdapSession) {
 func isSecure(messageId int, appRespTag ber.Tag, ls *LdapSession) bool {
 	_, isTlsCon := ls.con.(*tls.Conn)
 	if srvConf.LdapOverTlsOnly && !isTlsCon {
-		errResp := generateResultCode(messageId, appRespTag, ldap.LDAPResultConfidentialityRequired, "operations are allowed only on connections secured using TLS")
+		errResp := generateResultCode(messageId, appRespTag, ldap.LDAPResultConfidentialityRequired, "operation is allowed only on connections secured using TLS")
 		ls.con.Write(errResp.Bytes())
 		return false
 	}
@@ -162,12 +166,12 @@ func isSecure(messageId int, appRespTag ber.Tag, ls *LdapSession) bool {
 }
 
 func startTls(messageId int, ls *LdapSession) {
-	log.Debugf("securing the connection %s using startTLS", ls.Id)
+	log.Debugf("securing the connection %s using startTLS", ls.ClientIP)
 	ls.con = tls.Server(ls.con, tlsConf)
 }
 
 func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageId int) {
-	log.Debugf("handling bind request from %s", ls.Id)
+	log.Debugf("handling bind request from %s", ls.ClientIP)
 	log.Debugf("username = %s , password %s", bindReq.Username, bindReq.Password)
 
 	domain, _ := getDomainAndEndpoint(bindReq.Username)
@@ -188,7 +192,7 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 		return
 	}
 
-	ls.token = pr.GenSessionForUser(user)
+	ls.Session = pr.GenSessionForUser(user)
 	successResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultSuccess, "")
 	ls.con.Write(successResp.Bytes())
 }
@@ -215,11 +219,8 @@ func generateResultCode(messageId int, appRespTag ber.Tag, resultCode int, errMs
 }
 
 func toSearchContext(req ldap.SearchRequest, ls *LdapSession) (searchCtx *base.SearchContext, pr *provider.Provider, err error) {
-	opCtx := &base.OpContext{}
-	opCtx.ClientIP = ls.Id
-
 	searchCtx = &base.SearchContext{}
-	searchCtx.OpContext = opCtx
+	searchCtx.OpContext = ls.OpContext
 
 	// detect ResourceTypes from baseDN
 	domain, endPoint := getDomainAndEndpoint(req.BaseDN)
@@ -243,7 +244,6 @@ func toSearchContext(req ldap.SearchRequest, ls *LdapSession) (searchCtx *base.S
 	}
 
 	searchCtx.MaxResults = req.SizeLimit
-	searchCtx.Session = ls.token
 
 	return searchCtx, pr, nil
 }
@@ -712,4 +712,161 @@ func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base
 	attrParam = base.ConvertToParamAttributes(attrSet, subAtPresent)
 
 	return attrParam, nil
+}
+
+func modifyPassword(messageId int, packet *ber.Packet, ls *LdapSession) {
+	var userIdentity, oldPasswd, newPasswd string
+	var hasUserId, hasOldPasswd, hasNewPasswd bool
+
+	for i, child := range packet.Children {
+		if i == 0 {
+			userIdentity = strings.TrimSpace(child.Value.(string))
+			if len(userIdentity) == 0 {
+				hasUserId = true
+			}
+		}
+
+		if i == 1 {
+			oldPasswd = child.Value.(string)
+			hasOldPasswd = true
+		}
+
+		if i == 2 {
+			newPasswd = child.Value.(string)
+			hasNewPasswd = true
+		}
+	}
+
+	// no userID and not an authenticated connection
+	if !hasUserId && ls.Session == nil {
+		// throw unauthorized error
+		errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultInsufficientAccessRights, "insufficientAccessRights")
+		ls.con.Write(errResp.Bytes())
+		return
+	}
+
+	if !hasNewPasswd {
+		// throw invalidcredentials
+		errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultInvalidCredentials, "New password is required")
+		ls.con.Write(errResp.Bytes())
+		return
+	}
+
+	var user *base.Resource
+	var effSession *base.RbacSession
+	var pr *provider.Provider
+	var oldPasswdCompared bool
+
+	// if the userId is nil then take the user of the current session
+	if !hasUserId {
+		getCtx := &base.GetContext{}
+		getCtx.OpContext = ls.OpContext
+		getCtx.Rid = ls.Session.Sub
+		pr = providers[ls.Session.Domain]
+		var err error
+		user, err = pr.GetResource(getCtx)
+		if err != nil {
+			errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultNoSuchObject, "user doesn't exist")
+			ls.con.Write(errResp.Bytes())
+			return
+		}
+
+		effSession = ls.Session
+	} else {
+		getCtx := &base.GetContext{}
+		getCtx.OpContext = ls.OpContext
+		getCtx.Username = userIdentity
+
+		if ls.Session == nil {
+			pos := strings.LastIndex(userIdentity, "@")
+			if pos <= 0 {
+				// throw invalidcredentials
+				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultInvalidCredentials, "Invalid user identity")
+				ls.con.Write(errResp.Bytes())
+				return
+			}
+
+			normDomain := strings.ToLower(userIdentity[pos+1:])
+			pr = providers[normDomain]
+		} else {
+			pr = providers[ls.Session.Domain]
+			effSession = ls.Session
+		}
+
+		if pr == nil {
+			// throw invalidcredentials
+			errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultInvalidCredentials, "Invalid domain")
+			ls.con.Write(errResp.Bytes())
+			return
+		}
+
+		if effSession == nil {
+			user = pr.Authenticate(userIdentity, oldPasswd)
+			if user == nil {
+				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultNoSuchObject, "user doesn't exist")
+				ls.con.Write(errResp.Bytes())
+				return
+			}
+			effSession = pr.GenSessionForUser(user)
+			oldPasswdCompared = true
+		}
+	}
+
+	// only allow an administrator to change someone else's password
+	if !effSession.IsAdmin() && hasUserId {
+		if effSession.Sub != user.GetId() {
+			// throw unauthorized error
+			errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultInsufficientAccessRights, "insufficientAccessRights")
+			ls.con.Write(errResp.Bytes())
+			return
+		}
+	}
+
+	pwdAt := user.GetAttr("password")
+	if (pwdAt != nil) && !hasOldPasswd {
+		// throw invalidcredentials
+		errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultInvalidCredentials, "Old password is required")
+		ls.con.Write(errResp.Bytes())
+		return
+	}
+
+	if pwdAt != nil && !oldPasswdCompared {
+		existingPasswdHash := pwdAt.GetSimpleAt().Values[0].(string)
+		matched := utils.ComparePassword(oldPasswd, existingPasswdHash)
+		if !matched {
+			// throw invalidcredentials
+			errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultInvalidCredentials, "Old password is incorrect")
+			ls.con.Write(errResp.Bytes())
+			return
+		}
+	}
+
+	newHash := utils.HashPassword(newPasswd, pr.Config.PasswdHashType)
+	patchCtx := &base.PatchContext{}
+	patchCtx.OpContext = ls.OpContext
+	patchCtx.Rid = user.GetId()
+	patchCtx.Session = ls.Session
+	patchCtx.Rt = pr.RsTypes["User"]
+
+	replace := &base.PatchOp{}
+	replace.Index = 1
+	replace.Op = "replace"
+	replace.Path = "password"
+	replace.ParsedPath, _ = base.ParsePath(replace.Path, patchCtx.Rt)
+	replace.Value = newHash
+
+	patchReq := base.NewPatchReq()
+	patchReq.IfNoneMatch = user.GetVersion()
+	patchReq.Operations = append(patchReq.Operations, replace)
+	patchCtx.Pr = patchReq
+	_, err := pr.Patch(patchCtx)
+	if err != nil {
+		// throw other error
+		errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultOther, "Failed to update password")
+		ls.con.Write(errResp.Bytes())
+		return
+	}
+
+	successResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultSuccess, "password updated")
+	ls.con.Write(successResp.Bytes())
 }

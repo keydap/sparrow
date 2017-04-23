@@ -1514,6 +1514,42 @@ func (sl *Silo) LoadGroups() {
 
 }
 
+func (sl *Silo) GetUserByName(username string) (user *base.Resource, err error) {
+	rt := sl.resTypes["User"]
+	idx := sl.getIndex(rt.Name, "username")
+
+	tx, err := sl.db.Begin(false)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			log.Debugf("Error while fetching the user with username %s %#v", username, err)
+		}
+
+		tx.Rollback()
+	}()
+
+	rid := idx.GetRid(idx.convert(username), tx)
+
+	if len(rid) == 0 {
+		return nil, fmt.Errorf("User with username %s not found", username)
+	}
+
+	user, err = sl.getUsingTx(rid, rt, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
 func (sl *Silo) Authenticate(principal string, password string) (user *base.Resource, err error) {
 	pos := strings.IndexRune(principal, '/')
 	if pos > 0 {

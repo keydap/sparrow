@@ -30,6 +30,14 @@ type ParsedPath struct {
 	Text       string
 }
 
+func NewPatchReq() *PatchReq {
+	pr := &PatchReq{}
+	pr.Schemas = []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"}
+	pr.Operations = make([]*PatchOp, 0)
+
+	return pr
+}
+
 func ParsePatchReq(body io.Reader, rt *schema.ResourceType) (*PatchReq, error) {
 	if body == nil {
 		return nil, NewBadRequestError("Invalid Patch request data")
@@ -80,7 +88,7 @@ func ParsePatchReq(body io.Reader, rt *schema.ResourceType) (*PatchReq, error) {
 		}
 
 		if pLen > 0 {
-			pp, err := parsePath(po.Path, rt)
+			pp, err := ParsePath(po.Path, rt)
 			if err != nil {
 				return nil, err
 			}
@@ -92,7 +100,7 @@ func ParsePatchReq(body io.Reader, rt *schema.ResourceType) (*PatchReq, error) {
 	return &pr, nil
 }
 
-func parsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error) {
+func ParsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error) {
 
 	pp = &ParsedPath{}
 

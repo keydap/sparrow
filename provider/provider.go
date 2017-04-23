@@ -287,6 +287,18 @@ func (prv *Provider) Authenticate(username string, password string) (res *base.R
 	return user
 }
 
+func (prv *Provider) GetUserByName(getCtx *base.GetContext) (res *base.Resource) {
+	user, err := prv.sl.GetUserByName(getCtx.Username)
+
+	if err != nil {
+		msg := "Invalid username"
+		log.Debugf(msg)
+		return nil
+	}
+
+	return user
+}
+
 func (prv *Provider) GenSessionForUserId(rid string) (session *base.RbacSession, err error) {
 	user, err := prv.sl.GetUser(rid)
 	if err != nil {
