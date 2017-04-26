@@ -1,7 +1,7 @@
 ## Sparrow
 Sparrow is an identity server based on SCIM v2 specification, JWT and OAuth2.0.
 The goal is to support fast reads, domains and ARBAC.
-All the data is accessible over HTTP and authentication and authorization are supported by OpenIdConnect2 and OAuth2.
+All the data is accessible over HTTP and authentication and authorization are supported by OpenIdConnect and OAuth2.
 
 ## Why another identity server??
 One motivation was to have a server that contains all the features of an LDAP server minus the pain of organizing and
