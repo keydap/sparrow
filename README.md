@@ -23,4 +23,5 @@ And I want an identity server to have the ability to speak over HTTP directly wi
 
 ## License
 Sparrow is licensed under [Apache License Version 2](http://apache.org/licenses/LICENSE-2.0.txt)
+
 Copyright 2017 Keydap Software.
