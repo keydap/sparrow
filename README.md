@@ -22,4 +22,5 @@ And I want an identity server to have the ability to speak over HTTP directly wi
 1. Improving OpenIDConnect handler and audit logging
 
 ## License
-[Apache Software License v2](http://apache.org/licenses/LICENSE-2.0.txt)
+Sparrow is licensed under [Apache License Version 2](http://apache.org/licenses/LICENSE-2.0.txt)
+Copyright 2017 Keydap Software.
