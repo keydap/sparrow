@@ -39,11 +39,13 @@ public class LdapPasswdModifyTest extends TestBase {
     @BeforeClass
     public static void connect() throws Exception {
         ldapCon = new LdapNetworkConnection("localhost", 7092);
+        ldapCon.setTimeOut(Long.MAX_VALUE);
         ldapCon.getConfig().setTrustManagers(new NoVerificationTrustManager());
         ldapCon.connect();
         ldapCon.startTls();
         
         adminLdapCon = new LdapNetworkConnection("localhost", 7092);
+        adminLdapCon.setTimeOut(Long.MAX_VALUE);
         adminLdapCon.getConfig().setTrustManagers(new NoVerificationTrustManager());
         adminLdapCon.connect();
         adminLdapCon.startTls();
@@ -59,7 +61,7 @@ public class LdapPasswdModifyTest extends TestBase {
         String newPassword = "secret002";
         
         PasswordModifyRequest pmr = new PasswordModifyRequestImpl();
-        pmr.setUserIdentity((u.getUserName()+"@example.com").getBytes(utf8));
+        pmr.setUserIdentity((u.getUserName()).getBytes(utf8));
         pmr.setOldPassword(oldPassword.getBytes(utf8));
         pmr.setNewPassword(newPassword.getBytes(utf8));
         
@@ -80,4 +82,5 @@ public class LdapPasswdModifyTest extends TestBase {
         SparrowAuthenticator authenticator = new SparrowAuthenticator(username, "example.com", password);
         return new SparrowClient(baseApiUrl, authenticator);
     }
+    
 }
