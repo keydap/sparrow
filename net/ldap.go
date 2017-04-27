@@ -93,7 +93,7 @@ func serveClient(ls *LdapSession) {
 			log.Warningf("error while reading packet %s", err)
 			//le := ldap.NewError(ldap.LDAPResultOther, err)
 			//ber.Encode(ber.ClassApplication, TagType, Tag, Value, "Insufficient packet bytes")
-			continue
+			break
 		}
 
 		if log.IsDebugEnabled() {
@@ -143,6 +143,7 @@ func serveClient(ls *LdapSession) {
 				if !secure {
 					continue
 				}
+
 				modifyPassword(messageId, appMessage.Children[1], ls)
 			} else {
 				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultOther, "Unsupported extended operation "+oid)
@@ -717,25 +718,27 @@ func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base
 	return attrParam, nil
 }
 
-func modifyPassword(messageId int, packet *ber.Packet, ls *LdapSession) {
+func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession) {
 	var userIdentity, oldPasswd, newPasswd string
 	var hasUserId, hasOldPasswd, hasNewPasswd bool
 
-	for i, child := range packet.Children {
+	reqPacket := ber.DecodePacket(extReqValPacket.Data.Bytes())
+
+	for i, child := range reqPacket.Children {
 		if i == 0 {
-			userIdentity = strings.TrimSpace(child.Value.(string))
-			if len(userIdentity) == 0 {
+			userIdentity = strings.TrimSpace(string(child.Data.Bytes()))
+			if len(userIdentity) != 0 {
 				hasUserId = true
 			}
 		}
 
 		if i == 1 {
-			oldPasswd = child.Value.(string)
+			oldPasswd = string(child.Data.Bytes())
 			hasOldPasswd = true
 		}
 
 		if i == 2 {
-			newPasswd = child.Value.(string)
+			newPasswd = string(child.Data.Bytes())
 			hasNewPasswd = true
 		}
 	}
@@ -812,6 +815,17 @@ func modifyPassword(messageId int, packet *ber.Packet, ls *LdapSession) {
 			}
 			effSession = pr.GenSessionForUser(user)
 			oldPasswdCompared = true
+		} else {
+			getCtx := &base.GetContext{}
+			getCtx.OpContext = ls.OpContext
+			getCtx.Username = userIdentity
+
+			user = pr.GetUserByName(getCtx)
+			if user == nil {
+				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultNoSuchObject, "user doesn't exist")
+				ls.con.Write(errResp.Bytes())
+				return
+			}
 		}
 	}
 
