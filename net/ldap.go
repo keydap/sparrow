@@ -203,9 +203,17 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 
 func getUsernameFromDn(baseDn string) string {
 	rdns := strings.Split(baseDn, ",")
+	if len(rdns) == 0 {
+		log.Debugf("Empty DN given")
+		return ""
+	}
 
 	pos := strings.IndexRune(rdns[0], '=')
 
+	if pos <= 0 {
+		log.Debugf("Invalid DN given %s", baseDn)
+		return ""
+	}
 	return rdns[0][pos+1:]
 }
 
@@ -781,18 +789,18 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 	} else {
 		getCtx := &base.GetContext{}
 		getCtx.OpContext = ls.OpContext
-		getCtx.Username = userIdentity
+
+		var normDomain string
+		getCtx.Username, normDomain = getUserNameAndDomainFromPasswdReq(userIdentity)
 
 		if ls.Session == nil {
-			pos := strings.LastIndex(userIdentity, "@")
-			if pos <= 0 {
+			if getCtx.Username == "" {
 				// throw invalidcredentials
 				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultInvalidCredentials, "Invalid user identity")
 				ls.con.Write(errResp.Bytes())
 				return
 			}
 
-			normDomain := strings.ToLower(userIdentity[pos+1:])
 			pr = providers[normDomain]
 		} else {
 			pr = providers[ls.Session.Domain]
@@ -807,7 +815,7 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 		}
 
 		if effSession == nil {
-			user = pr.Authenticate(userIdentity, oldPasswd)
+			user = pr.Authenticate(getCtx.Username, oldPasswd)
 			if user == nil {
 				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultNoSuchObject, "user doesn't exist")
 				ls.con.Write(errResp.Bytes())
@@ -816,9 +824,7 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 			effSession = pr.GenSessionForUser(user)
 			oldPasswdCompared = true
 		} else {
-			getCtx := &base.GetContext{}
 			getCtx.OpContext = ls.OpContext
-			getCtx.Username = userIdentity
 
 			user = pr.GetUserByName(getCtx)
 			if user == nil {
@@ -862,7 +868,7 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 	patchCtx := &base.PatchContext{}
 	patchCtx.OpContext = ls.OpContext
 	patchCtx.Rid = user.GetId()
-	patchCtx.Session = ls.Session
+	patchCtx.Session = effSession
 	patchCtx.Rt = pr.RsTypes["User"]
 
 	replace := &base.PatchOp{}
@@ -879,6 +885,7 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 	_, err := pr.Patch(patchCtx)
 	if err != nil {
 		// throw other error
+		log.Debugf("Failed to update the password %s", err)
 		errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultOther, "Failed to update password")
 		ls.con.Write(errResp.Bytes())
 		return
@@ -886,4 +893,19 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 
 	successResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultSuccess, "password updated")
 	ls.con.Write(successResp.Bytes())
+}
+
+func getUserNameAndDomainFromPasswdReq(userIdentity string) (uid string, domain string) {
+	pos := strings.LastIndex(userIdentity, "@")
+	if pos > 0 {
+		return userIdentity[:pos], strings.ToLower(userIdentity[pos+1:])
+	}
+
+	// if not parse the DN
+	domain, _ = getDomainAndEndpoint(userIdentity)
+	uid = getUsernameFromDn(userIdentity)
+	if uid == "" {
+		uid = userIdentity
+	}
+	return uid, strings.ToLower(domain)
 }
