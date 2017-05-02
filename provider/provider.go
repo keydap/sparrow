@@ -263,7 +263,8 @@ func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource)
 }
 
 func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resource, err error) {
-	if !replaceCtx.Session.IsAllowUpdate() {
+	// allow an admin always, but normal user when the resource belongs to self
+	if !replaceCtx.Session.IsAllowUpdate() && (replaceCtx.Rid != replaceCtx.Session.Sub) {
 		return nil, base.NewForbiddenError("Insufficent privileges to replace the resource")
 	}
 
@@ -271,7 +272,8 @@ func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resourc
 }
 
 func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err error) {
-	if !patchCtx.Session.IsAllowUpdate() {
+	// allow an admin always, but normal user when the resource belongs to self
+	if !patchCtx.Session.IsAllowUpdate() && (patchCtx.Rid != patchCtx.Session.Sub) {
 		return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
 	}
 
