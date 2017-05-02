@@ -33,6 +33,7 @@ type DeleteContext struct {
 }
 
 type ReplaceContext struct {
+	Rid         string
 	InRes       *Resource
 	IfNoneMatch string
 	Rt          *schema.ResourceType
