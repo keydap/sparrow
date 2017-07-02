@@ -30,7 +30,7 @@ var providers = make(map[string]*provider.Provider)
 // this exists to keep the length of Oauth code fixed to N bytes
 var dcPrvMap = make(map[uint32]*provider.Provider)
 
-var TENANT_HEADER = "X-Sparrow-Tenant-Id"
+var TENANT_HEADER = "X-Sparrow-Domain"
 var SCIM_JSON_TYPE = "application/scim+json; charset=UTF-8"
 var JSON_TYPE = "application/json; charset=UTF-8"
 var FORM_URL_ENCODED_TYPE = "application/x-www-form-urlencoded"
