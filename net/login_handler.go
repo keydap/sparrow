@@ -128,6 +128,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		af.UserId = user.GetId()
 		af.DomainCode = prv.DomainCode()
 		setAuthFlow(af, w)
+		// FIXME show consent only if application/client config enforces it
 		login := templates["consent.html"]
 		login.Execute(w, paramMap)
 		return
@@ -161,6 +162,10 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 				sendOauthError(w, r, cl.RedUri, ep)
 			}
 		}
+	} else {
+		setAuthFlow(nil, w)
+		ologin := templates["login.html"]
+		ologin.Execute(w, paramMap)
 	}
 }
 
@@ -178,6 +183,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	valid := isValidAuthzReq(w, r, areq)
 
 	if !valid {
+		// FIXME return a meaningful error response
 		return
 	}
 
