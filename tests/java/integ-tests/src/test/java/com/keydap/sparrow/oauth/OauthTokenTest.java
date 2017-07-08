@@ -149,7 +149,6 @@ public class OauthTokenTest {
     @After
     public void teardown() throws Exception {
         browser.close();
-        browser.quit();
     }
     
     @AfterClass
@@ -167,7 +166,9 @@ public class OauthTokenTest {
         JsonObject regObj = parseJson(regResp);
         
         clientId = regObj.get("id").getAsString();
+        System.out.println(clientId);
         clientSecret = regObj.get("secret").getAsString();
+        System.out.println(clientSecret);
     }
     
     @Test
