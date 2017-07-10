@@ -32,8 +32,12 @@ import static org.junit.Assert.*;
  */
 public abstract class TestBase {
     
-    protected static String baseApiUrl = "http://localhost:7090/v2";
+    private static String BASE = "http://localhost:7090";
     
+    protected static String baseApiUrl = BASE + "/v2";
+    
+    protected static String baseOauthUrl = BASE + "/oauth2";
+
     protected static SparrowClient client;
     
     /** the anonymous client */
@@ -47,7 +51,7 @@ public abstract class TestBase {
     public static void createClient() throws Exception {
         authenticator = new SparrowAuthenticator("admin", "example.COM", "secret");
 
-        client = new SparrowClient(baseApiUrl, authenticator);
+        client = new SparrowClient(baseApiUrl, baseOauthUrl, authenticator);
         client.register(User.class, Group.class, Device.class);
         utcDf.setTimeZone(TimeZone.getTimeZone("UTC"));
 

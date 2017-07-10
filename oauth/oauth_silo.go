@@ -10,7 +10,6 @@ import (
 	logger "github.com/juju/loggo"
 	"runtime/debug"
 	"sparrow/base"
-	"sparrow/conf"
 	"sparrow/utils"
 	"time"
 )
@@ -30,11 +29,10 @@ var (
 	BUC_IDX_SSO_SESSION_BY_JTI = []byte("idx_session_by_jti")
 )
 
-var srvConf *conf.ServerConf
-
 type OauthSilo struct {
-	db       *bolt.DB
-	rvTokens map[string]bool
+	db                 *bolt.DB
+	tokenPurgeInterval int
+	rvTokens           map[string]bool
 }
 
 var log logger.Logger
@@ -43,7 +41,7 @@ func init() {
 	log = logger.GetLogger("sparrow.oauth")
 }
 
-func Open(path string, cnf *conf.ServerConf) (osl *OauthSilo, err error) {
+func Open(path string, tokenPurgeInterval int) (osl *OauthSilo, err error) {
 	db, err := bolt.Open(path, 0644, nil)
 
 	if err != nil {
@@ -89,9 +87,9 @@ func Open(path string, cnf *conf.ServerConf) (osl *OauthSilo, err error) {
 		return nil, err
 	}
 
-	srvConf = cnf
 	osl = &OauthSilo{}
 	osl.db = db
+	osl.tokenPurgeInterval = tokenPurgeInterval
 	osl.rvTokens = make(map[string]bool)
 
 	// load revoked tokens
@@ -104,14 +102,14 @@ func Open(path string, cnf *conf.ServerConf) (osl *OauthSilo, err error) {
 	return osl, nil
 }
 
-func (osl *OauthSilo) AddClient(cl *Client) {
+func (osl *OauthSilo) AddClient(cl *Client) (err error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(cl)
+	err = enc.Encode(cl)
 
 	if err != nil {
 		log.Warningf("Failed to encode client %s", err)
-		panic(err)
+		return err
 	}
 
 	err = osl.db.Update(func(tx *bolt.Tx) error {
@@ -119,10 +117,7 @@ func (osl *OauthSilo) AddClient(cl *Client) {
 		return clBucket.Put([]byte(cl.Id), buf.Bytes())
 	})
 
-	if err != nil {
-		log.Warningf("Failed to save client %s", err)
-		panic(err)
-	}
+	return err
 }
 
 func (osl *OauthSilo) DeleteClient(id string) error {
@@ -292,7 +287,7 @@ func (osl *OauthSilo) _getSession(bucketName []byte, jti string) *base.RbacSessi
 	return session
 }
 
-func (osl *OauthSilo) DeleteToken(jti string) bool {
+func (osl *OauthSilo) DeleteOauthSession(jti string) bool {
 	log.Debugf("Deleting token %s", jti)
 	return osl._deleteSession(BUC_OAUTH_SESSIONS, BUC_IDX_OAUTH_SESSION_BY_JTI, jti)
 }
@@ -341,10 +336,6 @@ func removeExpiredSessions(osl *OauthSilo, buckName []byte, idxBuckName []byte) 
 	}()
 
 	for {
-		if osl.db == nil {
-			break
-		}
-
 		tx, err := osl.db.Begin(true)
 		if err != nil {
 			log.Warningf("Failed to open a read-only transaction for removing expired sessions %s", err)
@@ -371,6 +362,8 @@ func removeExpiredSessions(osl *OauthSilo, buckName []byte, idxBuckName []byte) 
 
 		tx.Commit()
 
-		time.Sleep(time.Duration(srvConf.TokenPurgeInterval) * time.Second)
+		sleepTime := time.Duration(osl.tokenPurgeInterval) * time.Second
+		log.Debugf("Sleeping for %s", sleepTime)
+		time.Sleep(sleepTime)
 	}
 }

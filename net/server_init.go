@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"sparrow/conf"
-	"sparrow/oauth"
 	"sparrow/provider"
 	"sparrow/schema"
 	"sparrow/utils"
@@ -30,8 +29,7 @@ var DEFAULT_SRV_CONF string = `{
     "ldapOverTlsOnly" : true,
     "ipAddress" : "0.0.0.0",
     "certificateFile": "default.cer",
-    "privatekeyFile": "default.key",
-    "tokenPurgeInterval": 120
+    "privatekeyFile": "default.key"
 }`
 
 var COOKIE_LOGIN_NAME string = "SPLCN"
@@ -72,7 +70,6 @@ func initHome(srvHome string) *conf.ServerConf {
 
 	sc := &conf.ServerConf{}
 	sc.TmplDir = tmplDir
-	sc.OauthDir = oauthDir
 
 	if err != nil {
 		err = ioutil.WriteFile(srvConfPath, []byte(DEFAULT_SRV_CONF), utils.FILE_PERM)
@@ -132,13 +129,6 @@ func initHome(srvHome string) *conf.ServerConf {
 
 	if len(providers) == 0 {
 		createDefaultDomain(domainsDir, sc)
-	}
-
-	odbFilePath := filepath.Join(sc.OauthDir, "oauth.db")
-	osl, err = oauth.Open(odbFilePath, sc)
-
-	if err != nil {
-		panic(err)
 	}
 
 	cs = sessions.NewCookieStore(securecookie.GenerateRandomKey(32))

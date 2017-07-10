@@ -55,6 +55,10 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.keydap.sparrow.RegisterAppRequest;
+import com.keydap.sparrow.RegisteredApp;
+import com.keydap.sparrow.Response;
+import com.keydap.sparrow.TestBase;
 
 /**
  * Tests fetching of a OAuth token using a mix of httpclient
@@ -62,9 +66,7 @@ import com.google.gson.JsonParser;
  * 
  * @author Kiran Ayyagari (kayyagari@keydap.com)
  */
-public class OauthTokenTest {
-
-    public static String baseOauthUrl = "http://localhost:7090/oauth2";
+public class OauthTokenTest extends TestBase {
 
     private static final String CTX_PATH = "/tokentest";
     private static final int PORT = 7000;
@@ -157,18 +159,17 @@ public class OauthTokenTest {
     }
     
     private void registerClient() throws Exception {
-        String template = baseOauthUrl + "/register?uri=%s&desc=token-test-client";
-        encodedRedirectUri = URLEncoder.encode(redirectUri, "utf-8");
-        template = String.format(template, encodedRedirectUri);
-        HttpPost register = new HttpPost(template);
-        HttpResponse regResp = httpClient.execute(register);
-        assertEquals(HttpStatus.SC_CREATED, regResp.getStatusLine().getStatusCode());
-        JsonObject regObj = parseJson(regResp);
-        
-        clientId = regObj.get("id").getAsString();
+        RegisterAppRequest req = new RegisterAppRequest("test", redirectUri);
+        Response<RegisteredApp> appResp = client.registerApp(req);
+        assertEquals(HttpStatus.SC_CREATED, appResp.getHttpCode());
+
+        RegisteredApp app = appResp.getResource();
+        clientId = app.getId();
         System.out.println(clientId);
-        clientSecret = regObj.get("secret").getAsString();
+        clientSecret = app.getSecret();
         System.out.println(clientSecret);
+        
+        encodedRedirectUri = URLEncoder.encode(app.getRedUri(), "utf-8");
     }
     
     @Test

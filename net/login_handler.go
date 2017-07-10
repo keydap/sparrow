@@ -104,7 +104,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session := prv.GenSessionForUser(user)
-	osl.StoreSsoSession(session)
+	prv.StoreSsoSession(session)
 
 	cookie := &http.Cookie{}
 	cookie.Path = "/"
@@ -149,7 +149,11 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 				sendFinalResponse(w, r, nil, af)
 			} else {
 				clientId := r.Form.Get("client_id")
-				cl := osl.GetClient(clientId)
+				pr, _ := getPrFromParam(r)
+				var cl *oauth.Client
+				if pr != nil {
+					cl = pr.GetClient(clientId)
+				}
 				ep := &oauth.ErrorResp{}
 				ep.State = r.Form.Get("state")
 				if cl == nil {
@@ -164,8 +168,6 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		setAuthFlow(nil, w)
-		ologin := templates["login.html"]
-		ologin.Execute(w, paramMap)
 	}
 }
 
@@ -189,7 +191,12 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 
 	log.Debugf("Received authorization request is valid, searching for client")
 
-	cl := osl.GetClient(areq.ClientId)
+	pr, _ := getPrFromParam(r)
+	var cl *oauth.Client
+	if pr != nil {
+		cl = pr.GetClient(areq.ClientId)
+	}
+
 	if cl == nil {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Invalid client ID " + areq.ClientId
@@ -318,7 +325,13 @@ func getSession(r *http.Request) *base.RbacSession {
 	ssoCookie, _ := r.Cookie(SSO_COOKIE)
 
 	if ssoCookie != nil {
-		session := osl.GetSsoSession(ssoCookie.Value)
+		pr, _ := getPrFromParam(r)
+		var session *base.RbacSession
+
+		if pr != nil {
+			session = pr.GetSsoSession(ssoCookie.Value)
+		}
+
 		if (session != nil) && !session.IsExpired() {
 			return session
 		}

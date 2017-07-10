@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"sparrow/base"
 	"sparrow/conf"
-	"sparrow/oauth"
 	"sparrow/provider"
 	"sparrow/schema"
 	"sparrow/utils"
@@ -31,6 +30,7 @@ var providers = make(map[string]*provider.Provider)
 var dcPrvMap = make(map[uint32]*provider.Provider)
 
 var TENANT_HEADER = "X-Sparrow-Domain"
+var TENANT_COOKIE = "SD"
 var SCIM_JSON_TYPE = "application/scim+json; charset=UTF-8"
 var JSON_TYPE = "application/json; charset=UTF-8"
 var FORM_URL_ENCODED_TYPE = "application/x-www-form-urlencoded"
@@ -42,7 +42,6 @@ var commaByte = []byte{','}
 var defaultDomain = "example.com"
 var srvConf *conf.ServerConf
 var templates map[string]*template.Template
-var osl *oauth.OauthSilo
 var cs *sessions.CookieStore
 
 var cookieKey []byte
@@ -72,7 +71,7 @@ func startHttp() {
 	// scim requests
 	scimRouter := router.PathPrefix(API_BASE).Subrouter()
 
-	scimRouter.HandleFunc("/token", issueToken).Methods("POST")
+	scimRouter.HandleFunc("/directLogin", directLogin).Methods("POST")
 	//scimRouter.HandleFunc("/revoke", handleRevoke).Methods("DELETE")
 	scimRouter.HandleFunc("/Me", selfServe).Methods("GET", "POST", "PUT", "PATCH", "DELETE")
 
@@ -219,6 +218,7 @@ func searchWithSearchRequest(hc *httpContext) {
 
 	sr := &base.SearchRequest{}
 
+	defer hc.r.Body.Close()
 	err := json.NewDecoder(hc.r.Body).Decode(sr)
 	if err != nil {
 		e := base.NewBadRequestError("Invalid search request " + err.Error())
@@ -333,6 +333,7 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 }
 
 func createResource(hc *httpContext) {
+	defer hc.r.Body.Close()
 	rs, err := base.ParseResource(hc.pr.RsTypes, hc.pr.Schemas, hc.r.Body)
 	if err != nil {
 		writeError(hc.w, err)
@@ -380,6 +381,7 @@ func replaceResource(hc *httpContext) {
 		return
 	}
 
+	defer hc.r.Body.Close()
 	rs, err := base.ParseResource(hc.pr.RsTypes, hc.pr.Schemas, hc.r.Body)
 	if err != nil {
 		writeError(hc.w, err)
@@ -446,6 +448,7 @@ func patchResource(hc *httpContext) {
 		return
 	}
 
+	defer hc.r.Body.Close()
 	patchReq, err := base.ParsePatchReq(hc.r.Body, rtByPath)
 	if err != nil {
 		writeError(hc.w, err)
@@ -524,8 +527,21 @@ func getSrvProvConf(w http.ResponseWriter, r *http.Request) {
 }
 
 func getPrFromParam(r *http.Request) (pr *provider.Provider, err error) {
-	r.ParseForm() // ignore errors
-	domain := strings.ToLower(r.Form.Get("d"))
+	// NO NEED TO parse Form cause the domain ID will be either in the
+	// Header or in a Cookie
+	//r.ParseForm()
+	domain := r.Header.Get(TENANT_COOKIE)
+
+	if len(domain) == 0 {
+		domain = r.Header.Get(TENANT_HEADER)
+	}
+
+	/* no longer supported
+	if len(domain) == 0 {
+		domain = r.Form.Get("d")
+	}*/
+
+	domain = strings.ToLower(domain)
 
 	if len(domain) == 0 {
 		domain = defaultDomain
@@ -638,7 +654,8 @@ func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(version))
 }
 
-func issueToken(w http.ResponseWriter, r *http.Request) {
+func directLogin(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
 	ar := &base.AuthRequest{}
 	err := json.NewDecoder(r.Body).Decode(ar)
 	if err != nil {
@@ -648,7 +665,7 @@ func issueToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ar.ClientIP = r.RemoteAddr
-	normDomain := strings.ToLower(strings.TrimSpace(ar.Domain))
+	normDomain := strings.ToLower(ar.Domain)
 	if len(normDomain) == 0 {
 		normDomain = defaultDomain
 	}
@@ -668,7 +685,7 @@ func issueToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := pr.GenSessionForUser(user)
-	osl.StoreOauthSession(token)
+	pr.StoreOauthSession(token)
 
 	log.Debugf("Issued token %s by %s", token.Jti, ar.Domain)
 	// write the token
@@ -752,7 +769,7 @@ func createOpCtx(r *http.Request) (opCtx *base.OpContext, err error) {
 		}
 	}
 
-	session, err := parseToken(authzHeader, opCtx)
+	session, err := parseToken(authzHeader, opCtx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -823,9 +840,15 @@ func parseAttrParam(attrParam string, rTypes []*schema.ResourceType) []*base.Att
 	return nil
 }
 
-func parseToken(token string, opCtx *base.OpContext) (session *base.RbacSession, err error) {
+func parseToken(token string, opCtx *base.OpContext, r *http.Request) (session *base.RbacSession, err error) {
+	pr, err := getPrFromParam(r)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if opCtx.Sso {
-		session = osl.GetSsoSession(token)
+		session = pr.GetSsoSession(token)
 	} else {
 		// strip the prefix "Bearer " from token
 		spacePos := strings.IndexRune(token, ' ')
@@ -836,7 +859,7 @@ func parseToken(token string, opCtx *base.OpContext) (session *base.RbacSession,
 			}
 		}
 
-		session = osl.GetOauthSession(token)
+		session = pr.GetOauthSession(token)
 	}
 
 	if session == nil {

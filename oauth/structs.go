@@ -32,15 +32,16 @@ const (
 
 type Client struct {
 	Id              string                `json:"id"`
+	Name            string                `json:"name"`
 	Secret          string                `json:"secret"`
 	Time            int64                 `json:"time"`
 	Desc            string                `json:"desc"`
 	RedUri          string                `json:"redUri"`
-	ServerSecret    []byte                `json:"-"` // the secret used as a key
+	ServerSecret    []byte                `json:"-"` // this secret is used as a key
 	HasQueryInUri   bool                  `json:"-"` // flag to indicate if there is query part in the path
 	ConsentRequired bool                  `json:"consentRequired"`
-	SamlGroupConf   saml.SamlGroupConfig  `json:"samlGroupConf"`
-	SamlAtConf      []saml.SamlAttrConfig `json:"samlAtConf"`
+	SamlGroupConf   saml.SamlGroupConfig  `json:"samlGroupConf,omitempty"`
+	SamlAtConf      []saml.SamlAttrConfig `json:"samlAtConf,omitempty"`
 }
 
 type AuthorizationReq struct {

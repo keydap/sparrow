@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sparrow/base"
 	"sparrow/conf"
+	"sparrow/oauth"
 	_ "sparrow/rbac"
 	"sparrow/schema"
 	"sparrow/silo"
@@ -36,6 +37,7 @@ type Provider struct {
 	PrivKey       crypto.PrivateKey
 	immResIds     map[string]int // map of IDs of resources that cannot be deleted
 	domainCode    uint32
+	osl           *oauth.OauthSilo
 }
 
 const adminGroupId = "00000000-1000-0000-0000-000000000000"
@@ -99,6 +101,13 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	prv.immResIds = make(map[string]int)
 	prv.immResIds[adminGroupId] = 1
 	prv.immResIds[adminUserId] = 1
+
+	odbFilePath := filepath.Join(layout.DataDir, layout.name+"-tokens.db")
+	prv.osl, err = oauth.Open(odbFilePath, prv.Config.Oauth.TokenPurgeInterval)
+
+	if err != nil {
+		return nil, err
+	}
 
 	err = prv.createDefaultResources()
 

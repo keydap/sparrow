@@ -15,20 +15,18 @@ import (
 )
 
 type ServerConf struct {
-	ServerId           uint16              `json:"serverId"` // used while generating CSNs
-	Https              bool                `json:"enableHttps"`
-	HttpPort           int                 `json:"httpPort"`
-	LdapPort           int                 `json:"ldapPort"`
-	LdapOverTlsOnly    bool                `json:"ldapOverTlsOnly"`
-	IpAddress          string              `json:"ipAddress"`
-	CertFile           string              `json:"certificateFile"`
-	PrivKeyFile        string              `json:"privatekeyFile"`
-	TmplDir            string              `json:"-"` // template directory
-	OauthDir           string              `json:"-"` // template directory
-	CertChain          []*x509.Certificate `json:"-"`
-	PrivKey            crypto.PrivateKey   `json:"-"`
-	PubKey             crypto.PublicKey    `json:"-"`
-	TokenPurgeInterval int                 `json:"tokenPurgeInterval"` // the number of seconds to wait between successive purges of expired tokens
+	ServerId        uint16              `json:"serverId"` // used while generating CSNs
+	Https           bool                `json:"enableHttps"`
+	HttpPort        int                 `json:"httpPort"`
+	LdapPort        int                 `json:"ldapPort"`
+	LdapOverTlsOnly bool                `json:"ldapOverTlsOnly"`
+	IpAddress       string              `json:"ipAddress"`
+	CertFile        string              `json:"certificateFile"`
+	PrivKeyFile     string              `json:"privatekeyFile"`
+	TmplDir         string              `json:"-"` // template directory
+	CertChain       []*x509.Certificate `json:"-"`
+	PrivKey         crypto.PrivateKey   `json:"-"`
+	PubKey          crypto.PublicKey    `json:"-"`
 }
 
 type AuthenticationScheme struct {
@@ -90,6 +88,7 @@ type Ppolicy struct {
 type OauthConfig struct {
 	TokenTTL           int    `json:"tokenTtl"`           // the life time of an OAuth token in seconds
 	SsoSessionIdleTime int    `json:"ssoSessionIdleTime"` // the idle time of a SSO session in seconds
+	TokenPurgeInterval int    `json:"tokenPurgeInterval"` // the number of seconds to wait between successive purges of expired tokens
 	Notes              string `json:"notes"`
 }
 
@@ -161,6 +160,7 @@ func DefaultDomainConfig() *DomainConfig {
 	oauthCf := &OauthConfig{}
 	oauthCf.TokenTTL = 8 * 3600           // 8 hours
 	oauthCf.SsoSessionIdleTime = 1 * 3600 // 1 hour
+	oauthCf.TokenPurgeInterval = 2 * 60   // 2 minutes
 
 	ppolicy := &Ppolicy{}
 

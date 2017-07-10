@@ -104,6 +104,7 @@
     "oauth": {
         "tokenTtl": 28800,
         "ssoSessionIdleTime": 3600,
+        "tokenPurgeInterval": 120,
         "notes": ""
     },
 

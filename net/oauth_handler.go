@@ -35,50 +35,70 @@ type authFlow struct {
 }
 
 func registerClient(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
+	defer r.Body.Close()
+	var receivedCl oauth.Client
+	err := json.NewDecoder(r.Body).Decode(&receivedCl)
 	if err != nil {
-		writeError(w, base.NewBadRequestError(err.Error()))
+		msg := "Invalid app registration request " + err.Error()
+		log.Debugf(msg)
+		e := base.NewBadRequestError(msg)
+		writeError(w, e)
 		return
 	}
 
-	desc := strings.TrimSpace(r.Form.Get("desc"))
-	redUri := strings.TrimSpace(r.Form.Get("uri"))
-	if len(redUri) == 0 {
-		writeError(w, base.NewBadRequestError("Missing redirect URI"))
-		return
-	}
-
-	redUrl, err := url.Parse(strings.ToLower(redUri))
+	redUrl, err := url.Parse(strings.ToLower(receivedCl.RedUri))
 
 	if err != nil {
-		msg := fmt.Sprintf("Invalid redirect URI %s", redUri)
+		msg := fmt.Sprintf("Invalid redirect URI %s", receivedCl.RedUri)
 		log.Debugf(msg)
 		writeError(w, base.NewBadRequestError(msg))
 		return
 	}
 
 	if redUrl.Scheme != "http" && redUrl.Scheme != "https" {
-		msg := fmt.Sprintf("Unknown protocol in the redirect URI %s", redUri)
+		msg := fmt.Sprintf("Unknown protocol in the redirect URI %s", receivedCl.RedUri)
 		log.Debugf(msg)
 		writeError(w, base.NewBadRequestError(msg))
 		return
 	}
 
+	// create a new client and copy ONLY the fields that a user can set
 	cl := oauth.NewClient()
-	cl.Desc = desc
-	cl.RedUri = redUri
+	cl.Name = receivedCl.Name
+	cl.Desc = receivedCl.Desc
+	cl.RedUri = receivedCl.RedUri
+	cl.ConsentRequired = receivedCl.ConsentRequired
 	if len(redUrl.RawQuery) != 0 {
 		cl.HasQueryInUri = true
 	}
 
-	osl.AddClient(cl)
+	ctx, _ := createOpCtx(r)
+	if ctx == nil {
+		msg := "invalid operation context"
+		log.Debugf(msg)
+		writeError(w, base.NewBadRequestError(msg))
+		return
+	}
 
-	w.WriteHeader(http.StatusCreated)
-	enc := json.NewEncoder(w)
+	pr := providers[ctx.Session.Domain]
+	err = pr.AddClient(ctx, cl)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to store oauth client %s", err)
+		log.Warningf(msg)
+		writeError(w, base.NewInternalserverError(msg))
+		return
+	}
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	err = enc.Encode(cl)
 	if err != nil {
-		log.Warningf("Failed to write serialized oauth client data to user %s", err)
+		msg := fmt.Sprintf("Failed to serialize oauth client data %s", err)
+		log.Warningf(msg)
+		writeError(w, base.NewInternalserverError(msg))
 	} else {
+		w.WriteHeader(http.StatusCreated)
+		w.Write(buf.Bytes())
 		log.Debugf("Successfully created oauth client %s", cl.Id)
 	}
 }
@@ -120,7 +140,13 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 	invalidCreds.Desc = "Invalid client ID or secret"
 	invalidCreds.Err = oauth.ERR_INVALID_REQUEST
 
-	cl := osl.GetClient(atr.ClientId)
+	var cl *oauth.Client
+
+	pr, _ := getPrFromParam(r)
+	if pr != nil {
+		cl = pr.GetClient(atr.ClientId)
+	}
+
 	if cl == nil {
 		sendOauthError(w, r, "", invalidCreds)
 		return
@@ -162,7 +188,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prv := dcPrvMap[ac.DomainCode]
-	if prv == nil {
+	if prv == nil || (pr.Name != prv.Name) {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Invalid code"
 		ep.Err = oauth.ERR_INVALID_REQUEST
@@ -179,7 +205,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	osl.StoreOauthSession(token)
+	prv.StoreOauthSession(token)
 
 	tresp := &oauth.AccessTokenResp{}
 	tresp.AcToken = token.Jti
