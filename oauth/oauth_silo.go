@@ -320,7 +320,7 @@ func (osl *OauthSilo) _deleteSession(bucketName []byte, idxBuckName []byte, jti 
 }
 
 func (osl *OauthSilo) Close() {
-	log.Infof("Closing oauth silo")
+	log.Infof("Closing token silo")
 	osl.db.Close()
 	osl.db = nil
 	osl.rvTokens = nil

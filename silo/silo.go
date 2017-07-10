@@ -506,7 +506,7 @@ func Open(path string, serverId uint16, config *conf.DomainConfig, rtypes map[st
 }
 
 func (sl *Silo) Close() {
-	log.Infof("Closing silo")
+	log.Infof("Closing resource silo")
 	sl.db.Close()
 }
 

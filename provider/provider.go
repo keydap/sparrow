@@ -114,6 +114,12 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	return prv, err
 }
 
+func (pr *Provider) Close() {
+	log.Debugf("Closing provider %s", pr.Name)
+	pr.sl.Close()
+	pr.osl.Close()
+}
+
 func (prv *Provider) createDefaultResources() error {
 	groupName := "Administrator"
 	_, err := prv.sl.Get(adminGroupId, prv.RsTypes["Group"])

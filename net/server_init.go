@@ -48,6 +48,11 @@ func Start(srvHome string) {
 	startHttp()
 }
 
+func Stop() {
+	stopLdap()
+	stopHttp()
+}
+
 func initHome(srvHome string) *conf.ServerConf {
 	log.Debugf("Checking server home directory %s", srvHome)
 	utils.CheckAndCreate(srvHome)

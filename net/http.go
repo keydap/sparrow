@@ -43,6 +43,7 @@ var defaultDomain = "example.com"
 var srvConf *conf.ServerConf
 var templates map[string]*template.Template
 var cs *sessions.CookieStore
+var server *http.Server
 
 var cookieKey []byte
 
@@ -122,10 +123,20 @@ func startHttp() {
 
 	if srvConf.Https {
 		issuerUrl = "https://" + hostAddr
-		http.ListenAndServeTLS(hostAddr, srvConf.CertFile, srvConf.PrivKeyFile, router)
+		server = &http.Server{Addr: issuerUrl, Handler: router}
+		server.ListenAndServeTLS(srvConf.CertFile, srvConf.PrivKeyFile)
 	} else {
 		issuerUrl = "http://" + hostAddr
-		http.ListenAndServe(hostAddr, router)
+		server = &http.Server{Addr: issuerUrl, Handler: router}
+		server.ListenAndServe()
+	}
+}
+
+func stopHttp() {
+	log.Debugf("Stopping HTTP server")
+	server.Close()
+	for _, pr := range providers {
+		pr.Close()
 	}
 }
 

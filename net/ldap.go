@@ -28,6 +28,8 @@ type LdapSession struct {
 
 var tlsConf *tls.Config
 
+var listener *net.TCPListener
+
 func startLdap() error {
 	hostAddr := srvConf.IpAddress + ":" + strconv.Itoa(srvConf.LdapPort)
 
@@ -38,7 +40,7 @@ func startLdap() error {
 		return err
 	}
 
-	listener, err := net.ListenTCP("tcp", laddr)
+	listener, err = net.ListenTCP("tcp", laddr)
 	if err != nil {
 		log.Warningf("Failed to listen at the local address %s, %s", hostAddr, err)
 		return err
@@ -53,11 +55,23 @@ func startLdap() error {
 	return nil
 }
 
+func stopLdap() {
+	log.Debugf("Stopping LDAP server")
+	listener.Close()
+}
+
 func acceptConns(listener *net.TCPListener) {
 	for {
 		con, err := listener.AcceptTCP()
 		if err != nil {
-			log.Warningf("Failed to accept connection %s", err)
+			if oe, ok := err.(*net.OpError); ok {
+				// Source will be null if the listener was closed
+				if oe.Source == nil {
+					break
+				}
+			}
+
+			log.Warningf("Failed to accept connection %#v", err)
 			continue
 		}
 
