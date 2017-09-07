@@ -34,6 +34,7 @@ var TENANT_COOKIE = "SD"
 var SCIM_JSON_TYPE = "application/scim+json; charset=UTF-8"
 var JSON_TYPE = "application/json; charset=UTF-8"
 var FORM_URL_ENCODED_TYPE = "application/x-www-form-urlencoded"
+const SSO_COOKIE = "KSPAX" // Keydap Sparrow Auth X (X -> all the authenticated users)
 
 var API_BASE = "/v2"       // NO slash at the end
 var OAUTH_BASE = "/oauth2" // NO slash at the end
