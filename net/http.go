@@ -34,6 +34,7 @@ var TENANT_COOKIE = "SD"
 var SCIM_JSON_TYPE = "application/scim+json; charset=UTF-8"
 var JSON_TYPE = "application/json; charset=UTF-8"
 var FORM_URL_ENCODED_TYPE = "application/x-www-form-urlencoded"
+
 const SSO_COOKIE = "KSPAX" // Keydap Sparrow Auth X (X -> all the authenticated users)
 
 var API_BASE = "/v2"       // NO slash at the end
@@ -131,6 +132,9 @@ func startHttp() {
 		server = &http.Server{Addr: issuerUrl, Handler: router}
 		server.ListenAndServe()
 	}
+
+	log.Infof("SCIM API is accessible at %s", issuerUrl+API_BASE)
+	log.Infof("OAuth2 and OpenIDConnect API is accessible at %s", issuerUrl+OAUTH_BASE)
 }
 
 func stopHttp() {

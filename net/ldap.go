@@ -33,7 +33,7 @@ var listener *net.TCPListener
 func startLdap() error {
 	hostAddr := srvConf.IpAddress + ":" + strconv.Itoa(srvConf.LdapPort)
 
-	log.Infof("Starting ldap server %s", hostAddr)
+	log.Infof("Starting ldap server...")
 	laddr, err := net.ResolveTCPAddr("tcp", hostAddr)
 	if err != nil {
 		log.Warningf("Failed to resolve the local address, %s", err)
@@ -52,6 +52,7 @@ func startLdap() error {
 
 	go acceptConns(listener)
 
+	log.Infof("LDAP server is accessible at ldap://%s", hostAddr)
 	return nil
 }
 

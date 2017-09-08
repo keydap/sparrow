@@ -27,6 +27,6 @@ func main() {
 
 	log.Debugf("Waiting for signals...")
 	<-sigs
-	log.Debugf("Shutting down...")
+	log.Infof("Shutting down...")
 	net.Stop()
 }
