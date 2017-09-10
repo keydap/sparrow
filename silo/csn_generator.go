@@ -17,7 +17,7 @@ type csnGenerator struct {
 	changeCount uint32
 	replicaId   uint16
 	modCount    uint32
-	mutex       *sync.Mutex
+	mutex       sync.Mutex
 }
 
 type csnImpl struct {
@@ -53,8 +53,6 @@ func (ci csnImpl) String() string {
 func NewCsnGenerator(replicaId uint16) *csnGenerator {
 	cg := &csnGenerator{}
 	cg.replicaId = replicaId
-	cg.mutex = &sync.Mutex{}
-
 	return cg
 }
 
