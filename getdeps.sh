@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 echo 'getting packages'
 
-# boltdb
-go get github.com/boltdb/bolt
+# boltdb has been replaced with coreos/bbolt
+# go get github.com/boltdb/bolt
+go get github.com/coreos/bbolt
 # logging package
 go get github.com/juju/loggo
 # http routing package

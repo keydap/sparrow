@@ -5,7 +5,7 @@ package silo
 
 import (
 	"fmt"
-	"github.com/boltdb/bolt"
+	"github.com/coreos/bbolt"
 	"reflect"
 	"runtime/debug"
 	"sparrow/base"

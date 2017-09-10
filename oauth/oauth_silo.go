@@ -6,7 +6,7 @@ package oauth
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/boltdb/bolt"
+	"github.com/coreos/bbolt"
 	logger "github.com/juju/loggo"
 	"runtime/debug"
 	"sparrow/base"
