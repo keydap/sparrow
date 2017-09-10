@@ -15,6 +15,7 @@ import (
 	"sparrow/schema"
 	"sparrow/utils"
 	"strings"
+	"sync"
 
 	"github.com/boltdb/bolt"
 	logger "github.com/juju/loggo"
@@ -53,6 +54,7 @@ type Silo struct {
 	resTypes   map[string]*schema.ResourceType
 	Engine     *rbac.RbacEngine
 	cg         *csnGenerator
+	mutex      sync.Mutex
 }
 
 type Index struct {
@@ -661,6 +663,8 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 		return nil, err
 	}
 
+	sl.mutex.Lock()
+
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -681,6 +685,8 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 
 			log.Debugf("Successfully inserted resource with id %s", rid)
 		}
+
+		sl.mutex.Unlock()
 	}()
 
 	//log.Debugf("checking unique attributes %s", rt.UniqueAts)
@@ -909,6 +915,8 @@ func (sl *Silo) Delete(rid string, rt *schema.ResourceType) (err error) {
 		return err
 	}
 
+	sl.mutex.Lock()
+
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -927,6 +935,8 @@ func (sl *Silo) Delete(rid string, rt *schema.ResourceType) (err error) {
 
 			log.Debugf("Successfully removed resource with ID %s", rid)
 		}
+
+		sl.mutex.Unlock()
 	}()
 
 	err = sl._removeResource(rid, rt, tx)
@@ -1097,6 +1107,8 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 		return nil, err
 	}
 
+	sl.mutex.Lock()
+
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -1115,6 +1127,8 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 
 			log.Debugf("Successfully replaced resource with id %s", rid)
 		}
+
+		sl.mutex.Unlock()
 	}()
 
 	existing, err := sl.getUsingTx(rid, rt, tx)

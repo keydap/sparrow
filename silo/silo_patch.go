@@ -23,6 +23,8 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 		return nil, err
 	}
 
+	sl.mutex.Lock()
+
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -45,6 +47,8 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 
 			log.Debugf("Successfully modified resource with id %s", rid)
 		}
+
+		sl.mutex.Unlock()
 	}()
 
 	res, err = sl.getUsingTx(rid, rt, tx)
