@@ -7,7 +7,6 @@ import (
 	"fmt"
 	logger "github.com/juju/loggo"
 	"os"
-	"sparrow/conf"
 	"testing"
 )
 
@@ -33,11 +32,8 @@ func initSilo() {
 
 	os.Remove(dbFilePath)
 
-	cnf := &conf.ServerConf{}
-	cnf.TokenPurgeInterval = 120
-
 	var err error
-	osl, err = Open(dbFilePath, cnf)
+	osl, err = Open(dbFilePath, 120)
 
 	if err != nil {
 		fmt.Println("Failed to open oauth silo\n", err)
