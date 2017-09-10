@@ -125,14 +125,18 @@ func startHttp() {
 
 	if srvConf.Https {
 		issuerUrl = "https://" + hostAddr
-		server = &http.Server{Addr: issuerUrl, Handler: router}
+		logUrls()
+		server = &http.Server{Addr: hostAddr, Handler: router}
 		server.ListenAndServeTLS(srvConf.CertFile, srvConf.PrivKeyFile)
 	} else {
 		issuerUrl = "http://" + hostAddr
-		server = &http.Server{Addr: issuerUrl, Handler: router}
+		logUrls()
+		server = &http.Server{Addr: hostAddr, Handler: router}
 		server.ListenAndServe()
 	}
+}
 
+func logUrls() {
 	log.Infof("SCIM API is accessible at %s", issuerUrl+API_BASE)
 	log.Infof("OAuth2 and OpenIDConnect API is accessible at %s", issuerUrl+OAUTH_BASE)
 }
