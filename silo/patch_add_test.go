@@ -10,6 +10,7 @@ import (
 	"sparrow/schema"
 	"sparrow/utils"
 	"testing"
+	"runtime/debug"
 )
 
 var patchDevice = `{"schemas":["urn:keydap:params:scim:schemas:core:2.0:Device"],     
@@ -364,7 +365,8 @@ func getPr(pr string, rt *schema.ResourceType, version string) *base.PatchReq {
 	reader := bytes.NewReader([]byte(pr))
 	req, err := base.ParsePatchReq(reader, rt)
 	if err != nil {
-		fmt.Println(err)
+		debug.PrintStack()
+		//fmt.Println(err)
 		panic(err)
 	}
 

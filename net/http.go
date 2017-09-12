@@ -4,7 +4,7 @@
 package net
 
 import (
-	"encoding/json"
+	json "github.com/ugorji/go/codec"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
@@ -50,6 +50,8 @@ var server *http.Server
 var cookieKey []byte
 
 var issuerUrl = ""
+
+var jh json.Handle = new(json.JsonHandle)
 
 func init() {
 	log = logger.GetLogger("sparrow.net")
@@ -239,7 +241,7 @@ func searchWithSearchRequest(hc *httpContext) {
 	sr := &base.SearchRequest{}
 
 	defer hc.r.Body.Close()
-	err := json.NewDecoder(hc.r.Body).Decode(sr)
+	err := json.NewDecoder(hc.r.Body, jh).Decode(sr)
 	if err != nil {
 		e := base.NewBadRequestError("Invalid search request " + err.Error())
 		writeError(hc.w, e)
@@ -677,7 +679,7 @@ func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
 func directLogin(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	ar := &base.AuthRequest{}
-	err := json.NewDecoder(r.Body).Decode(ar)
+	err := json.NewDecoder(r.Body, jh).Decode(ar)
 	if err != nil {
 		e := base.NewBadRequestError("Invalid authentication request " + err.Error())
 		writeError(w, e)

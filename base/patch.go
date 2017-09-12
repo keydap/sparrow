@@ -4,7 +4,8 @@
 package base
 
 import (
-	"encoding/json"
+	json "github.com/ugorji/go/codec"
+	"reflect"
 	"fmt"
 	"io"
 	"sparrow/schema"
@@ -12,17 +13,17 @@ import (
 )
 
 type PatchReq struct {
-	Schemas     []string
+	Schemas     []string `json:"schemas"`
 	IfNoneMatch string
 	Operations  []*PatchOp
 }
 
 type PatchOp struct {
 	Index      int
-	Op         string
-	Path       string
+	Op         string `json:"op"`
+	Path       string `json:"path"`
 	ParsedPath *ParsedPath
-	Value      interface{}
+	Value      interface{} `json:"value"`
 }
 
 type ParsedPath struct {
@@ -31,6 +32,12 @@ type ParsedPath struct {
 	Schema     string           // the schema of the attribute
 	Slctr      Selector         // the selection filter present in the path
 	Text       string
+}
+
+var jh = &json.JsonHandle{}
+
+func init() {
+	jh.MapType = reflect.TypeOf(map[string]interface{}(nil))
 }
 
 func NewPatchReq() *PatchReq {
@@ -47,7 +54,7 @@ func ParsePatchReq(body io.Reader, rt *schema.ResourceType) (*PatchReq, error) {
 	}
 
 	var pr PatchReq
-	dec := json.NewDecoder(body)
+	dec := json.NewDecoder(body, jh)
 	err := dec.Decode(&pr)
 
 	if err != nil {

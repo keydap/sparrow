@@ -6,6 +6,7 @@ package base
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ugorji/go/codec"
 	"io"
 	"reflect"
 	"sparrow/schema"
@@ -854,7 +855,7 @@ func ParseResource(resTypes map[string]*schema.ResourceType, sm map[string]*sche
 	}
 
 	var i interface{}
-	dec := json.NewDecoder(body)
+	dec := codec.NewDecoder(body, jh)
 	err := dec.Decode(&i)
 
 	if err != nil {
@@ -1123,21 +1124,26 @@ func CheckValueTypeAndConvert(v reflect.Value, attrType *schema.AttrType) interf
 		}
 		return v.Bool()
 	case "integer":
-		if kind != reflect.Float64 {
-			panic(err)
+		switch kind {
+		case reflect.Float64:
+			str := fmt.Sprint(v.Float())
+			if strings.ContainsRune(str, '.') {
+				panic(err)
+			}
+
+			intVal, e := strconv.ParseInt(str, 10, 64)
+			if e != nil {
+				panic(err)
+			}
+			return intVal
+
+		case reflect.Uint64:
+			return int64(v.Uint())
+
+		default:
+			return v.Int()
 		}
 
-		str := fmt.Sprint(v.Float())
-		if strings.ContainsRune(str, '.') {
-			panic(err)
-		}
-
-		intVal, e := strconv.ParseInt(str, 10, 64)
-		if e != nil {
-			panic(err)
-		}
-
-		return intVal
 	case "decimal":
 		if kind != reflect.Float64 {
 			panic(err)

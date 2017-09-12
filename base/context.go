@@ -84,9 +84,9 @@ type SearchRequest struct {
 }
 
 type AuthRequest struct {
-	Username string
-	Domain   string
-	Password string
+	Username string	`json:"username"`
+	Domain   string `json:"domain"`
+	Password string `json:"password"`
 	ClientIP string
 }
 

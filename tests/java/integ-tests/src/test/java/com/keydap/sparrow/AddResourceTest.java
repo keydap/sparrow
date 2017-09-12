@@ -163,7 +163,7 @@ public class AddResourceTest extends TestBase {
     public void testInvalidInteger() throws Exception {
         JsonObject json = client.serialize(thermostat);
         json.remove("rating");
-        json.addProperty("rating", "2.7");
+        json.addProperty("rating", 2.7);
         
         HttpPost post = new HttpPost(baseApiUrl + "/Devices");
         post.setEntity(new StringEntity(json.toString(), SparrowClient.MIME_TYPE));

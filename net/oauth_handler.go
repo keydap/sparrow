@@ -6,7 +6,7 @@ package net
 import (
 	"bytes"
 	"encoding/gob"
-	"encoding/json"
+	json "github.com/ugorji/go/codec"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -37,7 +37,7 @@ type authFlow struct {
 func registerClient(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var receivedCl oauth.Client
-	err := json.NewDecoder(r.Body).Decode(&receivedCl)
+	err := json.NewDecoder(r.Body, jh).Decode(&receivedCl)
 	if err != nil {
 		msg := "Invalid app registration request " + err.Error()
 		log.Debugf(msg)
@@ -90,7 +90,7 @@ func registerClient(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
+	enc := json.NewEncoder(&buf, jh)
 	err = enc.Encode(cl)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to serialize oauth client data %s", err)

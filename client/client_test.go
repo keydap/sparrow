@@ -6,6 +6,7 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"github.com/ugorji/go/codec"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +23,8 @@ import (
 const baseUrl = "http://localhost:7090/v2"
 const scimContentType = "application/scim+json; charset=UTF-8"
 
+var jh codec.Handle = new(codec.JsonHandle)
+
 type authRequest struct {
 	Username string `json:"username"`
 	Domain   string `json:"domain"`
@@ -29,7 +32,7 @@ type authRequest struct {
 }
 
 func TestCreateResourcesPerf(t *testing.T) {
-	if true {
+	if false {
 		fmt.Println("Not running insert perf test")
 		return
 	}
@@ -120,7 +123,7 @@ func TestSearchResourcesPerf(t *testing.T) {
 	}
 
 	var lr base.ListResponse
-	decoder := json.NewDecoder(resp.Body)
+	decoder := codec.NewDecoder(resp.Body, jh)
 	decoder.Decode(&lr)
 
 	resp.Body.Close()
