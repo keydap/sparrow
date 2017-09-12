@@ -19,4 +19,4 @@ go get github.com/gorilla/securecookie
 
 go get github.com/gorilla/sessions
 
-go get github.com/ugorji/go
+go get github.com/ugorji/go/codec
