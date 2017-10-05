@@ -104,16 +104,35 @@ func TestCreateResourcesPerf(t *testing.T) {
 }
 
 func TestSearchResourcesPerf(t *testing.T) {
-	req := base.NewSearchRequest("username pr", "password", false)
-	data, err := json.Marshal(req)
+	if false {
+		fmt.Println("Not running search perf test")
+		return
+	}
+
+	scimReq := base.NewSearchRequest("username pr", "password", false)
+	data, err := json.Marshal(scimReq)
 	if err != nil {
 		t.Errorf(err.Error())
 		return
 	}
 
+	token, err := login()
+	if err != nil {
+		t.Logf("%s", err)
+		t.FailNow()
+	}
+
+	reqUrl, _ := url.Parse(baseUrl + "/Users/.search")
+	client := &http.Client{}
+	req := &http.Request{Method: "POST", URL: reqUrl}
+	req.Header = make(map[string][]string)
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Content-Type", scimContentType)
+	req.Body = ioutil.NopCloser(strings.NewReader(string(data)))
+
 	start := time.Now()
 
-	resp, se := http.Post(baseUrl+"/Users/.search", "application/scim+json", bytes.NewReader(data))
+	resp, se := client.Do(req)
 	if se != nil {
 		fmt.Printf("Error while searching User resource %#v\n", se)
 		return
