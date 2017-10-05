@@ -76,6 +76,12 @@ func (sa *SimpleAttribute) GetType() *schema.AttrType {
 	return sa.atType
 }
 
+// returns the first string value no type conversion is performed
+// so this call will only work if the values are of type string
+func (sa *SimpleAttribute) GetStringVal() string {
+	return sa.Values[0].(string)
+}
+
 func (sa *SimpleAttribute) GetSimpleAt() *SimpleAttribute {
 	return sa
 }
