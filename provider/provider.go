@@ -333,6 +333,15 @@ func (prv *Provider) GenSessionForUser(user *base.Resource) *base.RbacSession {
 	return prv.sl.Engine.NewRbacSession(user)
 }
 
+func (prv *Provider) GetUserById(rid string) (user *base.Resource, err error) {
+	user, err = prv.sl.GetUser(rid)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
 func (prv *Provider) DomainCode() uint32 {
 	if prv.domainCode != 0 {
 		return prv.domainCode

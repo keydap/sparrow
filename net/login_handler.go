@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"sparrow/base"
 	"sparrow/oauth"
+	"sparrow/provider"
 	"sparrow/utils"
 	"strings"
 	"time"
@@ -272,7 +273,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 
 	if areq.RespType == "id_token" || strings.HasSuffix(areq.RespType, " id_token") {
 		// create RbacSession and then generate ID Token
-		idt := createIdToken(session, cl)
+		idt := createIdToken(session, cl, pr)
 		idt.Nonce = areq.Nonce
 		strIdt := idt.ToJwt(srvConf.PrivKey)
 		if hasCode {
@@ -307,7 +308,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	*/
 }
 
-func createIdToken(session *base.RbacSession, cl *oauth.Client) oauth.IdToken {
+func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Provider) oauth.IdToken {
 	idt := oauth.IdToken{}
 	idt.Aud = cl.RedUri
 	idt.AuthTime = session.Iat
@@ -317,6 +318,40 @@ func createIdToken(session *base.RbacSession, cl *oauth.Client) oauth.IdToken {
 	idt.Iss = issuerUrl
 	idt.Jti = utils.NewRandShaStr()
 	idt.Sub = session.Sub
+
+	user, err := pr.GetUserById(session.Sub)
+	//FIXME what to do if user got deleted by then
+	if err == nil {
+		// FIXME the below code is ugly as hell, FIX IT by refactoring the XXXAttribute
+		// type system
+		idt.UserName = user.GetAttr("username").GetSimpleAt().GetStringVal()
+
+		displayNameAt := user.GetAttr("displayname")
+		if displayNameAt != nil {
+			idt.DisplayName = displayNameAt.GetSimpleAt().GetStringVal()
+		}
+
+		nameAt := user.GetAttr("name")
+		if nameAt != nil {
+			name := nameAt.GetComplexAt()
+			nameMap := name.GetFirstSubAt()
+
+			at := nameMap["givenname"]
+			if at != nil {
+				idt.GivenName = at.GetSimpleAt().GetStringVal()
+			}
+
+			at = nameMap["familyname"]
+			if at != nil {
+				idt.FamilyName = at.GetSimpleAt().GetStringVal()
+			}
+		}
+
+		emailAt := user.GetAttr("email")
+		if emailAt != nil {
+			idt.Email = emailAt.GetSimpleAt().GetStringVal()
+		}
+	}
 
 	return idt
 }

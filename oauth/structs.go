@@ -97,6 +97,12 @@ type IdToken struct {
 	Acr      string `json:"acr,omitempty"`
 	Amr      string `json:"amr,omitempty"`
 	Azp      string `json:"azp,omitempty"`
+
+	DisplayName string `json:"name"`
+	GivenName   string `json:"given_name"`
+	FamilyName  string `json:"family_name"`
+	UserName    string `json:"preferred_username"`
+	Email       string `json:"email"`
 }
 
 func NewClient() *Client {
