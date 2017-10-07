@@ -100,6 +100,7 @@ type LdapAttribute struct {
 
 type LdapEntryTemplate struct {
 	Type            string
+	Endpoint        string
 	DnPrefix        string
 	DnAtName        string
 	ObjectClasses   []string
@@ -121,6 +122,7 @@ func NewLdapTemplate(tmpl []byte, rsTypes map[string]*ResourceType) (entry *Ldap
 		return nil, err
 	}
 
+	entry.Endpoint = rt.Endpoint
 	entry.AttrMap = make(map[string]*LdapAttribute)
 	entry.LdapToScimAtMap = make(map[string]string)
 

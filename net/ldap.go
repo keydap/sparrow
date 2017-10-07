@@ -303,13 +303,35 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	sc, pr, err := toSearchContext(ldapReq, ls)
 
 	if err != nil {
+		log.Warningf("%s", err)
 		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultNoSuchObject, err.Error())
 		ls.con.Write(errResp.Bytes())
 		return
 	}
 
+	isVirtual := false
+	isDc := strings.HasPrefix(ldapReq.BaseDN, "dc=")
+	isOu := strings.HasPrefix(ldapReq.BaseDN, "ou=")
+	if ((ldapReq.Scope < 2) && isDc) || ((ldapReq.Scope == 0) && isOu) {
+		isVirtual = true
+	}
+
+	// handle OBJECT scope of namingContext
+	if isVirtual {
+		sendVirtualBase(ldapReq, pr, messageId, ls)
+		return
+	}
+
+	// for ONE level searches under a resource entry return nothing
+	if ldapReq.Scope == 1 && !isDc && !isOu {
+		resp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultSuccess, "")
+		ls.con.Write(resp.Bytes())
+		return
+	}
+
 	attrLst, err := parseFilter(child, ldapReq, sc, pr)
 	if err != nil {
+		log.Warningf("%s", err)
 		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultOther, err.Error())
 		ls.con.Write(errResp.Bytes())
 		return
@@ -321,6 +343,7 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	// or returns an error before starting the go routine
 	err = pr.Search(sc, outPipe)
 	if err != nil {
+		log.Debugf("failed to search %s", err)
 		close(outPipe)
 		errResp := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultOther, err.Error())
 		ls.con.Write(errResp.Bytes())
@@ -328,6 +351,7 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	}
 
 	for rs := range outPipe {
+		//log.Debugf("sending ldap entry %s", rs)
 		sendSearchResultEntry(rs, attrLst, pr, messageId, ls)
 	}
 
@@ -352,6 +376,22 @@ func sendRootDSE(messageId int, ls *LdapSession) {
 	versionLdapAt := &schema.LdapAttribute{LdapAttrName: "vendorVersion"}
 	addAttributeStringsPacket(versionLdapAt, attributes, "1.0") //TODO fix the hardcoded version
 
+	namingContextsAt := &schema.LdapAttribute{LdapAttrName: "namingContexts"}
+	for k, _ := range providers {
+		dn := domainNameToDn(k)
+		addAttributeStringsPacket(namingContextsAt, attributes, dn)
+	}
+
+	supportedExtAt := &schema.LdapAttribute{LdapAttrName: "supportedExtension"}
+	addAttributeStringsPacket(supportedExtAt, attributes, "1.3.6.1.4.1.1466.20037")
+	addAttributeStringsPacket(supportedExtAt, attributes, "1.3.6.1.4.1.4203.1.11.1")
+
+	uuidAt := &schema.LdapAttribute{LdapAttrName: "entryUUID"}
+	addAttributeStringsPacket(uuidAt, attributes, utils.GenUUID())
+
+	ldapVersionAt := &schema.LdapAttribute{LdapAttrName: "supportedLDAPVersion"}
+	addAttributeStringsPacket(ldapVersionAt, attributes, "3")
+
 	se.AppendChild(attributes)
 	rootDseEnvelope.AppendChild(se)
 	ls.con.Write(rootDseEnvelope.Bytes())
@@ -373,7 +413,7 @@ func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr
 		dnAtVal = fmt.Sprintf("%s", dnAt.GetSimpleAt().Values[0])
 	}
 
-	dn := fmt.Sprintf(tmpl.DnPrefix, dnAtVal, pr.Name)
+	dn := fmt.Sprintf(tmpl.DnPrefix, dnAtVal, domainNameToDn(pr.Name))
 
 	entryEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
 	entryEnvelope.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
@@ -595,6 +635,11 @@ func ldapToScimFilter(packet *ber.Packet, sc *base.SearchContext, pr *provider.P
 func findScimName(ldapAtName string, sc *base.SearchContext, pr *provider.Provider) (scimAtName string, atType *schema.AttrType) {
 	log.Debugf("Finding mapped SCIM name for ldap attribute %s", ldapAtName)
 	ldapAtName = strings.ToLower(ldapAtName)
+
+	if ldapAtName == "objectclass" {
+		ldapAtName = "id"
+	}
+
 	for _, rt := range sc.ResTypes {
 		tmpl := pr.LdapTemplates[rt.Name]
 		if tmpl != nil {
@@ -646,11 +691,19 @@ func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base
 
 	// handle OBJECT scope
 	if ldapReq.Scope == 0 {
-		if len(searchCtx.Endpoint) == 0 {
-			return nil, errors.New("Invalid base DN for searching at object scope")
+		if searchCtx.Endpoint == "" {
+			return nil, errors.New(fmt.Sprintf("Invalid base DN %s for searching at object scope", ldapReq.BaseDN))
 		}
 
-		tmpl := pr.LdapTemplates[searchCtx.Endpoint]
+		var tmpl *schema.LdapEntryTemplate
+
+		for _, v := range pr.LdapTemplates {
+			if v.Endpoint == searchCtx.Endpoint {
+				tmpl = v
+				break
+			}
+		}
+
 		if tmpl == nil {
 			return nil, fmt.Errorf("No ldap template configured for resource '%s'", searchCtx.Endpoint)
 		}
@@ -696,6 +749,7 @@ func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base
 				}
 			}
 		}
+
 		if !foundScimAt {
 			log.Debugf("No equivalent SCIM attribute found for the requested LDAP attribute %s", name)
 			continue
@@ -923,4 +977,75 @@ func getUserNameAndDomainFromPasswdReq(userIdentity string) (uid string, domain 
 		uid = userIdentity
 	}
 	return uid, strings.ToLower(domain)
+}
+
+func sendVirtualEntry(dn string, objectClass string, rdns map[string][]string, pr *provider.Provider, messageId int, ls *LdapSession) {
+	entryEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
+	entryEnvelope.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
+
+	se := ber.Encode(ber.ClassApplication, ber.TypeConstructed, ldap.ApplicationSearchResultEntry, nil, "SerchResultEntry")
+	se.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, dn, "DN"))
+	attributes := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Entry Attributes")
+
+	ocLdapAt := &schema.LdapAttribute{LdapAttrName: "objectClass"}
+	addAttributeStringsPacket(ocLdapAt, attributes, "top", objectClass)
+
+	for k, v := range rdns {
+		rdnAt := &schema.LdapAttribute{LdapAttrName: k}
+		addAttributeStringsPacket(rdnAt, attributes, v...)
+	}
+
+	uuidAt := &schema.LdapAttribute{LdapAttrName: "entryUUID"}
+	addAttributeStringsPacket(uuidAt, attributes, utils.GenUUID())
+
+	se.AppendChild(attributes)
+	entryEnvelope.AppendChild(se)
+	ls.con.Write(entryEnvelope.Bytes())
+}
+
+func sendVirtualBase(req ldap.SearchRequest, pr *provider.Provider, messageId int, ls *LdapSession) {
+	isDc := strings.HasPrefix(req.BaseDN, "dc=")
+	isOu := strings.HasPrefix(req.BaseDN, "ou=")
+
+	if isDc {
+		if req.Scope == 0 { // OBJECT
+			rdns := make(map[string][]string)
+			rdns["dc"] = strings.Split(req.BaseDN, ".")
+			sendVirtualEntry(req.BaseDN, "domain", rdns, pr, messageId, ls)
+		} else {
+			for _, v := range pr.RsTypes {
+				rdns := make(map[string][]string)
+				dn := req.BaseDN
+				ou := v.Endpoint[1:]
+				dn = "ou=" + ou + "," + dn
+				rdns["ou"] = []string{ou}
+				sendVirtualEntry(dn, "organizationalUnit", rdns, pr, messageId, ls)
+			}
+		}
+	}
+	if isOu { // OBJECT ONLY
+		rdns := make(map[string][]string)
+		_, ouEndpoint := getDomainAndEndpoint(req.BaseDN)
+		rdns["ou"] = []string{ouEndpoint[1:]} // leave the prefixed /
+		sendVirtualEntry(req.BaseDN, "organizationalUnit", rdns, pr, messageId, ls)
+	}
+
+	result := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultSuccess, "")
+	ls.con.Write(result.Bytes())
+}
+
+func domainNameToDn(domainName string) string {
+	rdns := strings.Split(domainName, ".")
+	dn := ""
+	prefix := "dc="
+	commaPrefix := "," + prefix
+	for i, s := range rdns {
+		if i > 0 {
+			dn += commaPrefix + s
+		} else {
+			dn += prefix + s
+		}
+	}
+
+	return dn
 }
