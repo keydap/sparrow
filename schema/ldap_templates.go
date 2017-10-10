@@ -4,6 +4,7 @@
 package schema
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -35,8 +36,8 @@ description: This is the description for Aaren Atp.`
 
 const LDAP_User_Entry = `{
 	"type": "User",
-	"objectClasses": ["top", "person", "organizationalPerson", "inetOrgPerson"],
-	"dnPrefix": "uid={{userName}},ou=Users",
+	"objectClasses": ["top", "person", "organizationalPerson", "inetOrgPerson", "extensibleObject"],
+	"dnPrefix": "uid={userName},ou=Users",
 	"attributes": [
 		{
 			"scimAttrPath": "id",
@@ -53,25 +54,29 @@ const LDAP_User_Entry = `{
 		{
 			"scimAttrPath": "name",
 			"ldapAttrName": "cn",
-			"format": "givenName familyName"
+			"format": "{givenName} {familyName}"
 		},
 		{
 			"scimAttrPath": "emails",
 			"ldapAttrName": "mail",
-			"format": "value"
+			"format": "{value}"
 		},
 		{
 			"scimAttrPath": "addresses",
 			"ldapAttrName": "postalAddress",
-			"format": "streetAddress$locality$region$country$postalCode"
-		}
-	]
+			"format": "{streetAddress}${locality}${region}${country}${postalCode}"
+		},
+		{
+			"scimAttrPath": "groups",
+			"ldapAttrName": "member",
+			"format": "cn={display},ou=Groups,{dn}"
+		}]
 }`
 
 const LDAP_Group_Entry = `{
 	"type": "Group",
 	"objectClasses": ["top", "groupOfUniqueNames"],
-	"dnPrefix": "cn={{displayName}},ou=Groups",
+	"dnPrefix": "cn={displayName},ou=Groups",
 	"attributes": [
 		{
 			"scimAttrPath": "id",
@@ -84,13 +89,14 @@ const LDAP_Group_Entry = `{
 		{
 			"scimAttrPath": "members",
 			"ldapAttrName": "uniqueMember",
-			"format": "value"
+			"format": "cn={value},ou=Users,{dn}"
 		}
 	]
 }`
 
 type LdapAttribute struct {
 	ScimAttrPath string
+	Meta         bool      `json:"-"`
 	AtType       *AttrType `json:"-"`
 	LdapAttrName string
 	Format       string
@@ -100,7 +106,7 @@ type LdapAttribute struct {
 
 type LdapEntryTemplate struct {
 	Type            string
-	Endpoint        string
+	Endpoint        string `json:"-"`
 	DnPrefix        string
 	DnAtName        string
 	ObjectClasses   []string
@@ -149,38 +155,80 @@ func NewLdapTemplate(tmpl []byte, rsTypes map[string]*ResourceType) (entry *Ldap
 }
 
 func parseFormat(ldapAt *LdapAttribute) {
-	ldapAt.FormatDelim = "$"
-
-	hasSpace := strings.ContainsRune(ldapAt.Format, ' ')
-	if hasSpace {
-		ldapAt.FormatDelim = " "
-	}
-
 	ldapAt.SubAtNames = make([]string, 0)
 
-	subAts := strings.Split(ldapAt.Format, ldapAt.FormatDelim)
-	for _, s := range subAts {
-		s := strings.TrimSpace(s)
-		if len(s) > 0 {
-			s = strings.ToLower(s)
-			ldapAt.SubAtNames = append(ldapAt.SubAtNames, s)
+	strBuf := bytes.NewBufferString(ldapAt.Format)
+
+	var buf bytes.Buffer
+	atName := ""
+
+outer:
+	for {
+		v, _, err := strBuf.ReadRune()
+		if err != nil {
+			log.Warningf("%s", err)
+			break
+		}
+		switch v {
+		case '\\':
+			next, _, err := strBuf.ReadRune()
+			if err != nil {
+				log.Warningf("%s", err)
+				break
+			}
+			if (next == '{') || (next == '}') {
+				buf.WriteRune(next)
+			} else {
+				buf.WriteRune(v)
+				strBuf.UnreadRune()
+			}
+
+		case '{':
+			for {
+				v, _, err := strBuf.ReadRune()
+				if err != nil {
+					buf.WriteString("{" + atName)
+					log.Warningf("Incorrect format string, missing } character")
+					break outer
+				}
+
+				if v == '}' {
+					atName = strings.TrimSpace(atName)
+					if len(atName) == 0 {
+						buf.WriteString("{}")
+					} else {
+						ldapAt.SubAtNames = append(ldapAt.SubAtNames, atName)
+						buf.WriteString("%s")
+					}
+
+					atName = ""
+					break
+				}
+				atName += string(v)
+			}
+
+		default:
+			buf.WriteRune(v)
 		}
 	}
+
+	ldapAt.Format = string(buf.Bytes())
+	log.Debugf("parsed format for %s --> %s", ldapAt.LdapAttrName, ldapAt.Format)
 }
 
 func parseDnPrefix(entry *LdapEntryTemplate) {
-	startPos := strings.Index(entry.DnPrefix, "{{")
+	startPos := strings.Index(entry.DnPrefix, "{")
 
 	if startPos <= 0 {
 		return
 	}
 
-	endPos := strings.Index(entry.DnPrefix, "}}")
+	endPos := strings.Index(entry.DnPrefix, "}")
 	if endPos <= 0 || endPos < startPos {
 		return
 	}
 
-	entry.DnAtName = strings.TrimSpace(entry.DnPrefix[startPos+2 : endPos])
+	entry.DnAtName = strings.TrimSpace(entry.DnPrefix[startPos+1 : endPos])
 	// convert DnPrefix into the format "uid=%s,ou=Users,%s"
-	entry.DnPrefix = entry.DnPrefix[:startPos] + "%s" + entry.DnPrefix[endPos+2:] + ",%s"
+	entry.DnPrefix = entry.DnPrefix[:startPos] + "%s" + entry.DnPrefix[endPos+1:] + ",%s"
 }

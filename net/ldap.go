@@ -191,7 +191,7 @@ func startTls(messageId int, ls *LdapSession) {
 
 func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageId int) {
 	log.Debugf("handling bind request from %s", ls.ClientIP)
-	log.Debugf("username = %s , password %s", bindReq.Username, bindReq.Password)
+	log.Debugf("bind dn = %s", bindReq.Username)
 
 	domain, _ := getDomainAndEndpoint(bindReq.Username)
 
@@ -413,7 +413,8 @@ func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr
 		dnAtVal = fmt.Sprintf("%s", dnAt.GetSimpleAt().Values[0])
 	}
 
-	dn := fmt.Sprintf(tmpl.DnPrefix, dnAtVal, domainNameToDn(pr.Name))
+	domainBaseDn := domainNameToDn(pr.Name)
+	dn := fmt.Sprintf(tmpl.DnPrefix, dnAtVal, domainBaseDn)
 
 	entryEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
 	entryEnvelope.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
@@ -445,28 +446,33 @@ func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr
 			ldapAt := tmpl.AttrMap[ap.Name]
 			if ldapAt != nil {
 				// fill in the format
-				values := make([]string, 0)
+				allValues := make([]string, 0)
 				for _, mapOfSa := range ca.SubAts {
-					formattedVal := ""
+					subAtValues := make([]interface{}, len(ldapAt.SubAtNames))
 					valPresent := false
-					for _, sn := range ldapAt.SubAtNames {
-						sa, ok := mapOfSa[sn]
-						if ok {
-							formattedVal += fmt.Sprintf("%s", sa.Values[0])
+					for i, sn := range ldapAt.SubAtNames {
+						if sn == "dn" { // special meta attribute place holder
+							subAtValues[i] = domainBaseDn
 							valPresent = true
+						} else {
+							sa, ok := mapOfSa[sn]
+							if ok {
+								subAtValues[i] = sa.Values[0]
+								valPresent = true
+							} else {
+								subAtValues[i] = ""
+							}
 						}
-
-						formattedVal += ldapAt.FormatDelim
 					}
 
 					if valPresent {
-						fvl := len(formattedVal) - 1
-						values = append(values, formattedVal[:fvl])
+						formattedVal := fmt.Sprintf(ldapAt.Format, subAtValues...)
+						allValues = append(allValues, formattedVal)
 					}
 				}
 
-				if len(values) > 0 {
-					addAttributeStringsPacket(ldapAt, attributes, values...)
+				if len(allValues) > 0 {
+					addAttributeStringsPacket(ldapAt, attributes, allValues...)
 				}
 			}
 			// FIXME schema URI prefixed attributes won't work in the below scheme
