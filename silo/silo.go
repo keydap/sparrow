@@ -741,8 +741,9 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 		isGroup = true
 		members := inRes.GetAttr("members")
 		if members != nil {
+			displayName := inRes.GetAttr("displayname").GetSimpleAt().GetStringVal()
 			ca := members.GetComplexAt()
-			sl.addGroupMembers(ca, rid, tx)
+			sl.addGroupMembers(ca, rid, displayName, tx)
 		}
 	}
 
@@ -766,7 +767,7 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 	return inRes, nil
 }
 
-func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string, tx *bolt.Tx) {
+func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string, displayName string, tx *bolt.Tx) {
 	groupType := sl.resTypes["Group"]
 	gRefAtType := groupType.GetAtType("members.$ref")
 	gTypeAtType := groupType.GetAtType("members.type")
@@ -809,6 +810,7 @@ func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string,
 				subAt["value"] = groupRid
 				subAt["$ref"] = "/Groups/" + groupRid
 				subAt["type"] = "Group"
+				subAt["display"] = displayName
 
 				updated := false
 				if groups == nil {
@@ -1165,7 +1167,8 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 			}
 		} else {
 			sl.deleteGroupMembers(existingMembers, rid, tx)
-			sl.addGroupMembers(inMembers, rid, tx)
+			displayName := inRes.GetAttr("displayname").GetSimpleAt().GetStringVal()
+			sl.addGroupMembers(inMembers, rid, displayName, tx)
 		}
 	}
 

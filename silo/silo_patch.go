@@ -95,6 +95,11 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 
 	isGroup := (rt.Name == "Group")
 
+	var displayName string
+	if isGroup {
+		displayName = res.GetAttr("displayname").GetSimpleAt().GetStringVal()
+	}
+
 	if pp == nil { // no path is provided
 		var addRs *base.Resource
 		var err error
@@ -127,7 +132,7 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 
 			if isGroup {
 				if ca.Name == "members" {
-					sl.addGroupMembers(ca, rid, tx)
+					sl.addGroupMembers(ca, rid, displayName, tx)
 				}
 			}
 		}
@@ -154,7 +159,7 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 			ca := base.ParseComplexAttr(pp.AtType, po.Value)
 			sl.addAttrTo(res, ca, tx, prIdx, mh)
 			if isMembers {
-				sl.addGroupMembers(ca, rid, tx)
+				sl.addGroupMembers(ca, rid, displayName, tx)
 			}
 		} else {
 			tCa := tAt.GetComplexAt()
@@ -194,7 +199,7 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 
 					if isMembers {
 						sl.deleteGroupMembers(tCa, rid, tx)
-						sl.addGroupMembers(ca, rid, tx)
+						sl.addGroupMembers(ca, rid, displayName, tx)
 					}
 
 					tCa.SubAts = ca.SubAts
@@ -226,7 +231,7 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 					}
 					sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
 					if isMembers {
-						sl.addGroupMembers(tCa, rid, tx)
+						sl.addGroupMembers(tCa, rid, displayName, tx)
 					}
 					mh.markDirty()
 				}
@@ -279,7 +284,7 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 					if isMemberVal {
 						membersCa := base.NewComplexAt(tCa.GetType())
 						membersCa.SubAts["1"] = tSaMap
-						sl.addGroupMembers(membersCa, rid, tx)
+						sl.addGroupMembers(membersCa, rid, displayName, tx)
 					}
 					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
 					mh.markDirty()
@@ -296,7 +301,7 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 					if isMemberVal {
 						membersCa := base.NewComplexAt(tCa.GetType())
 						membersCa.SubAts["1"] = tSaMap
-						sl.addGroupMembers(membersCa, rid, tx)
+						sl.addGroupMembers(membersCa, rid, displayName, tx)
 					}
 
 					sl.addSAtoIndex(sa, atPath, prIdx, rt.Name, rid, tx)
@@ -436,6 +441,11 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 
 	isGroup := (res.GetType().Name == "Group")
 
+	var displayName string
+	if isGroup {
+		displayName = res.GetAttr("displayname").GetSimpleAt().GetStringVal()
+	}
+
 	if pp == nil {
 		var addRs *base.Resource
 		var err error
@@ -458,7 +468,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 			sl.addAttrTo(res, ca, tx, prIdx, mh)
 			if isGroup {
 				if ca.Name == "members" {
-					sl.addGroupMembers(ca, rid, tx)
+					sl.addGroupMembers(ca, rid, displayName, tx)
 				}
 			}
 		}
@@ -485,7 +495,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 			ca := base.ParseComplexAttr(pp.AtType, po.Value)
 			sl.addAttrTo(res, ca, tx, prIdx, mh)
 			if isMembers {
-				sl.addGroupMembers(ca, rid, tx)
+				sl.addGroupMembers(ca, rid, displayName, tx)
 			}
 		} else {
 			tCa := tAt.GetComplexAt()
@@ -521,7 +531,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 						if isMembers {
 							// the ca should hold only one subAtMap so keeping the key as a constant
 							ca.SubAts["1"] = subAtMap
-							sl.addGroupMembers(ca, rid, tx)
+							sl.addGroupMembers(ca, rid, displayName, tx)
 							// the $ref and type values will be updated in the subAtMap when addGroupMembers is called
 							// so use this updated subAtMap
 							tCa.SubAts[base.RandStr()] = subAtMap
@@ -542,7 +552,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 					if isMembers {
 						// the ca should hold only one subAtMap so keeping the key as a constant
 						ca.SubAts["1"] = subAtMap
-						sl.addGroupMembers(ca, rid, tx)
+						sl.addGroupMembers(ca, rid, displayName, tx)
 						// the $ref and type values will be updated in the subAtMap when addGroupMembers is called
 						// so use this updated subAtMap
 						tCa.SubAts[base.RandStr()] = subAtMap
