@@ -121,16 +121,54 @@ func (pr *Provider) Close() {
 }
 
 func (prv *Provider) createDefaultResources() error {
+	_, err := prv.sl.Get(adminUserId, prv.RsTypes["User"])
+
+	if err != nil {
+		adminUser := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+                   "id": "%s",
+                   "userName":"admin",
+                   "displayName":"Administrator",
+                   "password":"secret",
+				   "active": true,
+                   "emails":[
+                       {
+                         "value":"admin@%s",
+                         "type":"work",
+                         "primary":true
+                       }
+                     ]
+                   }`
+
+		adminUser = fmt.Sprintf(adminUser, adminUserId, prv.Name) // fill in the placeholders
+		buf := bytes.NewBufferString(adminUser)
+		userRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
+		if err != nil {
+			return err
+		}
+
+		_, err = prv.sl.InsertInternal(userRes)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("Successfully inserted default administrator user %s", adminUserId)
+	}
+
 	groupName := "Administrator"
-	_, err := prv.sl.Get(adminGroupId, prv.RsTypes["Group"])
+	_, err = prv.sl.Get(adminGroupId, prv.RsTypes["Group"])
 	if err != nil {
 		adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
 	                "id": "%s",
 				    "displayName": "%s",
-				    "permissions": [{"value": "READ"}, {"value": "CREATE"}, {"value": "UPDATE"}, {"value": "DELETE"}]
+				    "permissions": [{"value": "READ"}, {"value": "CREATE"}, {"value": "UPDATE"}, {"value": "DELETE"}],
+                   "members": [
+                       {
+                          "value": "%s"
+                       }
+                     ]
 				   }`
 
-		adminGroup = fmt.Sprintf(adminGroup, adminGroupId, groupName)
+		adminGroup = fmt.Sprintf(adminGroup, adminGroupId, groupName, adminUserId)
 
 		buf := bytes.NewBufferString(adminGroup)
 
@@ -147,44 +185,6 @@ func (prv *Provider) createDefaultResources() error {
 		log.Infof("Successfully inserted default admin group %s", adminGroupId)
 	}
 
-	_, err = prv.sl.Get(adminUserId, prv.RsTypes["User"])
-
-	if err != nil {
-		adminUser := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
-                   "id": "%s",
-                   "userName":"admin",
-                   "displayName":"Administrator",
-                   "password":"secret",
-				   "active": true,
-                   "emails":[
-                       {
-                         "value":"admin@%s",
-                         "type":"work",
-                         "primary":true
-                       }
-                     ],
-                   "groups": [
-                       {
-                          "value": "%s",
-                          "display": "%s"
-                       }
-                     ]
-                   }`
-
-		adminUser = fmt.Sprintf(adminUser, adminUserId, prv.Name, adminGroupId, groupName) // fill in the placeholders
-		buf := bytes.NewBufferString(adminUser)
-		userRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
-		if err != nil {
-			return err
-		}
-
-		_, err = prv.sl.InsertInternal(userRes)
-		if err != nil {
-			return err
-		}
-
-		log.Infof("Successfully inserted default administrator user %s", adminUserId)
-	}
 	return nil
 }
 
