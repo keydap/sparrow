@@ -89,7 +89,7 @@ const LDAP_Group_Entry = `{
 		{
 			"scimAttrPath": "members",
 			"ldapAttrName": "uniqueMember",
-			"format": "cn={value},ou=Users,{dn}"
+			"format": "uid={value},ou=Users,{dn}"
 		}
 	]
 }`
