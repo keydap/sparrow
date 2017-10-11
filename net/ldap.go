@@ -617,7 +617,11 @@ func ldapToScimFilter(packet *ber.Packet, sc *base.SearchContext, pr *provider.P
 		val := ber.DecodeString(packet.Children[1].Data.Bytes())
 		if atType != nil {
 			if atType.IsStringType() {
-				val = `"` + val + `"`
+				if atName == "schemas" {
+					val = mapObjectClassToSchema(val, sc, pr)
+				} else {
+					val = `"` + val + `"`
+				}
 			}
 		}
 
@@ -631,7 +635,11 @@ func ldapToScimFilter(packet *ber.Packet, sc *base.SearchContext, pr *provider.P
 		val := ber.DecodeString(packet.Children[1].Data.Bytes())
 		if atType != nil {
 			if atType.IsStringType() {
-				val = `"` + val + `"`
+				if atName == "schemas" {
+					val = mapObjectClassToSchema(val, sc, pr)
+				} else {
+					val = `"` + val + `"`
+				}
 			}
 		}
 
@@ -645,7 +653,11 @@ func ldapToScimFilter(packet *ber.Packet, sc *base.SearchContext, pr *provider.P
 		val := ber.DecodeString(packet.Children[1].Data.Bytes())
 		if atType != nil {
 			if atType.IsStringType() {
-				val = `"` + val + `"`
+				if atName == "schemas" {
+					val = mapObjectClassToSchema(val, sc, pr)
+				} else {
+					val = `"` + val + `"`
+				}
 			}
 		}
 
@@ -668,7 +680,10 @@ func findScimName(ldapAtName string, sc *base.SearchContext, pr *provider.Provid
 	ldapAtName = strings.ToLower(ldapAtName)
 
 	if ldapAtName == "objectclass" {
-		ldapAtName = "id"
+		scimAtName := "schemas"
+		schemasAt := sc.ResTypes[0].GetAtType(scimAtName)
+
+		return scimAtName, schemasAt
 	}
 
 	for _, rt := range sc.ResTypes {
@@ -1079,4 +1094,20 @@ func domainNameToDn(domainName string) string {
 	}
 
 	return dn
+}
+
+func mapObjectClassToSchema(objectClassName string, sc *base.SearchContext, pr *provider.Provider) string {
+	for _, rt := range sc.ResTypes {
+		tmpl := pr.LdapTemplates[rt.Name]
+		if tmpl != nil {
+			for _, v := range tmpl.ObjectClasses {
+				if strings.EqualFold(objectClassName, v) {
+					return `"` + rt.Schema + `"`
+				}
+			}
+		}
+	}
+
+	// if not found just return the given objectClassName
+	return `"` + objectClassName + `"`
 }

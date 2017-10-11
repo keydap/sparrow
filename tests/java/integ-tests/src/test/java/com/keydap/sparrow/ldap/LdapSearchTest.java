@@ -34,7 +34,7 @@ public class LdapSearchTest {
         con.getConfig().setTrustManagers(new NoVerificationTrustManager());
         con.connect();
         con.startTls();
-        con.bind("uid=admin,dc=example,dc=com", "secret");
+        con.bind("uid=admin,ou=Users,dc=example,dc=com", "secret");
     }
     
     @Test
@@ -58,6 +58,9 @@ public class LdapSearchTest {
         String groupDn = "cn=Administrator,ou=Groups,dc=example,dc=com";
 
         Entry user = searchOne(userDn, "(uid=*)");
+        assertEquals(groupDn.toLowerCase(), user.get("member").getString().toLowerCase());
+        
+        user = searchOne(userDn, "(objectClass=person)"); // test using objectClass filter
         assertEquals(groupDn.toLowerCase(), user.get("member").getString().toLowerCase());
         
         Entry group = searchOne(groupDn, "(cn=*)");
