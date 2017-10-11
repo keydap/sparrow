@@ -111,13 +111,14 @@ func serveClient(ls *LdapSession) {
 			break
 		}
 
+		messageId := int(packet.Children[0].Value.(int64))
+		appMessage := packet.Children[1]
+
 		if log.IsDebugEnabled() {
+			log.Debugf("received LDAP request with tag %d", appMessage.Tag)
 			log.Debugf("read packet with children %d", len(packet.Children))
 			ber.PrintPacket(packet)
 		}
-
-		messageId := int(packet.Children[0].Value.(int64))
-		appMessage := packet.Children[1]
 
 		switch appMessage.Tag {
 		case ldap.ApplicationBindRequest:
@@ -131,6 +132,9 @@ func serveClient(ls *LdapSession) {
 			bindReq.Password = string(appMessage.Children[2].Data.Bytes())
 
 			handleSimpleBind(bindReq, ls, messageId)
+
+		case ldap.ApplicationUnbindRequest:
+			return // defer() will close the connection
 
 		case ldap.ApplicationSearchRequest:
 			secure := isSecure(messageId, ldap.ApplicationSearchResultDone, ls)
@@ -166,7 +170,7 @@ func serveClient(ls *LdapSession) {
 			}
 
 		default:
-			log.Warningf("Unsupported operation")
+			log.Warningf("Unsupported operation application request tag %d", appMessage.Tag)
 			//errResp := generateResultCode(messageId, ?, ldap.LDAPResultOther, "Unsupported operation")
 			//ls.con.Write(errResp.Bytes())
 		}
