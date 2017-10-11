@@ -413,6 +413,11 @@ func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr
 		dnAtVal = fmt.Sprintf("%s", dnAt.GetSimpleAt().Values[0])
 	}
 
+	isGroup := false
+	if typeName == "Group" {
+		isGroup = true
+	}
+
 	domainBaseDn := domainNameToDn(pr.Name)
 	dn := fmt.Sprintf(tmpl.DnPrefix, dnAtVal, domainBaseDn)
 
@@ -430,6 +435,11 @@ func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr
 		at := rs.GetAttr(ap.Name)
 		if at == nil {
 			continue
+		}
+
+		fetchUser := false
+		if ap.Name == "members" && isGroup {
+			fetchUser = true
 		}
 
 		atType := at.GetType()
@@ -457,7 +467,18 @@ func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr
 						} else {
 							sa, ok := mapOfSa[sn]
 							if ok {
-								subAtValues[i] = sa.Values[0]
+								// if Group's memebers attribute to be formatted with "value" sub-attribute
+								// then fetch the User associated with the "value" and fill in the userName value
+								if fetchUser && sn == "value" {
+									user, _ := pr.GetUserById(sa.Values[0].(string))
+									if user != nil {
+										subAtValues[i] = user.GetAttr("username").GetSimpleAt().GetStringVal()
+									} else {
+										subAtValues[i] = ""
+									}
+								} else {
+									subAtValues[i] = sa.Values[0]
+								}
 								valPresent = true
 							} else {
 								subAtValues[i] = ""
