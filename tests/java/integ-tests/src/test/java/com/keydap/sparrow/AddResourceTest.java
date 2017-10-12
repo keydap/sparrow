@@ -25,6 +25,7 @@ import org.junit.Test;
 import com.google.gson.JsonObject;
 import com.keydap.sparrow.scim.Device;
 import com.keydap.sparrow.scim.User;
+import com.keydap.sparrow.scim.User.Address;
 import com.keydap.sparrow.scim.User.Email;
 import com.keydap.sparrow.scim.User.Name;
 
@@ -69,6 +70,13 @@ public class AddResourceTest extends TestBase {
         u.setEmails(Collections.singletonList(e));
         
         u.setPassword("secret001");
+        
+        Address address = new Address();
+        address.setCountry("IN");
+        address.setLocality("Hyderabad");
+        address.setStreetAddress("Road No. 5");
+        address.setType("HOME");
+        u.setAddresses(Collections.singletonList(address));
         
         Response<User> resp = client.addResource(u);
         User created = resp.getResource();
