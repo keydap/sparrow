@@ -7,6 +7,12 @@
     "endpoint":"/Groups",
     "description":"Group",
     "schema":"urn:ietf:params:scim:schemas:core:2.0:Group",
+    "schemaExtensions":[
+        {
+            "schema":"urn:ietf:params:scim:schemas:extension:posix:2.0:Group",
+            "required":true
+        }
+    ],
     "meta":{
         "location":"v2/ResourceTypes/Group",
         "resourceType":"ResourceType"

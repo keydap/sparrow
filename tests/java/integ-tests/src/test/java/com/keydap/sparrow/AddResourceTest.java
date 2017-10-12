@@ -28,6 +28,7 @@ import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Address;
 import com.keydap.sparrow.scim.User.Email;
 import com.keydap.sparrow.scim.User.Name;
+import com.keydap.sparrow.scim.User.PosixUser;
 
 /**
  *
@@ -39,7 +40,7 @@ public class AddResourceTest extends TestBase {
     
     @BeforeClass
     public static void clean() throws Exception {
-        deleteAll(User.class);
+        //deleteAll(User.class);
         deleteAll(Device.class);
         //deleteAll(Group.class);
         
@@ -194,5 +195,16 @@ public class AddResourceTest extends TestBase {
         
         assertEquals(HttpStatus.SC_BAD_REQUEST, resp.getHttpCode());
     }
-    
+
+    @Test
+    public void addPosixUser() {
+        User user = buildUser("kanth", "secret1");
+        PosixUser posixUser = new PosixUser();
+        posixUser.setUidNumber(106);
+        posixUser.setGidNumber(posixUser.getUidNumber());
+        posixUser.setHomeDirectory("/home/" + user.getUserName());
+        posixUser.setLoginShell("/bin/bash");
+        user.setPosixUser(posixUser);
+        client.addResource(user);
+    }
 }

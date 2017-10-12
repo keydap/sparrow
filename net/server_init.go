@@ -341,8 +341,14 @@ func writeSchemas(schemaDir string) {
 	group := filepath.Join(schemaDir, "group.json")
 	writeFile(group, group_schema)
 
+	posixGroup := filepath.Join(schemaDir, "posix-group.json")
+	writeFile(posixGroup, posix_group_schema)
+
 	user := filepath.Join(schemaDir, "user.json")
 	writeFile(user, user_schema)
+
+	posixUser := filepath.Join(schemaDir, "posix-user.json")
+	writeFile(posixUser, posix_user_schema)
 }
 
 func writeResourceTypes(rtDir string) {

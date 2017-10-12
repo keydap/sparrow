@@ -195,7 +195,8 @@ func startTls(messageId int, ls *LdapSession) {
 
 func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageId int) {
 	log.Debugf("handling bind request from %s", ls.ClientIP)
-	log.Debugf("bind dn = %s", bindReq.Username)
+
+	log.Debugf("bind dn = %s password = '%s'", bindReq.Username, bindReq.Password)
 
 	domain, _ := getDomainAndEndpoint(bindReq.Username)
 
@@ -524,7 +525,7 @@ func addAttributePacket(ldapAt *schema.LdapAttribute, attributes *ber.Packet, sc
 	atPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, ldapAt.LdapAttrName, ldapAt.LdapAttrName))
 	atValuesPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSet, nil, ldapAt.LdapAttrName+" Attribute Values")
 	for _, v := range scimValues {
-		strVal := fmt.Sprintf("%s", v)
+		strVal := fmt.Sprintf("%v", v)
 		atValuesPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, strVal, strVal))
 	}
 	atPacket.AppendChild(atValuesPacket)
@@ -826,13 +827,17 @@ func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base
 			for k, _ := range rt.AtsDefaultRtn {
 				attrSet[k] = 1
 			}
-		}
 
-		for k, _ := range rt.AtsNeverRtn {
-			if _, ok := attrSet[k]; ok {
-				delete(attrSet, k)
+			for k, _ := range rt.AtsNeverRtn {
+				attrSet[k] = 1
 			}
 		}
+
+		//		for k, _ := range rt.AtsNeverRtn {
+		//			if _, ok := attrSet[k]; ok {
+		//				delete(attrSet, k)
+		//			}
+		//		}
 	}
 
 	// sort the names and eliminate redundant values, for example "name, name.familyName" will be reduced to name

@@ -123,13 +123,21 @@ func (pr *Provider) Close() {
 func (prv *Provider) createDefaultResources() error {
 	_, err := prv.sl.Get(adminUserId, prv.RsTypes["User"])
 
+	// TODO externalize this template so that any mandatory attributes
+	// can be added by user
 	if err != nil {
-		adminUser := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+		adminUser := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User", "urn:ietf:params:scim:schemas:extension:posix:2.0:User"],
                    "id": "%s",
                    "userName":"admin",
                    "displayName":"Administrator",
                    "password":"secret",
 				   "active": true,
+				   "urn:ietf:params:scim:schemas:extension:posix:2.0:User": {
+				   "uidNumber": 0,
+				   "gidNumber": 0,
+				   "homeDirectory": "/root",
+				   "loginShell": "/bin/bash"
+				   },
                    "emails":[
                        {
                          "value":"admin@%s",
@@ -157,9 +165,12 @@ func (prv *Provider) createDefaultResources() error {
 	groupName := "Administrator"
 	_, err = prv.sl.Get(adminGroupId, prv.RsTypes["Group"])
 	if err != nil {
-		adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+		adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group", "urn:ietf:params:scim:schemas:extension:posix:2.0:Group"],
 	                "id": "%s",
 				    "displayName": "%s",
+				    "urn:ietf:params:scim:schemas:extension:posix:2.0:Group": {
+				    "gidNumber": 0
+				    },
 				    "permissions": [{"value": "READ"}, {"value": "CREATE"}, {"value": "UPDATE"}, {"value": "DELETE"}],
                    "members": [
                        {

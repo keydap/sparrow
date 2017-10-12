@@ -97,6 +97,11 @@ public abstract class TestBase {
     
     protected User buildUser() {
         String username = randomAlphabetic(5);
+        String password = randomAlphabetic(11);
+        return buildUser(username, password);
+    }
+    
+    protected User buildUser(String username, String password) {
         User user = new User();
         user.setUserName(username);
 
@@ -112,21 +117,19 @@ public abstract class TestBase {
         Email homeMail = new Email();
         homeMail.setDisplay("Home Email");
         homeMail.setType("home");
-        String s = randomAlphabetic(5);
-        homeMail.setValue(s + "@home.com" );
+        homeMail.setValue(username + "@home.com" );
         emails.add(homeMail);
         
         Email workMail = new Email();
         workMail.setDisplay("Work Email");
         workMail.setType("work");
-        s = randomAlphabetic(5);
-        workMail.setValue(s + "@work.com" );
+        workMail.setValue(username + "@work.com" );
         emails.add(workMail);
         
         user.setEmails(emails);
         user.setActive(true);
         
-        user.setPassword(randomAlphabetic(11));
+        user.setPassword(password);
         
         return user;
     }

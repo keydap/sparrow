@@ -11,6 +11,10 @@
         {
             "schema":"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
             "required":false
+        },
+        {
+             "schema":"urn:ietf:params:scim:schemas:extension:posix:2.0:User",
+             "required":true
         }
     ],
     "meta":{
