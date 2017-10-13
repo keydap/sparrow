@@ -198,9 +198,9 @@ public class AddResourceTest extends TestBase {
 
     @Test
     public void addPosixUser() {
-        User user = buildUser("kanth", "secret1");
+        User user = buildUser("kanth", "secret");
         PosixUser posixUser = new PosixUser();
-        posixUser.setUidNumber(106);
+        posixUser.setUidNumber(101);
         posixUser.setGidNumber(posixUser.getUidNumber());
         posixUser.setHomeDirectory("/home/" + user.getUserName());
         posixUser.setLoginShell("/bin/bash");
