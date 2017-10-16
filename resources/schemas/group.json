@@ -80,7 +80,7 @@
                     "description":"Identifier of the permissions of this Group.",
                     "required":false,
                     "caseExact":false,
-                    "mutability":"immutable",
+                    "mutability":"readWrite",
                     "returned":"default",
                     "uniqueness":"none"
                 },
@@ -91,7 +91,7 @@
                     "description":"Comma separated values of the ResourceTypes on which this permission applies",
                     "required":false,
                     "caseExact":false,
-                    "mutability":"immutable",
+                    "mutability":"readWrite",
                     "returned":"default",
                     "uniqueness":"none"
                 }
