@@ -1,7 +1,7 @@
 ## Sparrow
-Sparrow is an identity server based on SCIM v2 specification, JWT and OAuth2.0.
-The goal is to support fast reads, domains and ARBAC.
-All the data is accessible over HTTP and authentication and authorization are supported by OpenIdConnect and OAuth2.
+Sparrow is an identity server based on SCIM v2 specification, OAuth2.0 and OpenIDConnect.
+The goal is to support fast reads, domains and making schema handling simple and easy.
+All the data is accessible over HTTP and authentication and authorization are supported by OpenIDConnect and OAuth2.
 
 ## Why Another Identity Server??
 One motivation was to have a server that contains all the features of an LDAP server minus the pain of organizing and
@@ -11,12 +11,12 @@ fluent access control(ARBAC) mechanism built right into the identity server.
 And I want an identity server to have the ability to speak over HTTP directly without the need of custom proxies. 
 
 ## What Features are Available Right Now?
-1. All the SCIM v2 features (except for /Bulk and /Me) are implemented.
+1. All the SCIM v2 features (except for /Bulk and /Me) are implemented
 2. RBAC0 is supported
-3. Support for JWT. User's authorization data is included in tokens after authentication.
+3. Support for OAuth2.0 and OpenIDConnect
 4. Support for multiple domains
-5. A client written in Java, see https://github.com/keydap/sparrow-client 
-6. Support for LDAP bind, search and password modify operations.
+5. A java client, see https://github.com/keydap/sparrow-client 
+6. Support for LDAP bind, unbind, search and password modify operations over startTLS.
 
 ## Can I Use it in Production Environment?
 Not yet. We are aiming to make it production ready by Q4 2017.
