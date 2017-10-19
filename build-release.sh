@@ -22,6 +22,8 @@ buildWindows() {
     env GOOS=windows GOARCH=amd64 go build -v -o $DIST_DIR/sparrow-win64
 }
 
+./getdeps.sh
+./write-static.sh
 buildLinux
 buildOsX
 buildWindows
