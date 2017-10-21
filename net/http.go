@@ -19,6 +19,7 @@ import (
 	"sparrow/utils"
 	"strconv"
 	"strings"
+	"net/http/pprof"
 )
 
 var log logger.Logger
@@ -123,6 +124,8 @@ func startHttp() {
 	router.HandleFunc("/login", showLogin).Methods("GET")
 	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
 
+	registerPprof(router)
+	
 	if srvConf.Https {
 		issuerUrl = "https://" + hostAddr
 		logUrls()
@@ -134,6 +137,15 @@ func startHttp() {
 		server = &http.Server{Addr: hostAddr, Handler: router}
 		server.ListenAndServe()
 	}
+}
+
+func registerPprof(topRouter *mux.Router) {
+	router := topRouter.PathPrefix("/debug/pprof").Subrouter()
+	router.HandleFunc("/", pprof.Index)
+	router.HandleFunc("/cmdline", pprof.Cmdline)
+	router.HandleFunc("/profile", pprof.Profile)
+	router.HandleFunc("/symbol", pprof.Symbol)
+	router.HandleFunc("/trace", pprof.Trace)
 }
 
 func logUrls() {
