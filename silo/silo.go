@@ -314,7 +314,7 @@ func (idx *Index) GetRids(valKey []byte, tx *bolt.Tx) []string {
 
 func (idx *Index) HasVal(val interface{}, tx *bolt.Tx) bool {
 	if idx.AllowDupKey {
-		return idx.keyCount(fmt.Sprint(val), tx) > 0
+		return idx.keyCount(val, tx) > 0
 	}
 
 	key := idx.convert(val)
