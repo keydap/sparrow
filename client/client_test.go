@@ -29,7 +29,7 @@ type authRequest struct {
 }
 
 func TestCreateResourcesPerf(t *testing.T) {
-	if true {
+	if false {
 		fmt.Println("Not running insert perf test")
 		return
 	}
@@ -97,7 +97,7 @@ func TestCreateResourcesPerf(t *testing.T) {
 			fmt.Printf("Time took to insert %d entries %fsec\n", count, durSec)
 		}
 
-		break
+		//break
 	}
 
 	fmt.Printf("Created %d resources in %fsec\n", count, time.Now().Sub(start).Seconds())

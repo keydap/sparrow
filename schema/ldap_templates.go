@@ -166,7 +166,7 @@ outer:
 	for {
 		v, _, err := strBuf.ReadRune()
 		if err != nil {
-			log.Warningf("%s", err)
+			log.Debugf("%s", err)
 			break
 		}
 		switch v {

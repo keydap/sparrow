@@ -18,7 +18,7 @@ func init() {
 }
 
 func main() {
-	logger.ConfigureLoggers("<root>=debug;")
+	logger.ConfigureLoggers("<root>=info;")
 	net.Start("/tmp/sparrow")
 	//	net.Start("/Volumes/EVOSSD/sparrow-bench")
 
