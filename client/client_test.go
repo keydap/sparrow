@@ -104,7 +104,7 @@ func TestCreateResourcesPerf(t *testing.T) {
 }
 
 func TestSearchResourcesPerf(t *testing.T) {
-	if false {
+	if true {
 		fmt.Println("Not running search perf test")
 		return
 	}
