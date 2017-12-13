@@ -87,7 +87,7 @@
                 {
                     "name":"restypes",
                     "type":"string",
-                    "multiValued":true,
+                    "multiValued":false,
                     "description":"Comma separated values of the ResourceTypes on which this permission applies",
                     "required":false,
                     "caseExact":false,
@@ -97,7 +97,7 @@
                 }
             ],
             "mutability":"readWrite",
-            "returned":"request"
+            "returned":"default"
         }
     ],
     "meta":{
