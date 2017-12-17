@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"sparrow/schema"
 	"time"
 )
 
@@ -37,9 +38,18 @@ type Role struct {
 	Perms map[string]*Permission
 }
 
+type ResourcePermission struct {
+	RType *schema.ResourceType
+	Perms map[string]*Permission
+}
+
 type Permission struct {
-	Name string
-	//Filters  map[string]int
+	Name       string
+	Filter     *FilterNode
+	AllowAttrs []*Attribute
+	DenyAttrs  []*Attribute
+	AllowAll   bool
+	DenyAll    bool
 }
 
 type RbacSession struct {
