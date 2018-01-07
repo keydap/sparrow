@@ -74,10 +74,10 @@
             "required":false,
             "subAttributes":[
                 {
-                    "name":"value",
+                    "name":"resName",
                     "type":"string",
                     "multiValued":false,
-                    "description":"Identifier of the permissions of this Group.",
+                    "description":"Name of the resource type.",
                     "required":false,
                     "caseExact":false,
                     "mutability":"readWrite",
@@ -85,10 +85,10 @@
                     "uniqueness":"none"
                 },
                 {
-                    "name":"restypes",
+                    "name":"opsObj",
                     "type":"string",
                     "multiValued":false,
-                    "description":"Comma separated values of the ResourceTypes on which this permission applies",
+                    "description":"JSON object holding the access control details of READ and WRITE operations.",
                     "required":false,
                     "caseExact":false,
                     "mutability":"readWrite",
