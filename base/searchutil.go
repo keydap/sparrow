@@ -5,14 +5,30 @@ package base
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"sparrow/schema"
 	"strings"
 )
 
-func SplitAttrCsv(csv string, rTypes []*schema.ResourceType) (attrMap map[string]int, subAtPresent bool) {
+func SplitAttrCsv(csv string, rTypes ...*schema.ResourceType) (attrMap map[string]int, subAtPresent bool) {
 	attrMap = make(map[string]int)
+	csv = strings.TrimSpace(csv)
 	tokens := strings.Split(csv, ",")
+
+	allAttrsRegex := regexp.MustCompile(`(^\*(,)*)|(\s*,\s*\*\s*(,)*)`) // detect if wildcard is given for ALL attributes, NOT just for a complex attribute like 'name.*'
+
+	if allAttrsRegex.MatchString(csv) {
+		for _, rt := range rTypes {
+			// MUST prepend the schema ID to resolve duplicate attribute names
+			collectAllAtNames(rt.GetMainSchema(), attrMap, true)
+			for _, se := range rt.SchemaExtensions {
+				collectAllAtNames(rt.GetSchema(se.Schema), attrMap, true)
+			}
+		}
+
+		return attrMap, false
+	}
 
 outer:
 	for _, t := range tokens {
@@ -29,6 +45,9 @@ outer:
 		t = strings.ToLower(t)
 		colonPos := strings.LastIndex(t, ":")
 
+		var sc *schema.Schema
+		isCoreSchema := true
+
 		if colonPos > 0 {
 			urn := strings.ToLower(t[0:colonPos])
 
@@ -38,35 +57,57 @@ outer:
 			for _, rt := range rTypes {
 				if urn == strings.ToLower(rt.Schema) {
 					// this is the core schema, we can skip the URN prefix
-					urn = ""
-					colonPos++
-					if colonPos >= tLen { // this is an invalid attribute, skip it
-						continue outer
-					}
+					sc = rt.GetMainSchema()
 					break
 				} else {
 					for _, se := range rt.SchemaExtensions {
 						if urn == strings.ToLower(se.Schema) {
-							urn = se.Schema
+							isCoreSchema = false
+							sc = rt.GetSchema(se.Schema)
 							break schemacheck
 						}
 					}
 				}
 			}
 
-			t = urn + t[colonPos:]
-
-			if urn == "" {
-				// reset the colonPos so that the check (dotPos > colonPos) will be accurate in this case
-				colonPos = -1
+			colonPos++
+			if colonPos >= tLen { // this is an invalid attribute, skip it
+				continue outer
 			}
+			t = t[colonPos:]
 		}
 
-		attrMap[t] = 1 // 0 is the default value for non-existing keys, so set the value to 1
+		hasDot := strings.ContainsRune(t, '.')
+		hasStar := strings.ContainsRune(t, '*')
 
-		dotPos := strings.LastIndex(t, ".")
-		if dotPos > colonPos {
-			subAtPresent = true
+		if hasDot && hasStar { // all the sub attributes of a complex attribute
+			dotPos := strings.IndexRune(t, '.')
+			t = t[0:dotPos]
+			if !isCoreSchema {
+				t = sc.Id + ":" + t
+			}
+			attrMap[t] = 1
+		} else if hasStar { // all the attributes of the schema with the urn
+			if sc != nil {
+				collectAllAtNames(sc, attrMap, !isCoreSchema)
+				subAtPresent = true
+			} else {
+				for _, rt := range rTypes {
+					// MUST prepend the schema ID to resolve duplicate attribute names
+					collectAllAtNames(rt.GetMainSchema(), attrMap, true)
+					for _, se := range rt.SchemaExtensions {
+						collectAllAtNames(rt.GetSchema(se.Schema), attrMap, true)
+					}
+				}
+			}
+		} else {
+			if !isCoreSchema {
+				t = sc.Id + ":" + t
+			}
+			attrMap[t] = 1 // 0 is the default value for non-existing keys, so set the value to 1
+			if hasDot {
+				subAtPresent = true
+			}
 		}
 	}
 
@@ -75,6 +116,20 @@ outer:
 	}
 
 	return attrMap, subAtPresent
+}
+
+func collectAllAtNames(sc *schema.Schema, attrMap map[string]int, prependSchemaId bool) {
+	if sc == nil {
+		return
+	}
+
+	for _, v := range sc.Attributes {
+		name := v.NormName
+		if prependSchemaId {
+			name = sc.Id + ":" + v.NormName
+		}
+		attrMap[name] = 1
+	}
 }
 
 // Converts the given list of attributes to AttributeParam and groups the sub-attributes under

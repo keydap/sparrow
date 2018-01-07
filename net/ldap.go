@@ -806,7 +806,7 @@ func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base
 
 	searchCtx.ParamAttrs = reqAttrs
 
-	attrSet, subAtPresent := base.SplitAttrCsv(reqAttrs, searchCtx.ResTypes)
+	attrSet, subAtPresent := base.SplitAttrCsv(reqAttrs, searchCtx.ResTypes...)
 
 	if attrSet == nil {
 		attrSet = make(map[string]int)

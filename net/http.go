@@ -838,7 +838,7 @@ func writeError(w http.ResponseWriter, err error) {
 }
 
 func parseAttrParam(attrParam string, rTypes []*schema.ResourceType) []*base.AttributeParam {
-	attrSet, subAtPresent := base.SplitAttrCsv(attrParam, rTypes)
+	attrSet, subAtPresent := base.SplitAttrCsv(attrParam, rTypes...)
 	if attrSet != nil {
 		// the mandatory attributes that will always be returned
 		for _, rt := range rTypes {
@@ -917,7 +917,7 @@ func parseAttrParams(attributes string, excludedAttributes string, rTypes ...*sc
 }
 
 func parseExcludedAttrs(excludedAttributes string, rTypes ...*schema.ResourceType) (exclAttrLst []*base.AttributeParam) {
-	exclAttrSet, subAtPresent := base.SplitAttrCsv(excludedAttributes, rTypes)
+	exclAttrSet, subAtPresent := base.SplitAttrCsv(excludedAttributes, rTypes...)
 
 	if exclAttrSet == nil {
 		// in this case compute the never return attribute list
