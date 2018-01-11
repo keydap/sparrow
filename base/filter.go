@@ -441,3 +441,18 @@ func (fn *FilterNode) String() string {
 
 	return fn.Name + " " + fn.Op + " " + fn.Value
 }
+
+func (fn *FilterNode) Clone() *FilterNode {
+	clone := &FilterNode{}
+	*clone = *fn
+	// ResType and AtType remain pointing to the original values
+
+	if fn.Children != nil {
+		clone.Children = make([]*FilterNode, len(fn.Children))
+		for i, c := range fn.Children {
+			clone.Children[i] = c.Clone()
+		}
+	}
+
+	return clone
+}

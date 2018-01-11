@@ -42,7 +42,7 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 			tx.Commit()
 
 			if rt.Name == "Group" {
-				sl.Engine.UpsertRole(res)
+				sl.Engine.UpsertRole(res, sl.resTypes)
 			}
 
 			log.Debugf("Successfully modified resource with id %s", rid)

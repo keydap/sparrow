@@ -68,7 +68,7 @@ type ListResponse struct {
 type AttributeParam struct {
 	Name     string
 	SchemaId string
-	SubAts   []string
+	SubAts   map[string]string // simplifies searching and eliminates iteration while filtering denied attributes
 }
 
 // https://tools.ietf.org/html/rfc7644#section-3.4.3

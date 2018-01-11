@@ -680,7 +680,7 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 			res = inRes
 
 			if isGroup {
-				sl.Engine.UpsertRole(inRes)
+				sl.Engine.UpsertRole(inRes, sl.resTypes)
 			}
 
 			log.Debugf("Successfully inserted resource with id %s", rid)
@@ -1124,7 +1124,7 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 		} else {
 			tx.Commit()
 			if isGroup {
-				sl.Engine.UpsertRole(inRes)
+				sl.Engine.UpsertRole(inRes, sl.resTypes)
 			}
 
 			log.Debugf("Successfully replaced resource with id %s", rid)
@@ -1528,7 +1528,7 @@ func (sl *Silo) LoadGroups() {
 			}
 
 			rs.SetSchema(groupType)
-			sl.Engine.UpsertRole(rs)
+			sl.Engine.UpsertRole(rs, sl.resTypes)
 		}
 	}
 

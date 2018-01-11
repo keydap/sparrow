@@ -404,7 +404,7 @@ func sendRootDSE(messageId int, ls *LdapSession) {
 	ls.con.Write(result.Bytes())
 }
 
-func sendSearchResultEntry(rs *base.Resource, attrLst []*base.AttributeParam, pr *provider.Provider, messageId int, ls *LdapSession) {
+func sendSearchResultEntry(rs *base.Resource, attrLst map[string]*base.AttributeParam, pr *provider.Provider, messageId int, ls *LdapSession) {
 	typeName := rs.GetType().Name
 	tmpl := pr.LdapTemplates[typeName]
 	if tmpl == nil {
@@ -727,7 +727,7 @@ func getDomainAndEndpoint(baseDN string) (domain string, endPoint string) {
 	return strings.ToLower(domain), endPoint
 }
 
-func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base.SearchContext, pr *provider.Provider) (attrParam []*base.AttributeParam, err error) {
+func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base.SearchContext, pr *provider.Provider) (attrParam map[string]*base.AttributeParam, err error) {
 	scimFilter, err := ldapToScimFilter(packet.Children[6], searchCtx, pr)
 	if err != nil {
 		return nil, err

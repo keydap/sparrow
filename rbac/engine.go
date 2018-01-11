@@ -4,8 +4,8 @@
 package rbac
 
 import (
-	"fmt"
 	"sparrow/base"
+	"sparrow/schema"
 	"sparrow/utils"
 	"time"
 )
@@ -30,7 +30,6 @@ func (engine *RbacEngine) NewRbacSession(rs *base.Resource) *base.RbacSession {
 	session.Sub = rs.GetId()
 
 	session.Roles = make(map[string]string)
-	session.EffPerms = make(map[string]int)
 
 	//session.Aud = ""
 	session.Domain = engine.Domain
@@ -45,22 +44,30 @@ func (engine *RbacEngine) NewRbacSession(rs *base.Resource) *base.RbacSession {
 
 	ca := groups.GetComplexAt()
 
+	effPerms := make(map[string]*base.ResourcePermission)
 	for _, subAtMap := range ca.SubAts {
 		gAt := subAtMap["value"]
 		if gAt != nil {
-			fmt.Println(gAt)
 			roleId := gAt.Values[0].(string)
 			role := engine.allRoles[roleId]
 			session.Roles[roleId] = role.Name
 
 			// now gather the permissions from role
 			if role != nil {
-				for _, p := range role.Perms {
-					session.EffPerms[p.Name] = 1
+				for _, resPerm := range role.Perms {
+					existingResPerm, ok := effPerms[resPerm.RType.Name]
+
+					if !ok {
+						effPerms[resPerm.RType.Name] = resPerm
+					} else {
+						effPerms[resPerm.RType.Name] = merge(existingResPerm, resPerm)
+					}
 				}
 			}
 		}
 	}
+
+	session.EffPerms = effPerms
 
 	return session
 }
@@ -69,28 +76,54 @@ func (engine *RbacEngine) DeleteRole(groupId string) {
 	delete(engine.allRoles, groupId)
 }
 
-func (engine *RbacEngine) UpsertRole(groupRes *base.Resource) {
+func (engine *RbacEngine) UpsertRole(groupRes *base.Resource, resTypes map[string]*schema.ResourceType) {
 	role := &base.Role{}
 	role.Id = groupRes.GetId()
-	role.Perms = make(map[string]*base.Permission)
 
 	dispName := groupRes.GetAttr("displayname")
 	if dispName != nil {
 		role.Name = dispName.GetSimpleAt().Values[0].(string)
 	}
 
-	perms := groupRes.GetAttr("permissions")
-	if perms != nil {
-		permSubAts := perms.GetComplexAt().SubAts
-		for _, subAtMap := range permSubAts {
-			valAt := subAtMap["value"]
-			if valAt != nil {
-				permName := valAt.Values[0].(string)
-				p := &base.Permission{Name: permName}
-				role.Perms[permName] = p
+	role.Perms = base.ParseResPerms(groupRes, resTypes)
+
+	engine.allRoles[role.Id] = role
+}
+
+// Merges the existing and nextPerm and returns a new ResourcePermission instance
+// the resulting instance contains a union of operation permissions
+func merge(existing *base.ResourcePermission, nextPerm *base.ResourcePermission) *base.ResourcePermission {
+	merged := &base.ResourcePermission{}
+	merged.RType = existing.RType
+
+	if existing.ReadPerm == nil && nextPerm.ReadPerm != nil {
+		merged.ReadPerm = nextPerm.ReadPerm.Clone()
+	} else if existing.ReadPerm != nil && nextPerm.ReadPerm != nil {
+		erp := existing.ReadPerm
+		nrp := nextPerm.ReadPerm
+
+		p := &base.Permission{}
+		merged.ReadPerm = p
+		if erp.AllowAll || nrp.AllowAll {
+			p.AllowAll = true
+		} else {
+			if erp.AllowAttrs != nil {
+				allowAttrMap := base.CloneAtParamMap(erp.AllowAttrs)
+				cloneAndMergeAttrMapInto(allowAttrMap, nrp.AllowAttrs)
 			}
 		}
 	}
 
-	engine.allRoles[role.Id] = role
+	return nil
+}
+
+func cloneAndMergeAttrMapInto(dest map[string]*base.AttributeParam, src map[string]*base.AttributeParam) {
+	if src == nil {
+		return
+	}
+
+	tmp := base.CloneAtParamMap(src)
+	for k, v := range tmp {
+		dest[k] = v
+	}
 }

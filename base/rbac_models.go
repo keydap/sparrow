@@ -35,33 +35,34 @@ type RbacUser struct {
 type Role struct {
 	Id    string
 	Name  string
-	Perms map[string]*Permission
+	Perms map[string]*ResourcePermission
 }
 
 type ResourcePermission struct {
-	RType *schema.ResourceType
-	Perms map[string]*Permission
+	RType     *schema.ResourceType
+	ReadPerm  *Permission
+	WritePerm *Permission
 }
 
 type Permission struct {
-	Name       string
-	Filter     *FilterNode
-	AllowAttrs []*Attribute
-	DenyAttrs  []*Attribute
-	AllowAll   bool
-	DenyAll    bool
+	Name          string
+	Filter        *FilterNode
+	OnAnyResource bool
+	OnNone        bool
+	AllowAttrs    map[string]*AttributeParam
+	AllowAll      bool
 }
 
 type RbacSession struct {
-	Roles    map[string]string `json:"roles"`
-	EffPerms map[string]int    `json:"ep"`
-	Domain   string            `json:"iss"`
-	Sub      string            `json:"sub"`
-	Exp      int64             `json:"exp"`
-	Iat      int64             `json:"iat"`
-	Jti      string            `json:"jti"`
-	Ito      string            `json:"ito"` // The ID of the oAuth client to who this JWT was sent to
-	Apps     map[string]string `json:"-"`   // a map of application IDs and their names
+	Roles    map[string]string              `json:"roles"`
+	EffPerms map[string]*ResourcePermission `json:"-"`
+	Domain   string                         `json:"iss"`
+	Sub      string                         `json:"sub"`
+	Exp      int64                          `json:"exp"`
+	Iat      int64                          `json:"iat"`
+	Jti      string                         `json:"jti"`
+	Ito      string                         `json:"ito"` // The ID of the oAuth client to who this JWT was sent to
+	Apps     map[string]string              `json:"-"`   // a map of application IDs and their names
 	//Aud      string         `json:"aud"`
 	//Nbf	int64 `json:"nbf"`
 }
@@ -132,3 +133,31 @@ func (session *RbacSession) IsExpired() bool {
 //func VerifyJwt(tokenString string) bool {
 //	jwt.Parse(tokenString, keyFunc)
 //}
+
+func (p *Permission) Clone() *Permission {
+	n := &Permission{}
+	*n = *p
+
+	if p.Filter != nil {
+		n.Filter = p.Filter.Clone()
+	}
+
+	if p.AllowAttrs != nil {
+		n.AllowAttrs = CloneAtParamMap(p.AllowAttrs)
+	}
+
+	return n
+}
+
+func CloneAtParamMap(m map[string]*AttributeParam) map[string]*AttributeParam {
+	if m == nil {
+		return nil
+	}
+	nMap := make(map[string]*AttributeParam)
+	for k, v := range m {
+		ap := &AttributeParam{}
+		*ap = *v
+		nMap[k] = ap
+	}
+	return nMap
+}

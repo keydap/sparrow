@@ -195,14 +195,8 @@ func TestParseAttrsWithWildcard(t *testing.T) {
 	}
 }
 
-func findAtParam(name string, atParams []*AttributeParam) *AttributeParam {
-	for _, k := range atParams {
-		if k.Name == name {
-			return k
-		}
-	}
-
-	return nil
+func findAtParam(name string, atParams map[string]*AttributeParam) *AttributeParam {
+	return atParams[name]
 }
 
 func getAtTypeCount(rt *schema.ResourceType) int {

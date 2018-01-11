@@ -39,7 +39,14 @@ func ParseResPerms(group *Resource, resTypes map[string]*schema.ResourceType) ma
 			}
 
 			rp := &ResourcePermission{RType: rt}
-			rp.Perms, _ = parseOpsObj(opsObj, rt)
+			opsPerms, err := parseOpsObj(opsObj, rt)
+			if err != nil {
+				log.Debugf("failed to parse the operation permissions %s", err)
+				continue
+			}
+
+			rp.ReadPerm = opsPerms["read"] // the keys are lowered in the call to parseOpsObj
+			rp.WritePerm = opsPerms["write"]
 			resPerms[resName] = rp
 		}
 	}
@@ -60,21 +67,69 @@ func parseOpsObj(opsObj string, rt *schema.ResourceType) (map[string]*Permission
 		p := &Permission{}
 		rop.AllowAttrs = strings.TrimSpace(rop.AllowAttrs)
 		if len(rop.AllowAttrs) != 0 {
-			if rop.AllowAttrs == "*" {
+			if allAttrsRegex.MatchString(rop.AllowAttrs) {
 				p.AllowAll = true
 			} else {
-				//p.AllowAttrs = make([]*schema.AttrType,0)
-				parseAttrs(rop.AllowAttrs, rt)
+				p.AllowAttrs = parseAttrs(rop.AllowAttrs, rt)
+			}
+		} else if len(rop.DenyAttrs) != 0 {
+			rop.DenyAttrs = strings.TrimSpace(rop.DenyAttrs)
+			if allAttrsRegex.MatchString(rop.DenyAttrs) {
+				p.AllowAttrs = nil
+			} else {
+				deniedAttrMap := parseAttrs(rop.DenyAttrs, rt)
+				// remove the denied attributes and mark the rest as allowed attributes
+				p.AllowAttrs = filterDenied(deniedAttrMap, rt)
 			}
 		}
-		rop.DenyAttrs = strings.TrimSpace(rop.DenyAttrs)
+
 		rop.Filter = strings.TrimSpace(rop.Filter)
+		if len(rop.Filter) > 0 {
+			tmp := strings.ToUpper(rop.Filter)
+			if "ANY" == tmp {
+				p.OnAnyResource = true
+			} else if "NONE" == tmp {
+				p.OnNone = true
+			} else {
+				node, err := ParseFilter(rop.Filter)
+				if err != nil {
+					log.Debugf("Error while parsing filter %s, dropping all the permissions for the %s operation", rop.Filter, rop.Op)
+					continue // deny the operation completely, this is safer than allowing without filter
+				}
+
+				p.Filter = node
+			}
+		}
+
+		opsPerms[strings.ToLower(rop.Op)] = p
 	}
 
 	return opsPerms, nil
 }
 
-func parseAttrs(attrCsv string, rt *schema.ResourceType) []*AttributeParam {
+func parseAttrs(attrCsv string, rt *schema.ResourceType) map[string]*AttributeParam {
 	attrMap, subAtPresent := SplitAttrCsv(attrCsv, rt)
 	return ConvertToParamAttributes(attrMap, subAtPresent)
+}
+
+func filterDenied(denied map[string]*AttributeParam, rt *schema.ResourceType) map[string]*AttributeParam {
+	attrMap := make(map[string]int)
+	collectAllAtNames(rt.GetMainSchema(), attrMap, true)
+	allowed := ConvertToParamAttributes(attrMap, false)
+	for k, v := range denied {
+		if v.SubAts == nil {
+			delete(allowed, k)
+		} else {
+			allowedParam := allowed[k]
+			atType := rt.GetAtType(allowedParam.Name)
+			allowedParam.SubAts = make(map[string]string)
+			for _, s := range atType.SubAttributes {
+				if _, ok := v.SubAts[s.NormName]; !ok {
+					allowedParam.SubAts[s.NormName] = s.NormName
+				}
+			}
+		}
+	}
+
+	return allowed
 }

@@ -11,12 +11,12 @@ import (
 	"strings"
 )
 
+var allAttrsRegex = regexp.MustCompile(`(^\*(,)*)|(\s*,\s*\*\s*(,)*)`) // detect if wildcard is given for ALL attributes, NOT just for a complex attribute like 'name.*'
+
 func SplitAttrCsv(csv string, rTypes ...*schema.ResourceType) (attrMap map[string]int, subAtPresent bool) {
 	attrMap = make(map[string]int)
 	csv = strings.TrimSpace(csv)
 	tokens := strings.Split(csv, ",")
-
-	allAttrsRegex := regexp.MustCompile(`(^\*(,)*)|(\s*,\s*\*\s*(,)*)`) // detect if wildcard is given for ALL attributes, NOT just for a complex attribute like 'name.*'
 
 	if allAttrsRegex.MatchString(csv) {
 		for _, rt := range rTypes {
@@ -137,9 +137,9 @@ func collectAllAtNames(sc *schema.Schema, attrMap map[string]int, prependSchemaI
 // For example if "emails.type,emails.value" are requested then an AttributeParam with
 // name "emails" will be created with two child attributes "type" and "value"
 // This will make filtering the attributes easier
-func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) []*AttributeParam {
+func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) map[string]*AttributeParam {
 
-	var atpLst []*AttributeParam
+	var atpMap map[string]*AttributeParam
 
 	if subAtPresent {
 		tmp := make([]string, len(attrMap))
@@ -151,7 +151,7 @@ func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) []*Attr
 
 		sort.Strings(tmp)
 
-		atpLst = make([]*AttributeParam, 0)
+		atpMap = make(map[string]*AttributeParam)
 		var prev *AttributeParam
 
 		for _, k := range tmp {
@@ -170,8 +170,8 @@ func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) []*Attr
 					dotPos++
 					k = k[dotPos:]
 
-					j.SubAts = make([]string, 1)
-					j.SubAts[0] = k
+					j.SubAts = make(map[string]string)
+					j.SubAts[k] = k
 				} else if strings.HasPrefix(k, prev.Name+".") {
 					dotPos++
 					k = k[dotPos:]
@@ -180,19 +180,18 @@ func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) []*Attr
 					// the parent attribute itself is not requested, for example, "name.formatted, name.givenname"
 					// but if "name" is also present in the list then the entire "name" attribute should be listed
 					if prev.SubAts != nil {
-						prev.SubAts = append(prev.SubAts, k)
+						prev.SubAts[k] = k
 					}
 
 					continue
 				}
 			}
 
-			atpLst = append(atpLst, j)
+			atpMap[j.Name] = j
 			prev = j
 		}
 	} else {
-		atpLst = make([]*AttributeParam, len(attrMap))
-		count := 0
+		atpMap = make(map[string]*AttributeParam, len(attrMap))
 		for k, _ := range attrMap {
 			j := &AttributeParam{}
 			j.Name = k
@@ -201,12 +200,11 @@ func ConvertToParamAttributes(attrMap map[string]int, subAtPresent bool) []*Attr
 			if pos > 0 {
 				j.SchemaId = k[0:pos]
 			}
-			atpLst[count] = j
-			count++
+			atpMap[j.Name] = j
 		}
 	}
 
-	return atpLst
+	return atpMap
 }
 
 func FixSchemaUris(node *FilterNode, rTypes []*schema.ResourceType) error {

@@ -1412,7 +1412,7 @@ func (rs *Resource) Serialize() []byte {
 	return data
 }
 
-func (rs *Resource) FilterAndSerialize(attrs []*AttributeParam, include bool) []byte {
+func (rs *Resource) FilterAndSerialize(attrs map[string]*AttributeParam, include bool) []byte {
 	if !include {
 		for _, ap := range attrs {
 			if ap.SubAts != nil {

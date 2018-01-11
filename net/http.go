@@ -837,7 +837,7 @@ func writeError(w http.ResponseWriter, err error) {
 	}
 }
 
-func parseAttrParam(attrParam string, rTypes []*schema.ResourceType) []*base.AttributeParam {
+func parseAttrParam(attrParam string, rTypes []*schema.ResourceType) map[string]*base.AttributeParam {
 	attrSet, subAtPresent := base.SplitAttrCsv(attrParam, rTypes...)
 	if attrSet != nil {
 		// the mandatory attributes that will always be returned
@@ -906,7 +906,7 @@ func keyFunc(jt *jwt.Token) (key interface{}, err error) {
 	return prv.PubKey, nil
 }
 
-func parseAttrParams(attributes string, excludedAttributes string, rTypes ...*schema.ResourceType) (attrLst []*base.AttributeParam, exclAttrLst []*base.AttributeParam) {
+func parseAttrParams(attributes string, excludedAttributes string, rTypes ...*schema.ResourceType) (attrLst map[string]*base.AttributeParam, exclAttrLst map[string]*base.AttributeParam) {
 	if len(attributes) != 0 {
 		attrLst = parseAttrParam(attributes, rTypes)
 	} else {
@@ -916,7 +916,7 @@ func parseAttrParams(attributes string, excludedAttributes string, rTypes ...*sc
 	return attrLst, exclAttrLst
 }
 
-func parseExcludedAttrs(excludedAttributes string, rTypes ...*schema.ResourceType) (exclAttrLst []*base.AttributeParam) {
+func parseExcludedAttrs(excludedAttributes string, rTypes ...*schema.ResourceType) (exclAttrLst map[string]*base.AttributeParam) {
 	exclAttrSet, subAtPresent := base.SplitAttrCsv(excludedAttributes, rTypes...)
 
 	if exclAttrSet == nil {
