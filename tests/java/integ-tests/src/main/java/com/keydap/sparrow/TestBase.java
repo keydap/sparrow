@@ -95,8 +95,22 @@ public abstract class TestBase {
         return null;
     }
     
-    protected User buildUser() {
+    protected static SparrowClient createClient(String username, String password) throws Exception {
+        SparrowAuthenticator authenticator = new SparrowAuthenticator(username, "example.COM", password);
+
+        SparrowClient client = new SparrowClient(baseApiUrl, baseOauthUrl, authenticator);
+        client.register(User.class, Group.class, Device.class);
+        client.authenticate();
+        
+        return client;
+    }
+    
+    protected static User buildUser() {
         String username = randomAlphabetic(5);
+        return buildUser(username);
+    }
+    
+    protected static User buildUser(String username) {
         User user = new User();
         user.setUserName(username);
 
