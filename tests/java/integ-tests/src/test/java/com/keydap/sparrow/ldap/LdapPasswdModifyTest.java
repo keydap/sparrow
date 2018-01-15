@@ -78,7 +78,7 @@ public class LdapPasswdModifyTest extends TestBase {
         assertEquals(ResultCodeEnum.SUCCESS, eResp.getLdapResult().getResultCode());
         
         try {
-            SparrowClient uClient = createClient(u.getUserName(), oldPassword);
+            SparrowClient uClient = createUnAuthenticatedClient(u.getUserName(), oldPassword);
             uClient.authenticate();
             fail("shouldn't authenticate with old password after changing password");
         }
@@ -86,7 +86,7 @@ public class LdapPasswdModifyTest extends TestBase {
             // pass
         }
         
-        SparrowClient uClient = createClient(u.getUserName(), newPassword);
+        SparrowClient uClient = createUnAuthenticatedClient(u.getUserName(), newPassword);
         uClient.authenticate();
     }
     
@@ -109,7 +109,7 @@ public class LdapPasswdModifyTest extends TestBase {
         assertEquals(ResultCodeEnum.SUCCESS, eResp.getLdapResult().getResultCode());
         
         try {
-            SparrowClient uClient = createClient(u.getUserName(), oldPassword);
+            SparrowClient uClient = createUnAuthenticatedClient(u.getUserName(), oldPassword);
             uClient.authenticate();
             fail("shouldn't authenticate with old password after changing password");
         }
@@ -117,7 +117,7 @@ public class LdapPasswdModifyTest extends TestBase {
             // pass
         }
         
-        SparrowClient uClient = createClient(u.getUserName(), newPassword);
+        SparrowClient uClient = createUnAuthenticatedClient(u.getUserName(), newPassword);
         uClient.authenticate();
     }
 
@@ -140,7 +140,7 @@ public class LdapPasswdModifyTest extends TestBase {
         assertEquals(ResultCodeEnum.INSUFFICIENT_ACCESS_RIGHTS, eResp.getLdapResult().getResultCode());
         
         try {
-            SparrowClient uClient = createClient(u.getUserName(), oldPassword);
+            SparrowClient uClient = createUnAuthenticatedClient(u.getUserName(), oldPassword);
             uClient.authenticate();
             // pass
         }
@@ -167,7 +167,7 @@ public class LdapPasswdModifyTest extends TestBase {
         assertEquals(ResultCodeEnum.SUCCESS, eResp.getLdapResult().getResultCode());
         
         try {
-            SparrowClient uClient = createClient(u.getUserName(), oldPassword);
+            SparrowClient uClient = createUnAuthenticatedClient(u.getUserName(), oldPassword);
             uClient.authenticate();
             fail("shouldn't authenticate with old password after changing password");
         }
@@ -175,11 +175,11 @@ public class LdapPasswdModifyTest extends TestBase {
             // pass
         }
         
-        SparrowClient uClient = createClient(u.getUserName(), newPassword);
+        SparrowClient uClient = createUnAuthenticatedClient(u.getUserName(), newPassword);
         uClient.authenticate();
     }
 
-    private SparrowClient createClient(String username, String password) {
+    private SparrowClient createUnAuthenticatedClient(String username, String password) {
         SparrowAuthenticator authenticator = new SparrowAuthenticator(username, "example.com", password);
         return new SparrowClient(baseApiUrl, authenticator);
     }
