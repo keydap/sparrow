@@ -160,7 +160,7 @@ func (prv *Provider) createDefaultResources() error {
 		adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
 	                "id": "%s",
 				    "displayName": "%s",
-				    "permissions": [{"value": "READ"}, {"value": "CREATE"}, {"value": "UPDATE"}, {"value": "DELETE"}],
+				    "permissions": [{"resName": "*", "opsArr" : "[{\"op\":\"read\",\"allowAttrs\": \"*\",\"filter\":\"ANY\"},{\"op\":\"write\",\"allowAttrs\":\"*\",\"filter\":\"ANY\"}]"}],
                    "members": [
                        {
                           "value": "%s"
@@ -237,7 +237,7 @@ func (prv *Provider) GetConfigJson() (data []byte, err error) {
 }
 
 func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resource, err error) {
-	if !crCtx.Session.IsAllowCreate() {
+	if !crCtx.AllowOp() {
 		return nil, base.NewForbiddenError("Insufficent privileges to create a resource")
 	}
 
@@ -245,8 +245,25 @@ func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resour
 }
 
 func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) error {
-	if !delCtx.Session.IsAllowDelete() {
-		return base.NewForbiddenError("Insufficent privileges to delete a resource")
+	od := delCtx.GetDecision()
+	if od.Deny {
+		return base.NewForbiddenError("Insufficent privileges to delete the resource")
+	}
+
+	if od.EvalFilter {
+		res, err := prv.sl.Get(delCtx.Rid, delCtx.Rt)
+		if res != nil {
+			if !delCtx.EvalDelete(res) {
+				return base.NewForbiddenError("Insufficent privileges to delete the resource")
+			}
+		} else {
+			// no need to attempt delete again, the entry is not found
+			return err
+		}
+	}
+
+	if delCtx.Rid == delCtx.Session.Sub {
+		return base.NewForbiddenError("Cannot delete self")
 	}
 
 	if _, ok := prv.immResIds[delCtx.Rid]; ok {
@@ -259,16 +276,40 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) error {
 }
 
 func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, err error) {
-	if !getCtx.Session.IsAllowRead() {
+	od := getCtx.GetDecision()
+	if od.Deny {
 		return nil, base.NewForbiddenError("Insufficent privileges to read the resource")
+	} else if od.EvalFilter {
+		res, err = prv.sl.Get(getCtx.Rid, getCtx.Rt)
+		if err != nil {
+			return nil, err
+		}
+
+		allow := getCtx.AllowRead(res)
+		if allow {
+			//FIXME filter resource attributes
+			return res, nil
+		} else {
+			return nil, base.NewForbiddenError("Insufficent privileges to read the resource")
+		}
 	}
 
 	return prv.sl.Get(getCtx.Rid, getCtx.Rt)
 }
 
 func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
-	if !sc.Session.IsAllowRead() {
+	deny, fn := sc.CanDenyOp()
+	if deny {
 		return base.NewForbiddenError("Insufficent privileges to search resources")
+	}
+
+	if fn != nil {
+		// modify the filter
+		and := &base.FilterNode{Op: "AND"}
+		and.Children = make([]*base.FilterNode, 2)
+		and.Children[0] = sc.Filter
+		and.Children[1] = fn
+		sc.Filter = and
 	}
 
 	sc.MaxResults = prv.Config.Scim.Filter.MaxResults
@@ -278,8 +319,7 @@ func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource)
 }
 
 func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resource, err error) {
-	// allow an admin always, but normal user when the resource belongs to self
-	if !replaceCtx.Session.IsAllowUpdate() && (replaceCtx.Rid != replaceCtx.Session.Sub) {
+	if !replaceCtx.AllowOp() {
 		return nil, base.NewForbiddenError("Insufficent privileges to replace the resource")
 	}
 
@@ -287,9 +327,20 @@ func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resourc
 }
 
 func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err error) {
-	// allow an admin always, but normal user when the resource belongs to self
-	if !patchCtx.Session.IsAllowUpdate() && (patchCtx.Rid != patchCtx.Session.Sub) {
+	od := patchCtx.GetDecision()
+	if od.Deny {
 		return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
+	}
+
+	if od.EvalFilter {
+		res, err = prv.sl.Get(patchCtx.Rid, patchCtx.Rt)
+		if err != nil {
+			return nil, err
+		}
+
+		if !patchCtx.EvalPatch(res) {
+			return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
+		}
 	}
 
 	return prv.sl.Patch(patchCtx.Rid, patchCtx.Pr, patchCtx.Rt)

@@ -48,9 +48,9 @@ type Permission struct {
 	Name          string
 	Filter        *FilterNode
 	OnAnyResource bool
-	OnNone        bool
 	AllowAttrs    map[string]*AttributeParam
 	AllowAll      bool
+	evaluator     Evaluator
 }
 
 type RbacSession struct {
@@ -70,39 +70,6 @@ type RbacSession struct {
 // Implementing Valid() makes RbacSession a valid Claims instance
 func (session *RbacSession) Valid() error {
 	return nil
-}
-
-func (session *RbacSession) IsAllowCreate() bool {
-	return session._PermAllowed(PERM_CREATE)
-}
-
-func (session *RbacSession) IsAllowRead() bool {
-	return session._PermAllowed(PERM_READ)
-}
-
-func (session *RbacSession) IsAllowUpdate() bool {
-	return session._PermAllowed(PERM_UPDATE)
-}
-
-func (session *RbacSession) IsAllowDelete() bool {
-	return session._PermAllowed(PERM_DELETE)
-}
-
-func (session *RbacSession) _PermAllowed(perm string) bool {
-	_, ok := session.EffPerms[perm]
-
-	return ok
-}
-
-func (session *RbacSession) IsAdmin() bool {
-	for _, perm := range admin_perm_array {
-		_, ok := session.EffPerms[perm]
-		if !ok {
-			return false
-		}
-	}
-
-	return true
 }
 
 func (session *RbacSession) ToJwt(key crypto.PrivateKey) string {
@@ -147,6 +114,18 @@ func (p *Permission) Clone() *Permission {
 	}
 
 	return n
+}
+
+func (p *Permission) EvalFilter(rs *Resource) bool {
+	if p.Filter == nil {
+		return false
+	}
+
+	if p.evaluator == nil {
+		p.evaluator = BuildEvaluator(p.Filter)
+	}
+
+	return p.evaluator.Evaluate(rs)
 }
 
 func CloneAtParamMap(m map[string]*AttributeParam) map[string]*AttributeParam {

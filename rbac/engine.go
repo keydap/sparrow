@@ -96,25 +96,43 @@ func merge(existing *base.ResourcePermission, nextPerm *base.ResourcePermission)
 	merged := &base.ResourcePermission{}
 	merged.RType = existing.RType
 
-	if existing.ReadPerm == nil && nextPerm.ReadPerm != nil {
-		merged.ReadPerm = nextPerm.ReadPerm.Clone()
-	} else if existing.ReadPerm != nil && nextPerm.ReadPerm != nil {
-		erp := existing.ReadPerm
-		nrp := nextPerm.ReadPerm
+	merged.ReadPerm = mergePermission(existing.ReadPerm, nextPerm.ReadPerm)
+	merged.WritePerm = mergePermission(existing.WritePerm, nextPerm.WritePerm)
 
-		p := &base.Permission{}
-		merged.ReadPerm = p
+	return merged
+}
+
+func mergePermission(erp *base.Permission, nrp *base.Permission) *base.Permission {
+	var p *base.Permission
+	if erp == nil && nrp != nil {
+		p = nrp.Clone()
+	} else if erp != nil && nrp != nil {
+		p = &base.Permission{}
 		if erp.AllowAll || nrp.AllowAll {
 			p.AllowAll = true
 		} else {
 			if erp.AllowAttrs != nil {
 				allowAttrMap := base.CloneAtParamMap(erp.AllowAttrs)
 				cloneAndMergeAttrMapInto(allowAttrMap, nrp.AllowAttrs)
+				p.AllowAttrs = allowAttrMap
 			}
+		}
+
+		if erp.OnAnyResource || nrp.OnAnyResource {
+			p.OnAnyResource = true
+		} else if erp.Filter != nil && nrp.Filter != nil {
+			fn := &base.FilterNode{}
+			fn.Op = "OR"
+			fn.Children = make([]*base.FilterNode, 2)
+			fn.Children[0] = erp.Filter.Clone()
+			fn.Children[1] = nrp.Filter.Clone()
+			p.Filter = fn
+		} else if erp.Filter == nil && nrp.Filter != nil {
+			p.Filter = nrp.Filter.Clone()
 		}
 	}
 
-	return nil
+	return p
 }
 
 func cloneAndMergeAttrMapInto(dest map[string]*base.AttributeParam, src map[string]*base.AttributeParam) {

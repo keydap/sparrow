@@ -9,10 +9,6 @@ import (
 	"strings"
 )
 
-type resOps struct {
-	Ops []opsObj
-}
-
 type opsObj struct {
 	Op         string
 	AllowAttrs string
@@ -27,43 +23,70 @@ func ParseResPerms(group *Resource, resTypes map[string]*schema.ResourceType) ma
 		permSubAts := perms.GetComplexAt().SubAts
 		for _, subAtMap := range permSubAts {
 			resNameAt := subAtMap["resname"]
-			opsObjAt := subAtMap["opsobj"]
+			opsArrAt := subAtMap["opsarr"]
 
 			resName := resNameAt.Values[0].(string)
-			opsObj := opsObjAt.Values[0].(string)
+			opsArr := opsArrAt.Values[0].(string)
 
-			rt := resTypes[resName]
-			if rt == nil {
-				log.Warningf("No resource type found with the name %s, ignoring permissions", resName)
-				continue
+			if resName == "*" {
+				// wildcard for all resources
+				for _, rt := range resTypes {
+					rp, err := createResPerms(opsArr, rt)
+					if err == nil {
+						resPerms[rt.Name] = rp
+					}
+				}
+
+				break // we do not need to process anything else
+			} else {
+				rt := resTypes[resName]
+				if rt == nil {
+					log.Warningf("No resource type found with the name %s, ignoring permissions", resName)
+					continue
+				}
+				rp, err := createResPerms(opsArr, rt)
+				if err == nil {
+					resPerms[resName] = rp
+				}
 			}
-
-			rp := &ResourcePermission{RType: rt}
-			opsPerms, err := parseOpsObj(opsObj, rt)
-			if err != nil {
-				log.Debugf("failed to parse the operation permissions %s", err)
-				continue
-			}
-
-			rp.ReadPerm = opsPerms["read"] // the keys are lowered in the call to parseOpsObj
-			rp.WritePerm = opsPerms["write"]
-			resPerms[resName] = rp
 		}
 	}
 
 	return resPerms
 }
 
-func parseOpsObj(opsObj string, rt *schema.ResourceType) (map[string]*Permission, error) {
-	ro := &resOps{}
+func createResPerms(opsArr string, rt *schema.ResourceType) (*ResourcePermission, error) {
+	rp := &ResourcePermission{RType: rt}
+	opsPerms, err := parseOpsArr(opsArr, rt)
+	if err != nil {
+		log.Debugf("failed to parse the operation permissions %s", err)
+		return nil, err
+	}
 
-	err := json.Unmarshal([]byte(opsObj), ro)
+	rp.ReadPerm = opsPerms["read"] // the keys are lowered in the call to parseOpsObj
+	if rp.ReadPerm == nil {
+		log.Debugf("No read permission present using default")
+		rp.ReadPerm = &Permission{Name: "read"}
+	}
+
+	rp.WritePerm = opsPerms["write"]
+	if rp.WritePerm == nil {
+		log.Debugf("No write permission present using default")
+		rp.WritePerm = &Permission{Name: "write"}
+	}
+
+	return rp, nil
+}
+
+func parseOpsArr(opsArr string, rt *schema.ResourceType) (map[string]*Permission, error) {
+	var ops []opsObj
+	err := json.Unmarshal([]byte(opsArr), &ops)
 	if err != nil {
 		return nil, err
 	}
 
 	opsPerms := make(map[string]*Permission)
-	for _, rop := range ro.Ops {
+	for _, rop := range ops {
 		p := &Permission{}
 		rop.AllowAttrs = strings.TrimSpace(rop.AllowAttrs)
 		if len(rop.AllowAttrs) != 0 {
@@ -83,21 +106,25 @@ func parseOpsObj(opsObj string, rt *schema.ResourceType) (map[string]*Permission
 			}
 		}
 
-		rop.Filter = strings.TrimSpace(rop.Filter)
-		if len(rop.Filter) > 0 {
-			tmp := strings.ToUpper(rop.Filter)
-			if "ANY" == tmp {
-				p.OnAnyResource = true
-			} else if "NONE" == tmp {
-				p.OnNone = true
-			} else {
-				node, err := ParseFilter(rop.Filter)
-				if err != nil {
-					log.Debugf("Error while parsing filter %s, dropping all the permissions for the %s operation", rop.Filter, rop.Op)
-					continue // deny the operation completely, this is safer than allowing without filter
-				}
+		// only parse the filter if either all attributes are allowed
+		// or there are some attributes specified
+		if p.AllowAll || p.AllowAttrs != nil {
+			rop.Filter = strings.TrimSpace(rop.Filter)
+			if len(rop.Filter) > 0 {
+				tmp := strings.ToUpper(rop.Filter)
+				if "ANY" == tmp {
+					p.OnAnyResource = true
+				} else if "NONE" == tmp {
+					p.Filter = nil
+				} else {
+					node, err := ParseFilter(rop.Filter)
+					if err != nil {
+						log.Debugf("Error while parsing filter %s, dropping all the permissions for the %s operation", rop.Filter, rop.Op)
+						continue // deny the operation completely, this is safer than allowing without filter
+					}
 
-				p.Filter = node
+					p.Filter = node
+				}
 			}
 		}
 
@@ -109,10 +136,20 @@ func parseOpsObj(opsObj string, rt *schema.ResourceType) (map[string]*Permission
 
 func parseAttrs(attrCsv string, rt *schema.ResourceType) map[string]*AttributeParam {
 	attrMap, subAtPresent := SplitAttrCsv(attrCsv, rt)
-	return ConvertToParamAttributes(attrMap, subAtPresent)
+	m := ConvertToParamAttributes(attrMap, subAtPresent)
+
+	if len(m) == 0 {
+		m = nil
+	}
+
+	return m
 }
 
 func filterDenied(denied map[string]*AttributeParam, rt *schema.ResourceType) map[string]*AttributeParam {
+	if denied == nil {
+		return nil
+	}
+
 	attrMap := make(map[string]int)
 	collectAllAtNames(rt.GetMainSchema(), attrMap, true)
 	allowed := ConvertToParamAttributes(attrMap, false)

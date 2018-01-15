@@ -79,18 +79,18 @@
                     "multiValued":false,
                     "description":"Name of the resource type.",
                     "required":false,
-                    "caseExact":false,
+                    "caseExact":true,
                     "mutability":"readWrite",
                     "returned":"default",
                     "uniqueness":"none"
                 },
                 {
-                    "name":"opsObj",
+                    "name":"opsArr",
                     "type":"string",
                     "multiValued":false,
-                    "description":"JSON object holding the access control details of READ and WRITE operations.",
+                    "description":"A JSON array object holding the access control details of READ and WRITE operations.",
                     "required":false,
-                    "caseExact":false,
+                    "caseExact":true,
                     "mutability":"readWrite",
                     "returned":"default",
                     "uniqueness":"none"

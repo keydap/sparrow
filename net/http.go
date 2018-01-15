@@ -422,6 +422,7 @@ func replaceResource(hc *httpContext) {
 	rs.SetId(rid)
 	replaceCtx := base.ReplaceContext{InRes: rs, OpContext: hc.OpContext}
 	replaceCtx.Rid = rid
+	replaceCtx.Rt = rsType
 	replaceCtx.IfNoneMatch = hc.r.Header.Get("If-None-Match")
 	replacedRs, err := hc.pr.Replace(&replaceCtx)
 	if err != nil {

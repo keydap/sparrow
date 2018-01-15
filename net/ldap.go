@@ -951,8 +951,8 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 	}
 
 	// only allow an administrator to change someone else's password
-	if !effSession.IsAdmin() && hasUserId {
-		if effSession.Sub != user.GetId() {
+	if hasUserId && (effSession.Sub != user.GetId()) {
+		if !canChangePassword(effSession, user) {
 			// throw unauthorized error
 			errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultInsufficientAccessRights, "insufficientAccessRights")
 			ls.con.Write(errResp.Bytes())
@@ -1110,4 +1110,22 @@ func mapObjectClassToSchema(objectClassName string, sc *base.SearchContext, pr *
 
 	// if not found just return the given objectClassName
 	return `"` + objectClassName + `"`
+}
+
+func canChangePassword(effSession *base.RbacSession, user *base.Resource) bool {
+	rp := effSession.EffPerms[user.GetType().Name]
+	if rp == nil {
+		return false
+	}
+
+	if rp.WritePerm.OnAnyResource && rp.WritePerm.AllowAll {
+		return true
+	}
+
+	_, hasPassword := rp.WritePerm.AllowAttrs["password"]
+	if !hasPassword {
+		return false
+	}
+
+	return rp.WritePerm.EvalFilter(user)
 }
