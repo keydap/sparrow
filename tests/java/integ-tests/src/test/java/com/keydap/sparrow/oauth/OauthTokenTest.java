@@ -49,7 +49,7 @@ import org.junit.Test;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
-import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.htmlunit.HtmlUnitDriver;
 import org.openqa.selenium.support.ui.ExpectedCondition;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
@@ -93,15 +93,11 @@ public class OauthTokenTest extends TestBase {
     String clientSecret;
     String encodedRedirectUri;
     
-    static {
-        System.setProperty("webdriver.gecko.driver", "/Users/dbugger/bin/geckodriver");
-    }
-    
     @Before
     public void reset() throws Exception {
         code = null;
         idToken = null;
-        browser = new FirefoxDriver();
+        browser = new HtmlUnitDriver(true);
         if(clientId == null) {
             registerClient();
         }
@@ -111,7 +107,7 @@ public class OauthTokenTest extends TestBase {
     public static void setup() throws Exception {
         httpClient = HttpClientBuilder.create().build();
         oHttpClient = new URLConnectionClient();
-    
+
         InetSocketAddress isa = new InetSocketAddress(LOCALHOST, PORT);
         server = new Server(isa);
         
