@@ -196,7 +196,31 @@ func searchResource(hc *httpContext) {
 		}
 
 		attrLst, exclAttrLst := parseAttrParams(attributes, exclAttributes, rtByPath)
+		rp := hc.OpContext.Session.EffPerms[rtByPath.Name]
 		if attrLst != nil {
+			if !rp.ReadPerm.AllowAll {
+				allow := rp.ReadPerm.AllowAttrs
+				for k, v := range attrLst {
+					existingV, ok := allow[k]
+					if !ok {
+						delete(attrLst, k)
+					} else {
+						//FIXME what if all sub-attributes are manually specified
+						// e.g email.type, value, display, primary - this case needs to be handled in searchutil.go's ConvertToParamAttributes
+						if len(existingV.SubAts) != 0 { // check if only certain sub-attributes are allowed
+							if len(v.SubAts) == 0 { // if the request violates it then remove
+								delete(attrLst, k)
+							} else { // keep only allowed sub-attributes
+								for subK, _ := range v.SubAts {
+									if _, ok := existingV.SubAts[subK]; !ok {
+										delete(v.SubAts, subK)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 			jsonData = rs.FilterAndSerialize(attrLst, true)
 		} else {
 			jsonData = rs.FilterAndSerialize(exclAttrLst, false)

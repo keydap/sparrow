@@ -20,9 +20,9 @@ func SplitAttrCsv(csv string, rTypes ...*schema.ResourceType) (attrMap map[strin
 
 	if allAttrsRegex.MatchString(csv) {
 		for _, rt := range rTypes {
-			// MUST prepend the schema ID to resolve duplicate attribute names
-			collectAllAtNames(rt.GetMainSchema(), attrMap, true)
+			collectAllAtNames(rt.GetMainSchema(), attrMap, false)
 			for _, se := range rt.SchemaExtensions {
+				// MUST prepend the schema ID to resolve duplicate attribute names
 				collectAllAtNames(rt.GetSchema(se.Schema), attrMap, true)
 			}
 		}

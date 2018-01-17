@@ -113,7 +113,8 @@ public abstract class TestBase {
     protected static User buildUser(String username) {
         User user = new User();
         user.setUserName(username);
-
+        user.setDisplayName("display-" + username);
+        
         Name name = new Name();
         name.setFamilyName(username);
         name.setGivenName(username);

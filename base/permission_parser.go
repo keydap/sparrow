@@ -116,6 +116,8 @@ func parseOpsArr(opsArr string, rt *schema.ResourceType) (map[string]*Permission
 					p.OnAnyResource = true
 				} else if "NONE" == tmp {
 					p.Filter = nil
+					p.AllowAll = false
+					p.AllowAttrs = nil
 				} else {
 					node, err := ParseFilter(rop.Filter)
 					if err != nil {
@@ -136,6 +138,18 @@ func parseOpsArr(opsArr string, rt *schema.ResourceType) (map[string]*Permission
 
 func parseAttrs(attrCsv string, rt *schema.ResourceType) map[string]*AttributeParam {
 	attrMap, subAtPresent := SplitAttrCsv(attrCsv, rt)
+	// the mandatory attributes that will always be returned
+	for k, _ := range rt.AtsAlwaysRtn {
+		attrMap[k] = 1
+	}
+
+	// and those that are never returned
+	for k, _ := range rt.AtsNeverRtn {
+		if _, ok := attrMap[k]; ok {
+			delete(attrMap, k)
+		}
+	}
+
 	m := ConvertToParamAttributes(attrMap, subAtPresent)
 
 	if len(m) == 0 {

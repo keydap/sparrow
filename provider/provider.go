@@ -341,6 +341,10 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err
 		if !patchCtx.EvalPatch(res) {
 			return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
 		}
+	} else if od.EvalWithoutFetch {
+		if !patchCtx.EvalPatch(nil) {
+			return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
+		}
 	}
 
 	return prv.sl.Patch(patchCtx.Rid, patchCtx.Pr, patchCtx.Rt)

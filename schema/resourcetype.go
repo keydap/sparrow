@@ -117,20 +117,25 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 func copyReturnAttrs(rt *ResourceType, sc *Schema) {
 	sc.collectReturnAttrs()
 
+	prefix := sc.Id + ":"
+	if rt.Schema == sc.Id {
+		prefix = ""
+	}
+
 	for _, v := range sc.AtsAlwaysRtn {
-		rt.AtsAlwaysRtn[v] = 1
+		rt.AtsAlwaysRtn[prefix+v] = 1
 	}
 
 	for _, v := range sc.AtsNeverRtn {
-		rt.AtsNeverRtn[v] = 1
+		rt.AtsNeverRtn[prefix+v] = 1
 	}
 
 	for _, v := range sc.AtsRequestRtn {
-		rt.AtsRequestRtn[v] = 1
+		rt.AtsRequestRtn[prefix+v] = 1
 	}
 
 	for _, v := range sc.AtsDefaultRtn {
-		rt.AtsDefaultRtn[v] = 1
+		rt.AtsDefaultRtn[prefix+v] = 1
 	}
 }
 

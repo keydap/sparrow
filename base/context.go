@@ -91,9 +91,10 @@ type AuthRequest struct {
 }
 
 type OpDecision struct {
-	Allow      bool
-	Deny       bool
-	EvalFilter bool
+	Allow            bool
+	Deny             bool
+	EvalWithoutFetch bool
+	EvalFilter       bool
 }
 
 func NewSearchRequest(filter string, attrs string, include bool) *SearchRequest {
@@ -173,6 +174,8 @@ func (pc *PatchContext) GetDecision() OpDecision {
 
 	if rp.WritePerm.OnAnyResource && rp.WritePerm.AllowAll {
 		od.Allow = true
+	} else if rp.WritePerm.OnAnyResource {
+		od.EvalWithoutFetch = true
 	} else {
 		od.EvalFilter = true
 	}
@@ -197,7 +200,11 @@ func (pc *PatchContext) EvalPatch(res *Resource) bool {
 		return false
 	}
 
-	entryOk := rp.WritePerm.EvalFilter(res)
+	entryOk := true
+	if res != nil { // will be nil IF EvalWithoutFetch is true
+		entryOk = rp.WritePerm.EvalFilter(res)
+	}
+
 	if entryOk && rp.WritePerm.AllowAll {
 		return true
 	}
