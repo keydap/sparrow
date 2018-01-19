@@ -21,6 +21,7 @@ import com.keydap.sparrow.SearchRequest;
 import com.keydap.sparrow.SearchResponse;
 import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Email;
+import com.keydap.sparrow.scim.User.EnterpriseUser;
 
 /**
  *
@@ -165,7 +166,6 @@ public class AddAuthorizationTest extends RbacTestBase {
         
         resp = readOnlyClient.getResource(id, User.class);
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
-        System.out.println(resp.getHttpBody());
         
         resp = partialReadClient.getResource(id, User.class);
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
@@ -177,7 +177,6 @@ public class AddAuthorizationTest extends RbacTestBase {
         resp = enterpriseReadOnlyClient.getResource(id, User.class);
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
         fetched = resp.getResource();
-        System.out.println(resp.getHttpBody());
         assertNull(fetched.getDisplayName()); // the role EnterpriseReadOnly allows read access to username and enterprise user attributes
         assertNull(fetched.getEmails());
         assertNotNull(fetched.getEnterpriseUser());
@@ -204,7 +203,6 @@ public class AddAuthorizationTest extends RbacTestBase {
         resp = partialReadClient.getResource(id, User.class, false, "emails");
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
         fetched = resp.getResource();
-        System.out.println(resp.getHttpBody());
         assertNull(fetched.getDisplayName()); // the role PartialReadAny allows read access to only username and emails
         assertNull(fetched.getEmails());
         assertEquals(original.getUserName(), fetched.getUserName());
@@ -255,6 +253,17 @@ public class AddAuthorizationTest extends RbacTestBase {
             assertNull(fetched.getDisplayName()); // the role PartialReadAny allows read access to only username and emails
             assertNull(fetched.getEmails());
             assertNotNull(fetched.getUserName());
+        }
+
+        sr = new SearchRequest();
+        sr.setAttributes(EnterpriseUser.SCHEMA+":*");
+        sr.setFilter("costCenter pr");
+        resp = enterpriseReadOnlyClient.searchResource(sr, User.class);
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        for(User fetched : resp.getResources()) {
+            assertNull(fetched.getDisplayName()); // the role EnterpriseReadOnly allows read access to username and enterprise user attributes
+            assertNull(fetched.getEmails());
+            assertNotNull(fetched.getEnterpriseUser());
         }
     }
     
