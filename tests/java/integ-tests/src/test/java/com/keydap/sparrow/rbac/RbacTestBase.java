@@ -31,6 +31,7 @@ public class RbacTestBase extends TestBase {
     protected static User uPartialWrite;
     protected static User uMixedUnion;
     protected static User uDenyAll;
+    protected static User uEnterpriseReadOnly;
     
     protected static SparrowClient readOnlyClient;
     protected static SparrowClient writeOnlyClient;
@@ -38,6 +39,7 @@ public class RbacTestBase extends TestBase {
     protected static SparrowClient partialWriteClient;
     protected static SparrowClient mixedUnionClient;
     protected static SparrowClient denyAllClient;
+    protected static SparrowClient enterpriseReadOnlyClient;
 
     @BeforeClass
     public static void setupGroups() throws Exception {
@@ -55,6 +57,12 @@ public class RbacTestBase extends TestBase {
         resp = client.addResource(uWriteOnly);
         uWriteOnly = resp.getResource();
         uWriteOnly.setPassword(password);
+        
+        uEnterpriseReadOnly = buildUser("uenterprisereadonly");
+        password = uEnterpriseReadOnly.getPassword();
+        resp = client.addResource(uEnterpriseReadOnly);
+        uEnterpriseReadOnly = resp.getResource();
+        uEnterpriseReadOnly.setPassword(password);
 
         uPartialRead = buildUser("upartialread");
         password = uPartialRead.getPassword();
@@ -106,6 +114,17 @@ public class RbacTestBase extends TestBase {
         partialReadOnlyMember.setValue(uPartialRead.getId());
         gPartialRead.setMembers(Collections.singletonList(partialReadOnlyMember));
         client.addResource(gPartialRead);
+
+        Group gEnterpriseOnlyRead = new Group();
+        gEnterpriseOnlyRead.setDisplayName("PartialReadAny");
+        Permission enterpriseOnlyReadP = new Permission();
+        enterpriseOnlyReadP.setResName("User");
+        enterpriseOnlyReadP.setOpsArr(OperationPermission.withAllowAttributes("read", "username, urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:*", "ANY").asJsonArray());
+        gEnterpriseOnlyRead.setPermissions(Collections.singletonList(enterpriseOnlyReadP));
+        Member enterpriseReadOnlyMember = new Member();
+        enterpriseReadOnlyMember.setValue(uEnterpriseReadOnly.getId());
+        gEnterpriseOnlyRead.setMembers(Collections.singletonList(enterpriseReadOnlyMember));
+        client.addResource(gEnterpriseOnlyRead);
 
         Group gWriteOnly = new Group();
         gWriteOnly.setDisplayName("WriteOnly");
@@ -159,5 +178,6 @@ public class RbacTestBase extends TestBase {
         partialWriteClient = createClient(uPartialWrite.getUserName(), uPartialWrite.getPassword());
         mixedUnionClient = createClient(uMixedUnion.getUserName(), uMixedUnion.getPassword());
         denyAllClient = createClient(uDenyAll.getUserName(), uDenyAll.getPassword());
+        enterpriseReadOnlyClient = createClient(uEnterpriseReadOnly.getUserName(), uEnterpriseReadOnly.getPassword());
     }
 }

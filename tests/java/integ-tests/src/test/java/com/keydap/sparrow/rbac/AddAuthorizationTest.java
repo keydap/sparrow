@@ -13,11 +13,12 @@ import java.util.List;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.http.HttpStatus;
 import org.junit.Test;
-import org.unitils.util.ReflectionUtils;
 
 import com.keydap.sparrow.PatchGenerator;
 import com.keydap.sparrow.PatchRequest;
 import com.keydap.sparrow.Response;
+import com.keydap.sparrow.SearchRequest;
+import com.keydap.sparrow.SearchResponse;
 import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Email;
 
@@ -164,15 +165,25 @@ public class AddAuthorizationTest extends RbacTestBase {
         
         resp = readOnlyClient.getResource(id, User.class);
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        System.out.println(resp.getHttpBody());
         
         resp = partialReadClient.getResource(id, User.class);
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
         User fetched = resp.getResource();
-        System.out.println(resp.getHttpBody());
         assertNull(fetched.getDisplayName()); // the role PartialReadAny allows read access to only username and emails
         compareEmails(original.getEmails(), fetched.getEmails());
         assertEquals(original.getUserName(), fetched.getUserName());
-        
+
+        resp = enterpriseReadOnlyClient.getResource(id, User.class);
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        fetched = resp.getResource();
+        System.out.println(resp.getHttpBody());
+        assertNull(fetched.getDisplayName()); // the role EnterpriseReadOnly allows read access to username and enterprise user attributes
+        assertNull(fetched.getEmails());
+        assertNotNull(fetched.getEnterpriseUser());
+        assertTrue(EqualsBuilder.reflectionEquals(original.getEnterpriseUser(), fetched.getEnterpriseUser(), false));
+        assertEquals(original.getUserName(), fetched.getUserName());
+
         // id and schemas are mandatory attributes
         assertNotNull(fetched.getId());
         assertNotNull(fetched.getSchemas());
@@ -188,6 +199,63 @@ public class AddAuthorizationTest extends RbacTestBase {
         
         resp = mixedUnionClient.getResource(id, User.class);
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        
+        // test with excluded attributes
+        resp = partialReadClient.getResource(id, User.class, false, "emails");
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        fetched = resp.getResource();
+        System.out.println(resp.getHttpBody());
+        assertNull(fetched.getDisplayName()); // the role PartialReadAny allows read access to only username and emails
+        assertNull(fetched.getEmails());
+        assertEquals(original.getUserName(), fetched.getUserName());
+    }
+
+    @Test
+    public void testSearch() {
+        User u1 = buildUser();
+        User u2 = buildUser();
+        writeOnlyClient.addResource(u1);
+        writeOnlyClient.addResource(u2);
+        
+        SearchResponse<User> resp = readOnlyClient.searchResource(User.class);
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        
+        resp = partialReadClient.searchResource(User.class);
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        assertTrue(resp.getResources().size() >= 2);
+        for(User fetched : resp.getResources()) {
+            assertNull(fetched.getDisplayName()); // the role PartialReadAny allows read access to only username and emails
+            assertNotNull(fetched.getEmails());
+            assertNotNull(fetched.getUserName());
+            // id and schemas are mandatory attributes
+            assertNotNull(fetched.getId());
+            assertNotNull(fetched.getSchemas());
+        }
+        
+        
+        resp = partialWriteClient.searchResource(User.class);
+        assertEquals(HttpStatus.SC_FORBIDDEN, resp.getHttpCode());
+        
+        resp = denyAllClient.searchResource(User.class);
+        assertEquals(HttpStatus.SC_FORBIDDEN, resp.getHttpCode());
+        
+        resp = writeOnlyClient.searchResource(User.class);
+        assertEquals(HttpStatus.SC_FORBIDDEN, resp.getHttpCode());
+        
+        resp = mixedUnionClient.searchResource(User.class);
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        
+        // test with excluded attributes
+        SearchRequest sr = new SearchRequest();
+        sr.setExcludedAttributes("emails");
+        resp = partialReadClient.searchResource(sr, User.class);
+        assertTrue(resp.getResources().size() >= 2);
+        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        for(User fetched : resp.getResources()) {
+            assertNull(fetched.getDisplayName()); // the role PartialReadAny allows read access to only username and emails
+            assertNull(fetched.getEmails());
+            assertNotNull(fetched.getUserName());
+        }
     }
     
     private void compareEmails(List<Email> lst1, List<Email> lst2) {

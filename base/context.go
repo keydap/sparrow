@@ -293,6 +293,9 @@ func (sc *SearchContext) CanDenyOp() (bool, *FilterNode) {
 		if efp == nil {
 			// flip the bit at ith index
 			flipped ^= (1 << uint(i))
+			//} else if efp.ReadPerm.AllowAttrs == nil && !efp.ReadPerm.AllowAll {
+			/// how to perform filter level permission checks? e.g how to prevent a comparison of emails.value when user has no read access?
+			//return false, nil
 		} else if !efp.ReadPerm.OnAnyResource {
 			tmp := efp.ReadPerm.Filter
 			if tmp == nil {

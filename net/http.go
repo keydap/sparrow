@@ -199,31 +199,17 @@ func searchResource(hc *httpContext) {
 		rp := hc.OpContext.Session.EffPerms[rtByPath.Name]
 		if attrLst != nil {
 			if !rp.ReadPerm.AllowAll {
-				allow := rp.ReadPerm.AllowAttrs
-				for k, v := range attrLst {
-					existingV, ok := allow[k]
-					if !ok {
-						delete(attrLst, k)
-					} else {
-						//FIXME what if all sub-attributes are manually specified
-						// e.g email.type, value, display, primary - this case needs to be handled in searchutil.go's ConvertToParamAttributes
-						if len(existingV.SubAts) != 0 { // check if only certain sub-attributes are allowed
-							if len(v.SubAts) == 0 { // if the request violates it then remove
-								delete(attrLst, k)
-							} else { // keep only allowed sub-attributes
-								for subK, _ := range v.SubAts {
-									if _, ok := existingV.SubAts[subK]; !ok {
-										delete(v.SubAts, subK)
-									}
-								}
-							}
-						}
-					}
-				}
+				filterAllowedAttrs(rp.ReadPerm.AllowAttrs, attrLst)
 			}
 			jsonData = rs.FilterAndSerialize(attrLst, true)
 		} else {
-			jsonData = rs.FilterAndSerialize(exclAttrLst, false)
+			if !rp.ReadPerm.AllowAll {
+				allow := base.CloneAtParamMap(rp.ReadPerm.AllowAttrs)
+				filterExcludedAttrs(allow, exclAttrLst)
+				jsonData = rs.FilterAndSerialize(allow, true)
+			} else {
+				jsonData = rs.FilterAndSerialize(exclAttrLst, false)
+			}
 		}
 
 		writeCommonHeaders(hc.w)
@@ -326,7 +312,32 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 		return
 	}
 
-	attrLst, exclAttrLst := parseAttrParams(sr.Attributes, sr.ExcludedAttributes, rTypes...)
+	attrByRtName := make(map[string][]map[string]*base.AttributeParam)
+	for _, rt := range rTypes {
+		rp := hc.OpContext.Session.EffPerms[rt.Name]
+		if rp == nil {
+			continue
+		} else if !rp.ReadPerm.AllowAll && rp.ReadPerm.AllowAttrs == nil {
+			continue
+		}
+
+		attrLst, exclAttrLst := parseAttrParams(sr.Attributes, sr.ExcludedAttributes, rt)
+
+		if attrLst != nil {
+			if !rp.ReadPerm.AllowAll {
+				filterAllowedAttrs(rp.ReadPerm.AllowAttrs, attrLst)
+			}
+		} else {
+			if !rp.ReadPerm.AllowAll {
+				allow := base.CloneAtParamMap(rp.ReadPerm.AllowAttrs)
+				filterExcludedAttrs(allow, exclAttrLst)
+				attrLst = allow
+				exclAttrLst = nil
+			}
+		}
+
+		attrByRtName[rt.Name] = []map[string]*base.AttributeParam{attrLst, exclAttrLst}
+	}
 
 	sc := &base.SearchContext{}
 	sc.Filter = filter
@@ -358,6 +369,16 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 				break
 			}
 		}
+
+		rt := rs.GetType()
+		arr := attrByRtName[rt.Name]
+		// no read permission for this ResourceType
+		if arr == nil {
+			continue
+		}
+
+		attrLst := arr[0]
+		exclAttrLst := arr[1]
 
 		// attribute filtering
 		if attrLst != nil {
@@ -516,7 +537,7 @@ func patchResource(hc *httpContext) {
 	if reqAttr == "" {
 		hc.w.WriteHeader(http.StatusNoContent)
 	} else {
-		attrLst := parseAttrParam(reqAttr, []*schema.ResourceType{rtByPath})
+		attrLst := parseAttrParam(reqAttr, rtByPath)
 		if attrLst != nil {
 			data := patchedRes.FilterAndSerialize(attrLst, true)
 			hc.w.WriteHeader(http.StatusOK)
@@ -862,19 +883,17 @@ func writeError(w http.ResponseWriter, err error) {
 	}
 }
 
-func parseAttrParam(attrParam string, rTypes []*schema.ResourceType) map[string]*base.AttributeParam {
-	attrSet, subAtPresent := base.SplitAttrCsv(attrParam, rTypes...)
+func parseAttrParam(attrParam string, rt *schema.ResourceType) map[string]*base.AttributeParam {
+	attrSet, subAtPresent := base.SplitAttrCsv(attrParam, rt)
 	if attrSet != nil {
 		// the mandatory attributes that will always be returned
-		for _, rt := range rTypes {
-			for k, _ := range rt.AtsAlwaysRtn {
-				attrSet[k] = 1
-			}
+		for k, _ := range rt.AtsAlwaysRtn {
+			attrSet[k] = 1
+		}
 
-			for k, _ := range rt.AtsNeverRtn {
-				if _, ok := attrSet[k]; ok {
-					delete(attrSet, k)
-				}
+		for k, _ := range rt.AtsNeverRtn {
+			if _, ok := attrSet[k]; ok {
+				delete(attrSet, k)
 			}
 		}
 
@@ -931,18 +950,18 @@ func keyFunc(jt *jwt.Token) (key interface{}, err error) {
 	return prv.PubKey, nil
 }
 
-func parseAttrParams(attributes string, excludedAttributes string, rTypes ...*schema.ResourceType) (attrLst map[string]*base.AttributeParam, exclAttrLst map[string]*base.AttributeParam) {
+func parseAttrParams(attributes string, excludedAttributes string, rt *schema.ResourceType) (attrLst map[string]*base.AttributeParam, exclAttrLst map[string]*base.AttributeParam) {
 	if len(attributes) != 0 {
-		attrLst = parseAttrParam(attributes, rTypes)
+		attrLst = parseAttrParam(attributes, rt)
 	} else {
-		exclAttrLst = parseExcludedAttrs(excludedAttributes, rTypes...)
+		exclAttrLst = parseExcludedAttrs(excludedAttributes, rt)
 	}
 
 	return attrLst, exclAttrLst
 }
 
-func parseExcludedAttrs(excludedAttributes string, rTypes ...*schema.ResourceType) (exclAttrLst map[string]*base.AttributeParam) {
-	exclAttrSet, subAtPresent := base.SplitAttrCsv(excludedAttributes, rTypes...)
+func parseExcludedAttrs(excludedAttributes string, rt *schema.ResourceType) (exclAttrLst map[string]*base.AttributeParam) {
+	exclAttrSet, subAtPresent := base.SplitAttrCsv(excludedAttributes, rt)
 
 	if exclAttrSet == nil {
 		// in this case compute the never return attribute list
@@ -951,25 +970,67 @@ func parseExcludedAttrs(excludedAttributes string, rTypes ...*schema.ResourceTyp
 	}
 
 	// the mandatory attributes cannot be excluded
-	for _, rt := range rTypes {
-		for k, _ := range rt.AtsAlwaysRtn {
-			if _, ok := exclAttrSet[k]; ok {
-				delete(exclAttrSet, k)
-			}
+	for k, _ := range rt.AtsAlwaysRtn {
+		if _, ok := exclAttrSet[k]; ok {
+			delete(exclAttrSet, k)
 		}
+	}
 
-		for k, _ := range rt.AtsNeverRtn {
+	for k, _ := range rt.AtsNeverRtn {
+		exclAttrSet[k] = 1
+	}
+
+	for k, _ := range rt.AtsRequestRtn {
+		if _, ok := exclAttrSet[k]; !ok {
 			exclAttrSet[k] = 1
-		}
-
-		for k, _ := range rt.AtsRequestRtn {
-			if _, ok := exclAttrSet[k]; !ok {
-				exclAttrSet[k] = 1
-			}
 		}
 	}
 
 	exclAttrLst = base.ConvertToParamAttributes(exclAttrSet, subAtPresent)
 
 	return exclAttrLst
+}
+
+func filterAllowedAttrs(allow map[string]*base.AttributeParam, attrLst map[string]*base.AttributeParam) {
+	for k, v := range attrLst {
+		existingV, ok := allow[k]
+		if !ok {
+			delete(attrLst, k)
+		} else {
+			//FIXME what if all sub-attributes are manually specified
+			// e.g email.type, value, display, primary - this case needs to be handled in searchutil.go's ConvertToParamAttributes
+			if len(existingV.SubAts) != 0 { // check if only certain sub-attributes are allowed
+				if len(v.SubAts) == 0 { // if the request violates it then remove
+					delete(attrLst, k)
+				} else { // keep only allowed sub-attributes
+					for subK, _ := range v.SubAts {
+						if _, ok := existingV.SubAts[subK]; !ok {
+							delete(v.SubAts, subK)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func filterExcludedAttrs(allow map[string]*base.AttributeParam, exclAttrLst map[string]*base.AttributeParam) {
+	for k, v := range exclAttrLst {
+		if len(v.SubAts) == 0 {
+			delete(allow, k)
+		} else {
+			existingV, ok := allow[k]
+			if ok {
+				for subK, _ := range v.SubAts {
+					if _, ok := existingV.SubAts[subK]; !ok {
+						delete(existingV.SubAts, subK)
+					}
+				}
+
+				if len(existingV.SubAts) == 0 {
+					delete(allow, k)
+				}
+			}
+		}
+	}
 }

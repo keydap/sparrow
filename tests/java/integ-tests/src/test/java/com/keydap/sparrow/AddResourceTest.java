@@ -106,8 +106,6 @@ public class AddResourceTest extends TestBase {
         Error error = resp.getError();
         assertEquals(Conflict.value(), error.getStatus());
         assertEquals(UNIQUENESS.value(), error.getScimType());
-        
-        System.out.println(created.getId());
     }
     
     @Test

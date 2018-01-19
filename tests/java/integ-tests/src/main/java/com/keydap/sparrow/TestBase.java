@@ -11,6 +11,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.TimeZone;
 
 import org.apache.http.HttpStatus;
@@ -21,6 +22,7 @@ import com.keydap.sparrow.scim.Device;
 import com.keydap.sparrow.scim.Group;
 import com.keydap.sparrow.scim.User;
 import com.keydap.sparrow.scim.User.Email;
+import com.keydap.sparrow.scim.User.EnterpriseUser;
 import com.keydap.sparrow.scim.User.Name;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
@@ -142,6 +144,14 @@ public abstract class TestBase {
         user.setActive(true);
         
         user.setPassword(randomAlphabetic(11));
+        
+        EnterpriseUser eu = new EnterpriseUser();
+        eu.setCostCenter(username);
+        eu.setDepartment("Sales");
+        eu.setDivision("EU");
+        eu.setEmployeeNumber(username);
+        eu.setOrganization(username);
+        user.setEnterpriseUser(eu);
         
         return user;
     }
