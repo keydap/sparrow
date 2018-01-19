@@ -1439,9 +1439,12 @@ func (rs *Resource) FilterAndSerialize(attrs map[string]*AttributeParam, include
 
 		atType := at.GetType()
 		if atType.SchemaId != rs.resType.Schema {
-			if coreObj[atType.SchemaId] == nil {
+			tmp := coreObj[atType.SchemaId]
+			if tmp == nil {
 				obj = make(map[string]interface{})
 				coreObj[atType.SchemaId] = obj
+			} else {
+				obj = tmp.(map[string]interface{}) // type assertion
 			}
 		}
 
