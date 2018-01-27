@@ -54,7 +54,7 @@ public abstract class TestBase {
         authenticator = new SparrowAuthenticator("admin", "example.COM", "secret");
 
         client = new SparrowClient(baseApiUrl, baseOauthUrl, authenticator);
-        client.register(User.class, Group.class, Device.class);
+        client.register(User.class, Group.class, Device.class, RegisteredApp.class);
         utcDf.setTimeZone(TimeZone.getTimeZone("UTC"));
 
         client.authenticate();
@@ -62,7 +62,7 @@ public abstract class TestBase {
         System.out.println(authenticator.getToken());
         
         unAuthClient = new SparrowClient(baseApiUrl);
-        unAuthClient.register(User.class, Group.class, Device.class);
+        unAuthClient.register(User.class, Group.class, Device.class, RegisteredApp.class);
     }
     
     public static <T> void deleteAll(Class<T> resClass) {
@@ -101,7 +101,7 @@ public abstract class TestBase {
         SparrowAuthenticator authenticator = new SparrowAuthenticator(username, "example.COM", password);
 
         SparrowClient client = new SparrowClient(baseApiUrl, baseOauthUrl, authenticator);
-        client.register(User.class, Group.class, Device.class);
+        client.register(User.class, Group.class, Device.class, RegisteredApp.class);
         client.authenticate();
         
         return client;
