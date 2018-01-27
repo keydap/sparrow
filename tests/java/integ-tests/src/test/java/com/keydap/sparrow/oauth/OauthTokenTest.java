@@ -55,7 +55,6 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.keydap.sparrow.RegisterAppRequest;
 import com.keydap.sparrow.RegisteredApp;
 import com.keydap.sparrow.Response;
 import com.keydap.sparrow.TestBase;
@@ -105,6 +104,7 @@ public class OauthTokenTest extends TestBase {
     
     @BeforeClass
     public static void setup() throws Exception {
+        deleteAll(RegisteredApp.class);
         httpClient = HttpClientBuilder.create().build();
         oHttpClient = new URLConnectionClient();
 
@@ -155,7 +155,9 @@ public class OauthTokenTest extends TestBase {
     }
     
     private void registerClient() throws Exception {
-        RegisterAppRequest req = new RegisterAppRequest("test", redirectUri);
+        RegisteredApp req = new RegisteredApp();
+        req.setName("test");
+        req.setRedirectUri(redirectUri);
         Response<RegisteredApp> appResp = client.registerApp(req);
         assertEquals(HttpStatus.SC_CREATED, appResp.getHttpCode());
 
@@ -165,7 +167,7 @@ public class OauthTokenTest extends TestBase {
         clientSecret = app.getSecret();
         System.out.println(clientSecret);
         
-        encodedRedirectUri = URLEncoder.encode(app.getRedUri(), "utf-8");
+        encodedRedirectUri = URLEncoder.encode(app.getRedirectUri(), "utf-8");
     }
     
     @Test
