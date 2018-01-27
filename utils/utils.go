@@ -20,7 +20,7 @@ const FILE_PERM os.FileMode = 0644 //rw-r--r--
 
 var log logger.Logger
 
-var urlEncoder = base64.URLEncoding.WithPadding(base64.NoPadding)
+var urlEncoder = base64.URLEncoding.WithPadding(base64.StdPadding)
 
 func init() {
 	log = logger.GetLogger("sparrow.utils")
