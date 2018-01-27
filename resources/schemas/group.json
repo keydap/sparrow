@@ -12,7 +12,7 @@
             "caseExact":false,
             "mutability":"readWrite",
             "returned":"default",
-            "uniqueness":"none"
+            "uniqueness":"server"
         },
         {
             "name":"members",
