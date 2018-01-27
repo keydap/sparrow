@@ -1,0 +1,14 @@
+{
+    "schemas":[
+        "urn:ietf:params:scim:schemas:core:2.0:ResourceType"
+    ],
+    "id":"Application",
+    "name":"Application",
+    "endpoint":"/Applications",
+    "description":"Application",
+    "schema":"urn:keydap:params:scim:schemas:core:2.0:Application",
+    "meta":{
+        "location":"v2/ResourceTypes/Application",
+        "resourceType":"ResourceType"
+    }
+}

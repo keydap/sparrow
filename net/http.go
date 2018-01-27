@@ -116,7 +116,6 @@ func startHttp() {
 		return true
 	})
 
-	oauthRouter.HandleFunc("/register", registerClient).Methods("POST")
 	oauthRouter.HandleFunc("/token", sendToken).Methods("POST")
 	oauthRouter.HandleFunc("/consent", verifyConsent).Methods("POST")
 
@@ -412,6 +411,23 @@ func createResource(hc *httpContext) {
 		err = base.NewBadRequestError(fmt.Sprintf("Resource data of type %s is sent to the wrong endpoint %s", rsType.Name, hc.r.RequestURI))
 		writeError(hc.w, err)
 		return
+	}
+	// FIXME special handling for Application resource
+	// this logic MUST go into a plugin, but that is
+	// part of yet another big change in future
+	// for now cooking it in the main hall
+	if rtByPath.Name == "Application" {
+		err = rs.CheckMissingRequiredAts()
+		if err != nil {
+			writeError(hc.w, err)
+			return
+		}
+
+		err = validateClient(rs, hc.OpContext)
+		if err != nil {
+			writeError(hc.w, err)
+			return
+		}
 	}
 
 	createCtx := base.CreateContext{InRes: rs, OpContext: hc.OpContext}

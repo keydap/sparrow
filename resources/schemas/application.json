@@ -1,0 +1,94 @@
+{
+    "id":"urn:keydap:params:scim:schemas:core:2.0:Application",
+    "name":"Application",
+    "description":"Metadata of an SSO capable service provider",
+    "attributes":[
+        {
+            "name":"name",
+            "type":"string",
+            "multiValued":false,
+            "description":"Name of the application",
+            "required":true,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"descritpion",
+            "type":"string",
+            "multiValued":false,
+            "description":"Description of the application",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"secret",
+            "type":"string",
+            "multiValued":false,
+            "description":"Application's secret. Though it is not 'required' server will always set a value",
+            "required":false,
+            "caseExact":true,
+            "mutability":"writeOnly",
+            "returned":"request",
+            "uniqueness":"none"
+        },
+        {
+            "name":"serverSecret",
+            "type":"string",
+            "multiValued":false,
+            "description":"A secret string value used as a key for securing the Application's OAuth codes. Though it is not 'required' server will always set a value",
+            "required":false,
+            "caseExact":true,
+            "mutability":"writeOnly",
+            "returned":"never",
+            "uniqueness":"none"
+        },
+        {
+            "name":"redirectUri",
+            "type":"string",
+            "multiValued":false,
+            "description":"Application's redirect URI",
+            "required":true,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"consentRequired",
+            "type":"boolean",
+            "multiValued":false,
+            "description":"Flag to detect if the consent is required",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"hasQueryInUri",
+            "type":"boolean",
+            "multiValued":false,
+            "description":"Flag to detect if there is query in the URI",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"never",
+            "uniqueness":"none"
+        },
+        {
+            "name":"regFromIPAddress",
+            "type":"string",
+            "multiValued":false,
+            "description":"IP Address from where this application was registered",
+            "required":false,
+            "caseExact":false,
+            "mutability":"writeOnly",
+            "returned":"default",
+            "uniqueness":"none"
+        }
+ ]}

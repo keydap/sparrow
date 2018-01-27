@@ -7,18 +7,33 @@ import (
 	//logger "github.com/juju/loggo"
 	"sparrow/base"
 	"sparrow/oauth"
+	"sparrow/utils"
 )
 
-func (pr *Provider) AddClient(ctx *base.OpContext, cl *oauth.Client) (err error) {
-	return pr.osl.AddClient(cl)
-}
-
-func (pr *Provider) DeleteClient(ctx *base.OpContext, id string) error {
-	return pr.osl.DeleteClient(id)
-}
-
 func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
-	return pr.osl.GetClient(id)
+	rs, err := pr.sl.Get(id, pr.RsTypes["Application"])
+	if err != nil {
+		log.Debugf("Could not find the oauth client with id %s [%#v]", id, err)
+		return nil
+	}
+
+	cl = &oauth.Client{}
+	cl.ConsentRequired = rs.GetAttr("consentRequired").GetSimpleAt().Values[0].(bool)
+	desc := rs.GetAttr("descritpion")
+	if desc != nil {
+		cl.Desc = desc.GetSimpleAt().GetStringVal()
+	}
+
+	cl.HasQueryInUri = rs.GetAttr("hasqueryinuri").GetSimpleAt().Values[0].(bool)
+	cl.Id = rs.GetId()
+	cl.Name = rs.GetAttr("name").GetSimpleAt().GetStringVal()
+	cl.RedUri = rs.GetAttr("redirecturi").GetSimpleAt().GetStringVal()
+	cl.Secret = rs.GetAttr("secret").GetSimpleAt().GetStringVal()
+	ss := rs.GetAttr("serversecret").GetSimpleAt().GetStringVal()
+	cl.ServerSecret = utils.B64Decode(ss)
+	cl.Time = rs.GetMeta().GetValue("created").(int64)
+
+	return cl
 }
 
 func (pr *Provider) StoreOauthSession(session *base.RbacSession) {

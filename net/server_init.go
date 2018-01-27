@@ -343,6 +343,9 @@ func writeSchemas(schemaDir string) {
 
 	user := filepath.Join(schemaDir, "user.json")
 	writeFile(user, user_schema)
+
+	application := filepath.Join(schemaDir, "application.json")
+	writeFile(application, application_schema)
 }
 
 func writeResourceTypes(rtDir string) {
@@ -354,4 +357,7 @@ func writeResourceTypes(rtDir string) {
 
 	user := filepath.Join(rtDir, "user.json")
 	writeFile(user, user_type)
+
+	application := filepath.Join(rtDir, "application.json")
+	writeFile(application, application_type)
 }

@@ -20,7 +20,8 @@ writeSchemas() {
   writeConst "device_schema" "resources/schemas/device.json" $targetFile
   writeConst "enterprise_user_schema" "resources/schemas/enterprise-user.json" $targetFile
   writeConst "group_schema" "resources/schemas/group.json" $targetFile
-  writeConst "user_schema" "resources/schemas/user.json" $targetFile  
+  writeConst "user_schema" "resources/schemas/user.json" $targetFile
+  writeConst "application_schema" "resources/schemas/application.json" $targetFile
 }
 
 writeResourceTypes() {
@@ -29,6 +30,7 @@ writeResourceTypes() {
   writeConst "device_type" "resources/types/device.json" $targetFile
   writeConst "group_type" "resources/types/group.json" $targetFile
   writeConst "user_type" "resources/types/user.json" $targetFile
+  writeConst "application_type" "resources/types/application.json" $targetFile
 }
 
 copyVersionFile() {

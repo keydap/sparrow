@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"sparrow/saml"
-	"sparrow/utils"
 	"strings"
 )
 
@@ -103,16 +102,6 @@ type IdToken struct {
 	FamilyName  string `json:"family_name"`
 	UserName    string `json:"preferred_username"`
 	Email       string `json:"email"`
-}
-
-func NewClient() *Client {
-	cl := &Client{}
-	cl.Id = utils.NewRandShaStr()
-	cl.Secret = utils.NewRandShaStr()
-	cl.Time = utils.DateTimeMillis()
-	cl.ServerSecret = utils.Rand32()
-
-	return cl
 }
 
 func (atr *AccessTokenResp) Serialize() []byte {

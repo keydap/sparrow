@@ -15,9 +15,6 @@ import (
 )
 
 var (
-	// a bucket that holds the clients.
-	BUC_SERVICE_PROVIDERS = []byte("service_providers")
-
 	BUC_SSO_SESSIONS = []byte("sso_sessions")
 
 	BUC_OAUTH_SESSIONS = []byte("oauth_sessions")
@@ -49,12 +46,7 @@ func Open(path string, tokenPurgeInterval int) (osl *OauthSilo, err error) {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(BUC_SERVICE_PROVIDERS)
-		if err != nil {
-			return err
-		}
-
-		_, err = tx.CreateBucketIfNotExists(BUC_OAUTH_SESSIONS)
+		_, err := tx.CreateBucketIfNotExists(BUC_OAUTH_SESSIONS)
 		if err != nil {
 			return err
 		}
@@ -100,59 +92,6 @@ func Open(path string, tokenPurgeInterval int) (osl *OauthSilo, err error) {
 	go removeExpiredSessions(osl, BUC_SSO_SESSIONS, BUC_IDX_SSO_SESSION_BY_JTI)
 
 	return osl, nil
-}
-
-func (osl *OauthSilo) AddClient(cl *Client) (err error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err = enc.Encode(cl)
-
-	if err != nil {
-		log.Warningf("Failed to encode client %s", err)
-		return err
-	}
-
-	err = osl.db.Update(func(tx *bolt.Tx) error {
-		clBucket := tx.Bucket(BUC_SERVICE_PROVIDERS)
-		return clBucket.Put([]byte(cl.Id), buf.Bytes())
-	})
-
-	return err
-}
-
-func (osl *OauthSilo) DeleteClient(id string) error {
-	err := osl.db.Update(func(tx *bolt.Tx) error {
-		clBucket := tx.Bucket(BUC_SERVICE_PROVIDERS)
-		return clBucket.Delete([]byte(id))
-	})
-
-	if err != nil {
-		log.Warningf("Failed to delete client %s %s", id, err)
-	}
-
-	return err
-}
-
-func (osl *OauthSilo) GetClient(id string) (cl *Client) {
-
-	err := osl.db.View(func(tx *bolt.Tx) error {
-		clBucket := tx.Bucket(BUC_SERVICE_PROVIDERS)
-		data := clBucket.Get([]byte(id))
-		var err error
-		if data != nil {
-			reader := bytes.NewReader(data)
-			dec := gob.NewDecoder(reader)
-			err = dec.Decode(&cl)
-		}
-
-		return err
-	})
-
-	if err != nil {
-		log.Warningf("Cound not find client with the id %s %s", id, err)
-	}
-
-	return cl
 }
 
 func (osl *OauthSilo) StoreOauthSession(session *base.RbacSession) {
