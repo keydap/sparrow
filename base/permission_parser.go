@@ -25,8 +25,15 @@ func ParseResPerms(group *Resource, resTypes map[string]*schema.ResourceType) ma
 			resNameAt := subAtMap["resname"]
 			opsArrAt := subAtMap["opsarr"]
 
-			resName := resNameAt.Values[0].(string)
-			opsArr := opsArrAt.Values[0].(string)
+			resName := ""
+			if resNameAt != nil {
+				resName = resNameAt.Values[0].(string)
+			}
+
+			opsArr := "[]"
+			if opsArrAt != nil {
+				opsArr = opsArrAt.Values[0].(string)
+			}
 
 			if resName == "*" {
 				// wildcard for all resources
