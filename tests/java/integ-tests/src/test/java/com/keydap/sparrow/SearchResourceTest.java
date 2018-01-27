@@ -54,6 +54,7 @@ public class SearchResourceTest extends TestBase {
         deleteAll(User.class);
         deleteAll(Device.class);
         deleteAll(Group.class);
+        deleteAll(RegisteredApp.class);
 
         // 'admin' user is the existing user, hence NOT inserted 
         // from here. It is present only to help some tests pass
