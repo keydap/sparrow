@@ -27,7 +27,7 @@ import com.keydap.sparrow.scim.User.EnterpriseUser;
  *
  * @author Kiran Ayyagari (kayyagari@keydap.com)
  */
-public class AddAuthorizationTest extends RbacTestBase {
+public class OperationAuthorizationTest extends RbacTestBase {
     
     @Test
     public void testAdd() {
