@@ -116,7 +116,7 @@ public class RbacTestBase extends TestBase {
         client.addResource(gPartialRead);
 
         Group gEnterpriseOnlyRead = new Group();
-        gEnterpriseOnlyRead.setDisplayName("PartialReadAny");
+        gEnterpriseOnlyRead.setDisplayName("EnterpriseOnlyReadAny");
         Permission enterpriseOnlyReadP = new Permission();
         enterpriseOnlyReadP.setResName("User");
         enterpriseOnlyReadP.setOpsArr(OperationPermission.withAllowAttributes("read", "username, urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:*", "ANY").asJsonArray());

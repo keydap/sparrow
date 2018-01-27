@@ -121,6 +121,7 @@ public class OperationAuthorizationTest extends RbacTestBase {
         PatchRequest pr = pg.create(id, modified, original, version);
         pr.setAttributes("*");
         resp = readOnlyClient.patchResource(pr);
+        assertEquals(HttpStatus.SC_FORBIDDEN, resp.getHttpCode());
         
         resp = partialReadClient.patchResource(pr);
         assertEquals(HttpStatus.SC_FORBIDDEN, resp.getHttpCode());
