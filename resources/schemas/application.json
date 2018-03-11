@@ -91,4 +91,9 @@
             "returned":"default",
             "uniqueness":"none"
         }
- ]}
+ ],
+ "meta":{
+        "resourceType":"Schema",
+        "location":"/v2/Schemas/urn:keydap:params:scim:schemas:core:2.0:Application"
+    }
+ }

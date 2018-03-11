@@ -93,7 +93,7 @@
 
         "notes": "",
         "meta": {
-            "location": "/v2/ServiceProviderConfig",
+            "location": "/v2/ServiceProviderConfigs",
             "resourceType": "ServiceProviderConfig",
             "created": "2017-02-26T18:14:58+05:30",
             "lastModified": "2017-02-26T18:14:58+05:30",

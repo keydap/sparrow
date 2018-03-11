@@ -79,7 +79,7 @@ func startHttp() {
 	scimRouter.HandleFunc("/Me", selfServe).Methods("GET", "POST", "PUT", "PATCH", "DELETE")
 
 	// generic service provider methods
-	scimRouter.HandleFunc("/ServiceProviderConfig", getSrvProvConf).Methods("GET")
+	scimRouter.HandleFunc("/ServiceProviderConfigs", getSrvProvConf).Methods("GET")
 	scimRouter.HandleFunc("/ResourceTypes", getResTypes).Methods("GET")
 	scimRouter.HandleFunc("/Schemas", getSchemas).Methods("GET")
 	scimRouter.HandleFunc("/Bulk", bulkUpdate).Methods("POST")

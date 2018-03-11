@@ -185,4 +185,9 @@
             "mutability":"readWrite",
             "returned":"default"
         }
- ]}
+ ],
+ "meta":{
+        "resourceType":"Schema",
+        "location":"/v2/Schemas/urn:keydap:params:scim:schemas:core:2.0:Device"
+    }
+}
