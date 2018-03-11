@@ -7,7 +7,9 @@ FILTER    = attrExp / logExp / *1"not" "(" FILTER ")"
 ;valuePath = attrPath "[" valFilter "]"
   ; FILTER uses sub-attributes of a parent attrPath
 
-valFilter = attrExp / logExp / *1"not" "(" valFilter ")"
+valFilter = attrExp / valLogExp / *1"not" "(" valFilter ")"
+
+valLogExp = attrExp SP ("and" / "or") SP attrExp
 
 attrExp   = (attrPath SP "pr") /
   (attrPath SP compareOp SP compValue)
