@@ -40,8 +40,8 @@ type Provider struct {
 	osl           *oauth.OauthSilo
 }
 
-const adminGroupId = "00000000-1000-0000-0000-000000000000"
-const adminUserId = "10000000-0000-0000-0000-000000000000"
+const adminGroupId = "01000000-0000-4000-4000-000000000000"
+const adminUserId = "00000000-0000-4000-4000-000000000000"
 
 var log logger.Logger
 
