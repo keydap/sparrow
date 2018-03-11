@@ -73,7 +73,7 @@
             "name":"hasQueryInUri",
             "type":"boolean",
             "multiValued":false,
-            "description":"Flag to detect if there is query in the URI",
+            "description":"Flag to detect if there is query in the URI. This is an internal attribute",
             "required":false,
             "caseExact":false,
             "mutability":"readWrite",
