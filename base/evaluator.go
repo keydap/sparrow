@@ -87,25 +87,26 @@ func (pr *PresenceEvaluator) Evaluate(rs *Resource) bool {
 }
 
 func (ar *ArithmeticEvaluator) Evaluate(rs *Resource) bool {
-	return rsCompare(ar.node, rs)
+	_, result := rsCompare(ar.node, rs)
+	return result
 }
 
-func rsCompare(node *FilterNode, rs *Resource) bool {
+func rsCompare(node *FilterNode, rs *Resource) (sa *SimpleAttribute, result bool) {
 	// last para of https://tools.ietf.org/html/rfc7644#section-3.4.2.1
 	atType := node.GetAtType()
 	if atType == nil {
-		return false
+		return nil, false
 	}
 
 	if atType.IsComplex() {
-		return false // comaprison should be only on sub-attributes, not on parent
+		return nil, false // comaprison should be only on sub-attributes, not on parent
 	}
 
 	parentType := atType.Parent()
 	if parentType != nil && parentType.MultiValued {
 		parentAt := rs.GetAttr(strings.ToLower(parentType.Name))
 		if parentAt == nil {
-			return false
+			return nil, false
 		}
 
 		atName := strings.ToLower(atType.Name)
@@ -113,27 +114,27 @@ func rsCompare(node *FilterNode, rs *Resource) bool {
 
 		for _, smap := range ca.SubAts {
 			if at, ok := smap[atName]; ok {
-				sa := at.GetSimpleAt()
+				sa = at.GetSimpleAt()
 				matched := _compare(sa, node, atType)
 
 				if matched {
-					return true
+					return sa, true
 				}
 			}
 		}
 
-		return false
+		return nil, false
 	}
 
 	at := rs.GetAttr(node.Name)
 
 	if at == nil {
-		return false
+		return nil, false
 	}
 
-	sa := at.GetSimpleAt()
+	sa = at.GetSimpleAt()
 
-	return _compare(sa, node, atType)
+	return sa, _compare(sa, node, atType)
 }
 
 func _compare(sa *SimpleAttribute, node *FilterNode, atType *schema.AttrType) bool {
