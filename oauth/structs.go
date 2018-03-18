@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
-	"sparrow/saml"
+	"sparrow/base"
 	"strings"
 )
 
@@ -30,17 +30,19 @@ const (
 )
 
 type Client struct {
-	Id              string                `json:"id"`
-	Name            string                `json:"name"`
-	Secret          string                `json:"secret"`
-	Time            int64                 `json:"time"`
-	Desc            string                `json:"desc"`
-	RedUri          string                `json:"redUri"`
-	ServerSecret    []byte                `json:"-"` // this secret is used as a key
-	HasQueryInUri   bool                  `json:"-"` // flag to indicate if there is query part in the path
-	ConsentRequired bool                  `json:"consentRequired"`
-	SamlGroupConf   saml.SamlGroupConfig  `json:"samlGroupConf,omitempty"`
-	SamlAtConf      []saml.SamlAttrConfig `json:"samlAtConf,omitempty"`
+	Id              string `json:"id"`
+	Name            string `json:"name"`
+	Secret          string `json:"secret"`
+	Time            int64  `json:"time"`
+	Desc            string `json:"desc"`
+	RedUri          string `json:"redUri"`
+	ServerSecret    []byte `json:"-"` // this secret is used as a key
+	HasQueryInUri   bool   `json:"-"` // flag to indicate if there is query part in the path
+	ConsentRequired bool   `json:"consentRequired"`
+	//SamlGroupConf   saml.SamlGroupConfig   `json:"samlGroupConf,omitempty"`
+	//SamlAtConf      []saml.SamlAttrConfig  `json:"samlAtConf,omitempty"`
+	//Scopes          map[string]*OauthScope `json:"-"`
+	Attributes map[string]*base.SsoAttr `json:"attrs"`
 }
 
 type AuthorizationReq struct {
@@ -83,25 +85,15 @@ type AccessTokenResp struct {
 	ExpiresIn int    `json:"expires_in,omitempty"`
 }
 
-type IdToken struct {
-	Jti      string `json:"jti"`
-	Domain   string `json:"d"`
-	Iss      string `json:"iss"`
-	Sub      string `json:"sub"`
-	Aud      string `json:"aud"`
-	Exp      int64  `json:"exp"`
-	Iat      int64  `json:"iat"`
-	AuthTime int64  `json:"auth_time"`
-	Nonce    string `json:"nonce,omitempty"`
-	Acr      string `json:"acr,omitempty"`
-	Amr      string `json:"amr,omitempty"`
-	Azp      string `json:"azp,omitempty"`
+type AttrProfile struct {
+	Id         string
+	Name       string
+	Attributes []*base.SsoAttr
+}
 
-	DisplayName string `json:"name"`
-	GivenName   string `json:"given_name"`
-	FamilyName  string `json:"family_name"`
-	UserName    string `json:"preferred_username"`
-	Email       string `json:"email"`
+type OauthScope struct {
+	Name       string
+	UserGroups []string
 }
 
 func (atr *AccessTokenResp) Serialize() []byte {
@@ -142,20 +134,12 @@ func (ep *ErrorResp) BuildErrorUri(redUri string) string {
 	return redUri
 }
 
-func (idt IdToken) ToJwt(key crypto.PrivateKey) string {
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, idt)
+func ToJwt(claims jwt.MapClaims, key crypto.PrivateKey) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	str, err := token.SignedString(key)
 	if err != nil {
 		panic(fmt.Errorf("could not create the JWT from IdToken %#v", err))
 	}
 
-	data, _ := json.Marshal(idt)
-	fmt.Println(string(data))
-
 	return str
-}
-
-// Implementing Valid() makes IdToken a valid Claims instance
-func (idt IdToken) Valid() error {
-	return nil
 }

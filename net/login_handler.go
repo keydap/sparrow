@@ -5,6 +5,7 @@ package net
 
 import (
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"net/http"
 	"net/url"
 	"sparrow/base"
@@ -274,8 +275,8 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	if areq.RespType == "id_token" || strings.HasSuffix(areq.RespType, " id_token") {
 		// create RbacSession and then generate ID Token
 		idt := createIdToken(session, cl, pr)
-		idt.Nonce = areq.Nonce
-		strIdt := idt.ToJwt(srvConf.PrivKey)
+		idt["nonce"] = areq.Nonce // TODO set the nonce to the UUID of the session
+		strIdt := oauth.ToJwt(idt, srvConf.PrivKey)
 		if hasCode {
 			tmpUri += "&"
 		}
@@ -308,50 +309,27 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	*/
 }
 
-func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Provider) oauth.IdToken {
-	idt := oauth.IdToken{}
-	idt.Aud = cl.RedUri
-	idt.AuthTime = session.Iat
-	idt.Domain = session.Domain
-	idt.Iat = time.Now().Unix()
-	idt.Exp = idt.Iat + 600 // TODO config
-	idt.Iss = issuerUrl
-	idt.Jti = utils.NewRandShaStr()
-	idt.Sub = session.Sub
+func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Provider) jwt.MapClaims {
+	idt := jwt.MapClaims{}
 
 	user, err := pr.GetUserById(session.Sub)
-	//FIXME what to do if user got deleted by then
-	if err == nil {
-		// FIXME the below code is ugly as hell, FIX IT by refactoring the XXXAttribute
-		// type system
-		idt.UserName = user.GetAttr("username").GetSimpleAt().GetStringVal()
-
-		displayNameAt := user.GetAttr("displayname")
-		if displayNameAt != nil {
-			idt.DisplayName = displayNameAt.GetSimpleAt().GetStringVal()
-		}
-
-		nameAt := user.GetAttr("name")
-		if nameAt != nil {
-			name := nameAt.GetComplexAt()
-			nameMap := name.GetFirstSubAt()
-
-			at := nameMap["givenname"]
-			if at != nil {
-				idt.GivenName = at.GetSimpleAt().GetStringVal()
-			}
-
-			at = nameMap["familyname"]
-			if at != nil {
-				idt.FamilyName = at.GetSimpleAt().GetStringVal()
-			}
-		}
-
-		emailAt := user.GetAttr("email")
-		if emailAt != nil {
-			idt.Email = emailAt.GetSimpleAt().GetStringVal()
-		}
+	if err != nil {
+		// TODO what to do?? return empty claims?
+		return idt
 	}
+
+	for _, ssoAt := range cl.Attributes {
+		ssoAt.GetValueFrom(user, idt)
+	}
+
+	idt["aud"] = cl.RedUri
+	idt["d"] = session.Domain
+	iat := time.Now().Unix()
+	idt["iat"] = iat
+	idt["exp"] = iat + 600 // TODO config
+	idt["iss"] = issuerUrl
+	idt["jti"] = utils.NewRandShaStr()
+	idt["sub"] = session.Sub
 
 	return idt
 }

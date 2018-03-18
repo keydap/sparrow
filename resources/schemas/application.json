@@ -90,6 +90,107 @@
             "mutability":"writeOnly",
             "returned":"default",
             "uniqueness":"none"
+        },
+        {
+            "name":"scopes",
+            "type":"complex",
+            "multiValued":true,
+            "description":"Application's scopes",
+            "required":false,
+            "subAttributes":[
+                {
+                    "name":"name",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"Name of the scope",
+                    "required":false,
+                    "caseExact":true,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"userGroups",
+                    "type":"string",
+                    "multiValued":true,
+                    "description":"The groups whose permissions will be applied before returning the attributes",
+                    "required":false,
+                    "caseExact":true,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                }
+            ],
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"attributes",
+            "type":"complex",
+            "multiValued":true,
+            "description":"Application's attributes",
+            "required":false,
+            "subAttributes":[
+                {
+                    "name":"name",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"Name to be used",
+                    "required":false,
+                    "caseExact":true,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"scimExpr",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"The SCIM expression to get the value",
+                    "required":false,
+                    "caseExact":true,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"staticVal",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"Static value if any",
+                    "required":false,
+                    "caseExact":true,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"staticMultiValDelim",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"String using which the static value will be split",
+                    "required":false,
+                    "caseExact":false,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                }
+            ],
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"enableSAML",
+            "type":"boolean",
+            "multiValued":false,
+            "description":"Flag to enable SAML",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
         }
  ],
  "meta":{

@@ -33,6 +33,32 @@ func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
 	cl.ServerSecret = utils.B64Decode(ss)
 	cl.Time = rs.GetMeta().GetValue("created").(int64)
 
+	tmpResAt := rs.GetAttr("attributes")
+	cl.Attributes = make(map[string]*base.SsoAttr)
+
+	if tmpResAt != nil {
+		resAt := tmpResAt.GetComplexAt()
+		for _, subAt := range resAt.SubAts {
+			ssoAt := &base.SsoAttr{}
+			for _, at := range subAt {
+				switch at.GetType().NormName {
+				case "name":
+					ssoAt.Name = at.GetStringVal()
+
+				case "scimexpr":
+					ssoAt.ScimExpr = at.GetStringVal()
+
+				case "staticval":
+					ssoAt.StaticVal = at.GetStringVal()
+
+				case "staticmultivaldelim":
+					ssoAt.StaticMultiValDelim = at.GetStringVal()
+				}
+			}
+			cl.Attributes[ssoAt.Name] = ssoAt
+		}
+	}
+
 	return cl
 }
 
