@@ -36,11 +36,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
-import org.apache.oltu.oauth2.client.HttpClient;
-import org.apache.oltu.oauth2.client.URLConnectionClient;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.jose4j.jwt.JwtClaims;
+import org.jose4j.jwt.consumer.JwtConsumer;
+import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -56,6 +57,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.keydap.sparrow.RegisteredApp;
+import com.keydap.sparrow.RegisteredApp.Attribute;
 import com.keydap.sparrow.Response;
 import com.keydap.sparrow.TestBase;
 
@@ -74,7 +76,6 @@ public class OauthTokenTest extends TestBase {
     private static Server server;
     
     static String redirectUri = "http://" + LOCALHOST + ":" + PORT + CTX_PATH;
-    static HttpClient oHttpClient;
     
     static CloseableHttpClient httpClient;
     
@@ -106,7 +107,6 @@ public class OauthTokenTest extends TestBase {
     public static void setup() throws Exception {
         deleteAll(RegisteredApp.class);
         httpClient = HttpClientBuilder.create().build();
-        oHttpClient = new URLConnectionClient();
 
         InetSocketAddress isa = new InetSocketAddress(LOCALHOST, PORT);
         server = new Server(isa);
@@ -158,6 +158,9 @@ public class OauthTokenTest extends TestBase {
         RegisteredApp req = new RegisteredApp();
         req.setName("test");
         req.setRedirectUri(redirectUri);
+        req.add(new Attribute("displayName", "displayName"));
+        req.add(new Attribute("email", "emails.value"));
+
         Response<RegisteredApp> appResp = client.registerApp(req);
         assertEquals(HttpStatus.SC_CREATED, appResp.getHttpCode());
 
@@ -248,6 +251,13 @@ public class OauthTokenTest extends TestBase {
         
         assertNull(code);
         assertNotNull(idToken);
+        System.out.println("oidc token:");
+        System.out.println(idToken);
+        printToken(idToken);
+        JwtConsumer consumer = new JwtConsumerBuilder().setSkipAllValidators().setDisableRequireSignature().setSkipSignatureVerification().build();
+        JwtClaims claims = consumer.processToClaims(idToken);
+        assertNotNull(claims.getClaimValue("email"));
+        assertNotNull(claims.getClaimValue("displayName"));
     }
     
     private static JsonObject parseJson(HttpResponse resp) throws Exception {
@@ -261,5 +271,11 @@ public class OauthTokenTest extends TestBase {
         assertNotNull(obj);
         
         return obj;
+    }
+
+    private void printToken(String token) {
+        String[] parts = token.split("\\.");
+        byte[] data = Base64.getDecoder().decode(parts[1]);
+        System.out.println(new String(data));
     }
 }
