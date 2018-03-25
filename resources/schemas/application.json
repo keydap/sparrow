@@ -126,10 +126,10 @@
             "uniqueness":"none"
         },
         {
-            "name":"attributes",
+            "name":"oauthAttributes",
             "type":"complex",
             "multiValued":true,
-            "description":"Application's attributes",
+            "description":"Application's OAuth attributes",
             "required":false,
             "subAttributes":[
                 {
@@ -182,10 +182,110 @@
             "uniqueness":"none"
         },
         {
-            "name":"enableSAML",
-            "type":"boolean",
+            "name":"acsUrl",
+            "type":"string",
             "multiValued":false,
-            "description":"Flag to enable SAML",
+            "description":"Assertion Consumer URL",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"sloUrl",
+            "type":"string",
+            "multiValued":false,
+            "description":"Single LOgout URL",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"metaUrl",
+            "type":"string",
+            "multiValued":false,
+            "description":"Metadata URL of the application",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"samlAttributes",
+            "type":"complex",
+            "multiValued":true,
+            "description":"Application's SAML attributes",
+            "required":false,
+            "subAttributes":[
+                {
+                    "name":"name",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"Name to be used",
+                    "required":false,
+                    "caseExact":true,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"format",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"Format of the attribute",
+                    "required":false,
+                    "caseExact":true,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"scimExpr",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"The SCIM expression to get the value",
+                    "required":false,
+                    "caseExact":true,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"staticVal",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"Static value if any",
+                    "required":false,
+                    "caseExact":true,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                },
+                {
+                    "name":"staticMultiValDelim",
+                    "type":"string",
+                    "multiValued":false,
+                    "description":"String using which the static value will be split",
+                    "required":false,
+                    "caseExact":false,
+                    "mutability":"readWrite",
+                    "returned":"default",
+                    "uniqueness":"none"
+                }
+            ],
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"assertionValidity",
+            "type":"integer",
+            "multiValued":false,
+            "description":"Time in seconds each generated assertion is valid for. Must be greater than 0. Default is 120 seconds",
             "required":false,
             "caseExact":false,
             "mutability":"readWrite",

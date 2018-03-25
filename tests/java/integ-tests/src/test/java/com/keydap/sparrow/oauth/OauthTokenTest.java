@@ -93,6 +93,30 @@ public class OauthTokenTest extends TestBase {
     String clientSecret;
     String encodedRedirectUri;
     
+    private static class ResponseHandler extends AbstractHandler {
+        public ResponseHandler() {
+            super();
+        }
+        
+        @Override
+        public void handle(String target,  Request baseRequest, HttpServletRequest request,  HttpServletResponse response) throws IOException, ServletException {
+            System.out.println(baseRequest);
+            code = baseRequest.getParameter("code");
+            idToken = baseRequest.getParameter("id_token");
+            
+            InputStream in = request.getInputStream();
+            BufferedReader br = new BufferedReader(new InputStreamReader(in));
+            String s = null;
+            spResponse = "";
+            while((s = br.readLine()) != null) {
+                spResponse += s + "\n";
+            }
+            br.close();
+            response.setStatus(HttpServletResponse.SC_OK);
+            response.getWriter().flush();
+        }
+    }
+    
     @Before
     public void reset() throws Exception {
         code = null;
@@ -111,34 +135,7 @@ public class OauthTokenTest extends TestBase {
         InetSocketAddress isa = new InetSocketAddress(LOCALHOST, PORT);
         server = new Server(isa);
         
-        AbstractHandler handler = new AbstractHandler() {
-            
-            @Override
-            public void handle(String target,  Request baseRequest,
-                    HttpServletRequest request,  HttpServletResponse response)
-                    throws IOException, ServletException {
-                
-                if(!target.endsWith("/tokentest")) {
-                    return;
-                }
-                
-                System.out.println(baseRequest);
-                code = baseRequest.getParameter("code");
-                idToken = baseRequest.getParameter("id_token");
-                
-                InputStream in = request.getInputStream();
-                BufferedReader br = new BufferedReader(new InputStreamReader(in));
-                String s = null;
-                spResponse = "";
-                while((s = br.readLine()) != null) {
-                    spResponse += s + "\n";
-                }
-                br.close();
-                response.setStatus(HttpServletResponse.SC_OK);
-                response.getWriter().flush();
-            }
-        };
-        
+        AbstractHandler handler = new ResponseHandler();
         server.setHandler(handler);
         
         server.start();

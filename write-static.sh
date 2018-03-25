@@ -12,6 +12,7 @@ writeHtml() {
   printf "package net\n\n" > $targetFile
   writeConst "login_html" "templates/login.html" $targetFile
   writeConst "consent_html" "templates/consent.html" $targetFile
+  writeConst "saml_response_html" "templates/saml_response.html" $targetFile
 }
 
 writeSchemas() {

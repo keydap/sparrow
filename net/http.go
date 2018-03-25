@@ -39,6 +39,7 @@ const SSO_COOKIE = "KSPAX" // Keydap Sparrow Auth X (X -> all the authenticated 
 
 var API_BASE = "/v2"       // NO slash at the end
 var OAUTH_BASE = "/oauth2" // NO slash at the end
+var SAML_BASE = "/saml"    // NO slash at the end
 var commaByte = []byte{','}
 
 var defaultDomain = "example.com"
@@ -118,6 +119,13 @@ func startHttp() {
 
 	oauthRouter.HandleFunc("/token", sendToken).Methods("POST")
 	oauthRouter.HandleFunc("/consent", verifyConsent).Methods("POST")
+
+	// SAMLv2 requests
+	samlRouter := router.PathPrefix(SAML_BASE).Subrouter()
+	// match /saml with any number of query parameters
+	samlRouter.HandleFunc("/idp", handleSamlReq).Methods("GET", "POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+		return true
+	})
 
 	router.HandleFunc("/login", showLogin).Methods("GET")
 	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")

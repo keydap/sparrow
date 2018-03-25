@@ -18,3 +18,5 @@ go get github.com/go-ldap/ldap
 go get github.com/gorilla/securecookie
 
 go get github.com/gorilla/sessions
+
+go get github.com/russellhaering/gosaml2

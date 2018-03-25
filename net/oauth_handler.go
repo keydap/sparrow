@@ -22,12 +22,14 @@ const BASIC_AUTHZ_PREFIX string = "Basic "
 
 // the number of seconds an oauth code is valid for
 const OAUTH_CODE_TTL int = 600
+const FROM_OAUTH = 0x1
+const FROM_SAML = 0x2
 
 type authFlow struct {
 	PsVerified   bool
 	TfaVerified  bool
 	TfaRequired  bool
-	FromOauth    bool
+	From         byte
 	GrantedAuthz bool
 	UserId       string
 	DomainCode   uint32
@@ -40,13 +42,13 @@ func validateClient(rs *base.Resource, opCtx *base.OpContext) error {
 	redUrl, err := url.Parse(strings.ToLower(redirectUriAt.GetStringVal()))
 
 	if err != nil {
-		msg := fmt.Sprintf("Invalid redirect URI %s", receivedCl.RedUri)
+		msg := fmt.Sprintf("Invalid redirect URI %s", receivedCl.Oauth.RedUri)
 		log.Debugf(msg)
 		return base.NewBadRequestError(msg)
 	}
 
 	if redUrl.Scheme != "http" && redUrl.Scheme != "https" {
-		msg := fmt.Sprintf("Unknown protocol in the redirect URI %s", receivedCl.RedUri)
+		msg := fmt.Sprintf("Unknown protocol in the redirect URI %s", receivedCl.Oauth.RedUri)
 		log.Debugf(msg)
 		return base.NewBadRequestError(msg)
 	}
@@ -111,8 +113,8 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if atr.Secret != cl.Secret {
-		log.Debugf("Invalid secret of the client %s [%s != %s]", atr.ClientId, atr.Secret, cl.Secret)
+	if atr.Secret != cl.Oauth.Secret {
+		log.Debugf("Invalid secret of the client %s [%s != %s]", atr.ClientId, atr.Secret, cl.Oauth.Secret)
 		sendOauthError(w, r, "", invalidCreds)
 		return
 	}
@@ -177,9 +179,9 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow, areq *oauth.AuthorizationReq, cl *oauth.Client) {
-	tmpUri := cl.RedUri
+	tmpUri := cl.Oauth.RedUri
 	// send code to the redirect URI
-	if cl.HasQueryInUri {
+	if cl.Oauth.HasQueryInUri {
 		tmpUri += "&code="
 	} else {
 		tmpUri += "?code="

@@ -6,10 +6,12 @@ import (
 
 type SsoAttr struct {
 	Name                string
+	Format              string // only applicable to SAML attributes
 	ScimExpr            string
 	atOrFilter          *scimAtOrFilter
 	StaticVal           string
 	StaticMultiValDelim string
+	Value               interface{} // only used when executing SAML attribute's template
 }
 
 type scimAtOrFilter struct {
@@ -17,10 +19,16 @@ type scimAtOrFilter struct {
 	filter *FilterNode
 }
 
-func (ssoAt *SsoAttr) GetValueFrom(res *Resource, container map[string]interface{}) {
+func (ssoAt *SsoAttr) GetValueInto(res *Resource, container map[string]interface{}) {
+	val := ssoAt.GetValueFrom(res)
+	if val != nil {
+		container[ssoAt.Name] = val
+	}
+}
+
+func (ssoAt *SsoAttr) GetValueFrom(res *Resource) interface{} {
 	if len(ssoAt.StaticVal) != 0 {
-		container[ssoAt.Name] = ssoAt.StaticVal
-		return
+		return ssoAt.StaticVal
 	}
 
 	ssoAt.parseAtExpr()
@@ -29,8 +37,7 @@ func (ssoAt *SsoAttr) GetValueFrom(res *Resource, container map[string]interface
 		if ssoAt.atOrFilter.filter != nil {
 			sa, result := rsCompare(ssoAt.atOrFilter.filter, res)
 			if result {
-				container[ssoAt.Name] = sa.Values[0]
-				return
+				return sa.Values[0]
 			}
 		} else {
 			atName = ssoAt.atOrFilter.atName
@@ -41,13 +48,15 @@ func (ssoAt *SsoAttr) GetValueFrom(res *Resource, container map[string]interface
 	if at != nil {
 		if at.IsSimple() {
 			sa := at.GetSimpleAt()
-			container[ssoAt.Name] = sa.Values[0]
+			return sa.Values[0]
 		} else {
 			//ca := at.GetComplexAt()
 			//subAt := ca.GetFirstSubAt()
 			log.Warningf("oauth attribute %s evaluated to a complex attribute, ignoring", atName)
 		}
 	}
+
+	return nil
 }
 
 func (ssoAt *SsoAttr) parseAtExpr() {

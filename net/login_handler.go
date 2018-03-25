@@ -4,7 +4,6 @@
 package net
 
 import (
-	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"net/http"
 	"net/url"
@@ -36,19 +35,13 @@ func authorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	af := &authFlow{}
-	af.FromOauth = true
+	af.From = FROM_OAUTH
 
 	setAuthFlow(af, w)
-	paramMap := make(map[string]string)
-
-	for k, v := range r.Form {
-		if len(v) > 1 {
-			err = fmt.Errorf("Invalid request the parameter %s is included more than once", k)
-			sendOauthError(w, r, "", err)
-			return
-		}
-
-		paramMap[k] = v[0]
+	paramMap, err := parseParamMap(r)
+	if err != nil {
+		sendOauthError(w, r, "", err)
+		return
 	}
 
 	// do a redirect to /login with all the parameters
@@ -123,16 +116,20 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		af = &authFlow{}
 	}
 
-	if af.FromOauth {
-		af.PsVerified = true
-		// TODO enable it when the account has TFA capability
-		af.TfaRequired = false
-		af.UserId = user.GetId()
-		af.DomainCode = prv.DomainCode()
-		setAuthFlow(af, w)
+	af.PsVerified = true
+	// TODO enable it when the account has TFA capability
+	af.TfaRequired = false
+	af.UserId = user.GetId()
+	af.DomainCode = prv.DomainCode()
+	setAuthFlow(af, w)
+
+	if af.From == FROM_OAUTH {
 		// FIXME show consent only if application/client config enforces it
 		login := templates["consent.html"]
 		login.Execute(w, paramMap)
+		return
+	} else if af.From == FROM_SAML {
+		sendSamlResponse(w, r, session, af)
 		return
 	}
 
@@ -165,7 +162,7 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 					ep.Desc = "User did not authorize the request"
 					ep.Err = oauth.ERR_ACCESS_DENIED
 				}
-				sendOauthError(w, r, cl.RedUri, ep)
+				sendOauthError(w, r, cl.Oauth.RedUri, ep)
 			}
 		}
 	} else {
@@ -209,7 +206,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 		return
 	}
 
-	if cl.RedUri != areq.RedUri {
+	if cl.Oauth.RedUri != areq.RedUri {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Mismatched redirect URI. Registered URI of the client is not matching with the value of redirect_uri parameter"
 		log.Debugf(ep.Desc)
@@ -220,8 +217,8 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	}
 
 	// send code to the redirect URI
-	tmpUri := cl.RedUri
-	if cl.HasQueryInUri {
+	tmpUri := cl.Oauth.RedUri
+	if cl.Oauth.HasQueryInUri {
 		tmpUri += "&"
 	} else {
 		tmpUri += "?"
@@ -318,11 +315,11 @@ func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Pro
 		return idt
 	}
 
-	for _, ssoAt := range cl.Attributes {
-		ssoAt.GetValueFrom(user, idt)
+	for _, ssoAt := range cl.Oauth.Attributes {
+		ssoAt.GetValueInto(user, idt)
 	}
 
-	idt["aud"] = cl.RedUri
+	idt["aud"] = cl.Oauth.RedUri
 	idt["d"] = session.Domain
 	iat := time.Now().Unix()
 	idt["iat"] = iat

@@ -18,24 +18,58 @@ func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
 	}
 
 	cl = &oauth.Client{}
-	cl.ConsentRequired = rs.GetAttr("consentRequired").GetSimpleAt().Values[0].(bool)
-	desc := rs.GetAttr("descritpion")
-	if desc != nil {
-		cl.Desc = desc.GetSimpleAt().GetStringVal()
-	}
-
-	cl.HasQueryInUri = rs.GetAttr("hasqueryinuri").GetSimpleAt().Values[0].(bool)
 	cl.Id = rs.GetId()
-	cl.Name = rs.GetAttr("name").GetSimpleAt().GetStringVal()
-	cl.RedUri = rs.GetAttr("redirecturi").GetSimpleAt().GetStringVal()
-	cl.Secret = rs.GetAttr("secret").GetSimpleAt().GetStringVal()
-	ss := rs.GetAttr("serversecret").GetSimpleAt().GetStringVal()
-	cl.ServerSecret = utils.B64Decode(ss)
+	cl.Name = safeGetStrVal("name", rs)
+	cl.Desc = safeGetStrVal("descritpion", rs)
 	cl.Time = rs.GetMeta().GetValue("created").(int64)
 
-	tmpResAt := rs.GetAttr("attributes")
-	cl.Attributes = make(map[string]*base.SsoAttr)
+	oauthConf := &oauth.ClientOauthConf{}
+	redUri := safeGetStrVal("redirecturi", rs)
+	if len(redUri) > 0 {
+		cl.Oauth = oauthConf
+		oauthConf.RedUri = redUri
+		oauthConf.ConsentRequired = rs.GetAttr("consentRequired").GetSimpleAt().Values[0].(bool)
+		oauthConf.HasQueryInUri = rs.GetAttr("hasqueryinuri").GetSimpleAt().Values[0].(bool)
+		oauthConf.Secret = safeGetStrVal("secret", rs)
+		ss := safeGetStrVal("serversecret", rs)
+		oauthConf.ServerSecret = utils.B64Decode(ss)
+		oauthAt := rs.GetAttr("oauthattributes")
+		oauthConf.Attributes = parseSsoAttributes(oauthAt)
+	}
 
+	samlConf := &oauth.ClientSamlConf{}
+	samlConf.ACSUrl = safeGetStrVal("acsurl", rs)
+	samlConf.SLOUrl = safeGetStrVal("slourl", rs)
+	samlConf.MetaUrl = safeGetStrVal("metaurl", rs)
+
+	if len(samlConf.ACSUrl) > 0 || len(samlConf.MetaUrl) > 0 { // enable SAML only if ACS or Metadata URLs are not empty
+
+		samlAt := rs.GetAttr("samlattributes")
+		samlConf.Attributes = parseSsoAttributes(samlAt)
+
+		validityAt := rs.GetAttr("assertionvalidity")
+		if validityAt != nil {
+			val := validityAt.GetSimpleAt().Values[0].(int64)
+			samlConf.AssertionValidity = int(val)
+		}
+
+		cl.Saml = samlConf
+	}
+
+	return cl
+}
+
+func safeGetStrVal(atName string, rs *base.Resource) string {
+	at := rs.GetAttr(atName)
+	if at == nil {
+		return ""
+	}
+
+	return at.GetSimpleAt().GetStringVal()
+}
+
+func parseSsoAttributes(tmpResAt base.Attribute) map[string]*base.SsoAttr {
+	m := make(map[string]*base.SsoAttr)
 	if tmpResAt != nil {
 		resAt := tmpResAt.GetComplexAt()
 		for _, subAt := range resAt.SubAts {
@@ -53,15 +87,17 @@ func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
 
 				case "staticmultivaldelim":
 					ssoAt.StaticMultiValDelim = at.GetStringVal()
+
+				case "format":
+					ssoAt.Format = at.GetStringVal()
 				}
 			}
-			cl.Attributes[ssoAt.Name] = ssoAt
+			m[ssoAt.Name] = ssoAt
 		}
 	}
 
-	return cl
+	return m
 }
-
 func (pr *Provider) StoreOauthSession(session *base.RbacSession) {
 	pr.osl.StoreOauthSession(session)
 }

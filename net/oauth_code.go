@@ -52,15 +52,15 @@ func newOauthCode(cl *oauth.Client, createdAt time.Time, userId string, domainCo
 	dst[macLen+aes.BlockSize+36+4+8] = byte(ctype)
 	// leave the rest of the data as 0s
 
-	block, _ := aes.NewCipher(cl.ServerSecret)
+	block, _ := aes.NewCipher(cl.Oauth.ServerSecret)
 	cbc := cipher.NewCBCEncrypter(block, iv)
 
 	cbc.CryptBlocks(dst[macLen+aes.BlockSize:], dst[macLen+aes.BlockSize:])
 
 	// generate a new key using ServerSecret and Secret
 	hmacKeySrc := make([]byte, 0)
-	hmacKeySrc = append(hmacKeySrc, []byte(cl.Secret)...)
-	hmacKeySrc = append(hmacKeySrc, cl.ServerSecret...)
+	hmacKeySrc = append(hmacKeySrc, []byte(cl.Oauth.Secret)...)
+	hmacKeySrc = append(hmacKeySrc, cl.Oauth.ServerSecret...)
 
 	hmacKey := sha256.Sum256(hmacKeySrc)
 
@@ -89,8 +89,8 @@ func decryptOauthCode(code string, cl *oauth.Client) *oAuthCode {
 	// verify HMAC first
 	// generate a new key using ServerSecret and Secret
 	hmacKeySrc := make([]byte, 0)
-	hmacKeySrc = append(hmacKeySrc, []byte(cl.Secret)...)
-	hmacKeySrc = append(hmacKeySrc, cl.ServerSecret...)
+	hmacKeySrc = append(hmacKeySrc, []byte(cl.Oauth.Secret)...)
+	hmacKeySrc = append(hmacKeySrc, cl.Oauth.ServerSecret...)
 
 	hmacKey := sha256.Sum256(hmacKeySrc)
 
@@ -106,7 +106,7 @@ func decryptOauthCode(code string, cl *oauth.Client) *oAuthCode {
 
 	// end of HMAC verification
 
-	block, _ := aes.NewCipher(cl.ServerSecret)
+	block, _ := aes.NewCipher(cl.Oauth.ServerSecret)
 	iv := data[macLen : macLen+aes.BlockSize]
 	cbc := cipher.NewCBCDecrypter(block, iv)
 	dst := make([]byte, len(data)-(macLen+aes.BlockSize))

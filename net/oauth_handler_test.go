@@ -23,8 +23,9 @@ func TestCodeGeneration(t *testing.T) {
 
 	cl := &oauth.Client{}
 	cl.Id = id
-	cl.Secret = utils.NewRandShaStr()
-	cl.ServerSecret = utils.B64Decode(utils.NewRandShaStr())
+	cl.Oauth = &oauth.ClientOauthConf{}
+	cl.Oauth.Secret = utils.NewRandShaStr()
+	cl.Oauth.ServerSecret = utils.B64Decode(utils.NewRandShaStr())
 
 	code := newOauthCode(cl, ttl, id, domCode, OAuth2)
 	fmt.Println(code)
