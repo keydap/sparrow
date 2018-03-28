@@ -39,6 +39,8 @@ public abstract class TestBase {
     protected static String baseApiUrl = BASE + "/v2";
     
     protected static String baseOauthUrl = BASE + "/oauth2";
+    
+    protected static String baseIdpUrl = BASE + "/saml/idp";
 
     protected static SparrowClient client;
     

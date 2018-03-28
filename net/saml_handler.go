@@ -2,9 +2,14 @@ package net
 
 import (
 	"bytes"
+	"compress/flate"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
+	"github.com/beevik/etree"
 	saml "github.com/russellhaering/gosaml2"
+	"github.com/russellhaering/goxmldsig"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"sparrow/base"
@@ -16,9 +21,7 @@ import (
 	"time"
 )
 
-const respXml = `
-<?xml version="1.0" encoding="UTF-8"?>
-<saml2p:Response Destination="{{.DestinationUrl}}" ID="{{.RespId}}" InResponseTo="{{.ReqId}}" IssueInstant="{{.CurTime}}" Version="2.0" xmlns:saml2p="urn:oasis:names:tc:SAML:2.0:protocol">
+const respXml = `<saml2p:Response Destination="{{.DestinationUrl}}" ID="{{.RespId}}" InResponseTo="{{.ReqId}}" IssueInstant="{{.CurTime}}" Version="2.0" xmlns:saml2p="urn:oasis:names:tc:SAML:2.0:protocol">
 	<saml2:Issuer xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">{{.IssuerUrl}}</saml2:Issuer>
 	<saml2p:Status>
 		<saml2p:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
@@ -45,10 +48,9 @@ const respXml = `
 	</saml2:Assertion>
 </saml2p:Response>`
 
-const attributeXml = `
-<saml2:Attribute Name="{{.Name}}" NameFormat="{{.Format}}">
- <saml2:AttributeValue>{{.Value}}</saml2:AttributeValue>
-</saml2:Attribute>`
+const attributeXml = `<saml2:Attribute Name="{{.Name}}" NameFormat="{{.Format}}">
+  <saml2:AttributeValue>{{.Value}}</saml2:AttributeValue>
+ </saml2:Attribute>`
 
 type samlResponse struct {
 	DestinationUrl string
@@ -68,6 +70,8 @@ type samlResponse struct {
 var respTemplate *template.Template
 var attributeTemplate *template.Template
 
+const saml_received_via = "saml_received_via"
+
 func init() {
 	respTemplate = &template.Template{}
 	attributeTemplate = &template.Template{}
@@ -77,6 +81,7 @@ func init() {
 
 // STEP 1 - check the presence of session otherwise redirect to login
 func handleSamlReq(w http.ResponseWriter, r *http.Request) {
+	log.Debugf("handling saml request")
 	session := getSession(r)
 	if session != nil {
 		// valid session exists serve the SAMLResponse
@@ -104,6 +109,11 @@ func handleSamlReq(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == http.MethodGet {
+		paramMap[saml_received_via] = http.MethodGet
+	}
+
+	log.Debugf("no valid session exists, redirecting to login")
 	// do a redirect to /login with all the parameters
 	redirect("/login", w, r, paramMap)
 }
@@ -135,15 +145,40 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 	var data []byte
 
 	samlReq := r.Form.Get("SAMLRequest")
-	if r.Method == http.MethodGet {
-		samlReq, err = url.QueryUnescape(samlReq)
-		if err == nil {
-			data = utils.B64Decode(samlReq)
+	receivedVia := r.Form.Get(saml_received_via)
+	log.Debugf("http method %s", r.Method)
+	if r.Method == http.MethodGet || receivedVia == http.MethodGet {
+		log.Debugf("Received SAMLRequest (raw): %s", samlReq)
+		if strings.Contains(samlReq, "%") {
+			log.Debugf("URL decoding the received SAMLRequest")
+			samlReq, _ = url.QueryUnescape(samlReq)
+		}
+		data, err = base64.StdEncoding.DecodeString(samlReq)
+		if err != nil {
+			err = fmt.Errorf("Failed to base64 decode the SAML authentication request %s", err.Error())
+			log.Debugf("%s", err.Error())
+			sendSamlError(w, err, http.StatusBadRequest)
+			return
+		}
+
+		// remove the GLIB header if present
+		if data[0] == 0x78 && data[1] == 0x9C {
+			data = data[2:]
+		}
+		r := flate.NewReader(bytes.NewReader(data))
+		data, err = ioutil.ReadAll(r)
+		r.Close()
+		if err != nil {
+			err = fmt.Errorf("Failed to inflate the SAML authentication request %s", err.Error())
+			log.Debugf("%s", err.Error())
+			sendSamlError(w, err, http.StatusBadRequest)
+			return
 		}
 	} else {
-		data = []byte(samlReq)
+		data = utils.B64Decode(samlReq)
 	}
 
+	log.Debugf("Received SAMLRequest: %s", string(data))
 	err = xml.Unmarshal(data, &samlAuthnReq)
 	if err != nil {
 		err = fmt.Errorf("Failed to parse the SAML authentication request %s", err.Error())
@@ -225,10 +260,17 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 	}
 
 	respTemplate.Execute(&buf, sp)
+	doc := etree.NewDocument()
+	doc.ReadFromBytes(buf.Bytes())
+
+	ctx := dsig.NewDefaultSigningContext(cl)
+	root, _ := ctx.SignEnveloped(doc.Root())
+	doc.SetRoot(root)
+	signedContent, _ := doc.WriteToBytes()
 	sp.RelayStateVal = r.Form.Get("RelayState")
-	sp.ResponseText = utils.B64Encode(buf.Bytes())
+	sp.ResponseText = base64.StdEncoding.WithPadding(base64.StdPadding).EncodeToString(signedContent)
 	log.Debugf("SAML response: %s", sp.ResponseText)
-	templates["saml_response_html"].Execute(w, sp)
+	templates["saml_response.html"].Execute(w, sp)
 }
 
 func sendSamlError(w http.ResponseWriter, err error, status int) {

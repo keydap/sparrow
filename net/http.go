@@ -146,6 +146,7 @@ func startHttp() {
 func logUrls() {
 	log.Infof("SCIM API is accessible at %s", issuerUrl+API_BASE)
 	log.Infof("OAuth2 and OpenIDConnect API is accessible at %s", issuerUrl+OAUTH_BASE)
+	log.Infof("SAML2 API is accessible at %s", issuerUrl+SAML_BASE)
 }
 
 func stopHttp() {
@@ -971,7 +972,7 @@ func keyFunc(jt *jwt.Token) (key interface{}, err error) {
 	}
 
 	prv := providers[domain.(string)]
-	return prv.PubKey, nil
+	return prv.Cert.PublicKey, nil
 }
 
 func parseAttrParams(attributes string, excludedAttributes string, rt *schema.ResourceType) (attrLst map[string]*base.AttributeParam, exclAttrLst map[string]*base.AttributeParam) {

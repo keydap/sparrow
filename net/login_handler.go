@@ -98,6 +98,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Debugf("password verified")
 	session := prv.GenSessionForUser(user)
 	prv.StoreSsoSession(session)
 
@@ -129,6 +130,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		login.Execute(w, paramMap)
 		return
 	} else if af.From == FROM_SAML {
+		log.Debugf("resuming SAML flow")
 		sendSamlResponse(w, r, session, af)
 		return
 	}

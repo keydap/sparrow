@@ -11,14 +11,20 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.URLEncoder;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.GZIPOutputStream;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -36,6 +42,8 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.apache.xml.security.utils.XMLUtils;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.AbstractHandler;
@@ -53,13 +61,27 @@ import org.openqa.selenium.WebElement;
 import org.openqa.selenium.htmlunit.HtmlUnitDriver;
 import org.openqa.selenium.support.ui.ExpectedCondition;
 import org.openqa.selenium.support.ui.WebDriverWait;
+import org.opensaml.core.config.InitializationService;
+import org.opensaml.core.xml.XMLObjectBuilderFactory;
+import org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport;
+import org.opensaml.core.xml.io.MarshallerFactory;
+import org.opensaml.core.xml.io.UnmarshallerFactory;
+import org.opensaml.core.xml.util.XMLObjectSupport;
+import org.opensaml.saml.saml2.core.AuthnRequest;
+import org.opensaml.saml.saml2.core.Issuer;
+import org.opensaml.saml.saml2.core.impl.AuthnRequestBuilder;
+import org.opensaml.saml.saml2.core.impl.IssuerBuilder;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.keydap.sparrow.RegisteredApp;
-import com.keydap.sparrow.RegisteredApp.Attribute;
+import com.keydap.sparrow.RegisteredApp.OauthAttribute;
+import com.keydap.sparrow.RegisteredApp.SamlAttribute;
 import com.keydap.sparrow.Response;
 import com.keydap.sparrow.TestBase;
+
+import net.shibboleth.utilities.java.support.xml.BasicParserPool;
+import net.shibboleth.utilities.java.support.xml.ParserPool;
 
 /**
  * Tests fetching of a OAuth token using a mix of httpclient
@@ -83,6 +105,8 @@ public class OauthTokenTest extends TestBase {
     
     static String code;
     static String idToken;
+    static String samlResponse;
+    static String relayState;
     
     static JsonParser parser = new JsonParser();
     
@@ -93,6 +117,21 @@ public class OauthTokenTest extends TestBase {
     String clientSecret;
     String encodedRedirectUri;
     
+    private static final XMLObjectBuilderFactory builderFactory;
+    
+    private static final UnmarshallerFactory unmarshallerFactory;
+    
+    static {
+        try {
+            Security.addProvider(new BouncyCastleProvider());
+            InitializationService.initialize();
+            builderFactory = XMLObjectProviderRegistrySupport.getBuilderFactory();
+            unmarshallerFactory = XMLObjectProviderRegistrySupport.getUnmarshallerFactory();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static class ResponseHandler extends AbstractHandler {
         public ResponseHandler() {
             super();
@@ -103,6 +142,8 @@ public class OauthTokenTest extends TestBase {
             System.out.println(baseRequest);
             code = baseRequest.getParameter("code");
             idToken = baseRequest.getParameter("id_token");
+            samlResponse = baseRequest.getParameter("SAMLResponse");
+            relayState = baseRequest.getParameter("RelayState");
             
             InputStream in = request.getInputStream();
             BufferedReader br = new BufferedReader(new InputStreamReader(in));
@@ -155,8 +196,13 @@ public class OauthTokenTest extends TestBase {
         RegisteredApp req = new RegisteredApp();
         req.setName("test");
         req.setRedirectUri(redirectUri);
-        req.add(new Attribute("displayName", "displayName"));
-        req.add(new Attribute("email", "emails.value"));
+        req.add(new OauthAttribute("displayName", "displayName"));
+        req.add(new OauthAttribute("email", "emails.value"));
+        
+        req.add(new SamlAttribute("displayName", "displayName"));
+        req.add(new SamlAttribute("email", "emails.value"));
+        req.setAcsUrl(redirectUri);
+        req.setSloUrl(redirectUri);
 
         Response<RegisteredApp> appResp = client.registerApp(req);
         assertEquals(HttpStatus.SC_CREATED, appResp.getHttpCode());
@@ -256,7 +302,56 @@ public class OauthTokenTest extends TestBase {
         assertNotNull(claims.getClaimValue("email"));
         assertNotNull(claims.getClaimValue("displayName"));
     }
-    
+
+    @Test
+    public void testSamlRequest() throws Exception {
+        AuthnRequestBuilder builder = (AuthnRequestBuilder)builderFactory.getBuilder(AuthnRequest.DEFAULT_ELEMENT_NAME);
+        AuthnRequest authnReq = builder.buildObject();
+        authnReq.setID("_" + UUID.randomUUID().toString());
+        authnReq.setAssertionConsumerServiceURL(redirectUri);
+        authnReq.setDestination(redirectUri);
+        Issuer issuer = ((IssuerBuilder)builderFactory.getBuilder(Issuer.DEFAULT_ELEMENT_NAME)).buildObject();
+        issuer.setValue(clientId);
+        authnReq.setIssuer(issuer);
+        
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        DeflaterOutputStream deflater = new DeflaterOutputStream(out);
+        XMLObjectSupport.marshallToOutputStream(authnReq, deflater);
+        deflater.finish();
+        deflater.flush();
+        
+        String samlReq = Base64.getEncoder().encodeToString(out.toByteArray());
+        
+        samlReq = URLEncoder.encode(samlReq, "utf-8");
+        String url = baseIdpUrl + "?SAMLRequest=" + samlReq + "&RelayState=" + encodedRedirectUri;
+        System.out.println(url);
+        browser.get(url);
+        
+        WebElement username = browser.findElement(By.name("username"));
+        username.sendKeys("admin");
+        
+        WebElement password = browser.findElement(By.name("password"));
+        password.sendKeys("secret");
+
+        WebElement login = browser.findElement(By.id("login"));
+        login.click();
+        
+        Thread.sleep(1000);
+
+        System.out.println(samlResponse);
+        System.out.println(relayState);
+        
+        assertNotNull(samlResponse);
+        assertEquals(redirectUri, relayState);
+        byte[] saml = Base64.getDecoder().decode(samlResponse);
+        String str = new String(saml);
+        BasicParserPool pool = new BasicParserPool();
+        pool.setNamespaceAware(true);
+        pool.initialize();
+        org.opensaml.saml.saml2.core.Response samlResp = (org.opensaml.saml.saml2.core.Response)XMLObjectSupport.unmarshallFromInputStream(pool, new ByteArrayInputStream(saml));
+        assertNotNull(samlResp);
+        // TODO validate the received SAML response
+    }
     private static JsonObject parseJson(HttpResponse resp) throws Exception {
         StatusLine sl = resp.getStatusLine();
         System.out.println(sl);

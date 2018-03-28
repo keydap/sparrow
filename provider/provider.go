@@ -6,6 +6,7 @@ package provider
 import (
 	"bytes"
 	"crypto"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	_ "github.com/dgrijalva/jwt-go"
@@ -33,7 +34,7 @@ type Provider struct {
 	sl            *silo.Silo
 	layout        *Layout
 	Name          string // the domain name
-	PubKey        crypto.PublicKey
+	Cert          *x509.Certificate
 	PrivKey       crypto.PrivateKey
 	immResIds     map[string]int // map of IDs of resources that cannot be deleted
 	domainCode    uint32

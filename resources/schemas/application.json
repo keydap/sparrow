@@ -291,6 +291,39 @@
             "mutability":"readWrite",
             "returned":"default",
             "uniqueness":"none"
+        },
+        {
+            "name":"x509Cert",
+            "type":"binary",
+            "multiValued":false,
+            "description":"X509 certificate used for signing the responses",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"rsaPrivKey",
+            "type":"binary",
+            "multiValued":false,
+            "description":"The RSA private key associated with this application's certficiate",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"never",
+            "uniqueness":"none"
+        },
+        {
+            "name":"trustedCerts",
+            "type":"binary",
+            "multiValued":true,
+            "description":"The certificates trusted by this application",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
         }
  ],
  "meta":{

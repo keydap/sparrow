@@ -56,6 +56,8 @@ func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
 		cl.Saml = samlConf
 	}
 
+	cl.Cert = pr.Cert
+	cl.PrivKey = pr.PrivKey
 	return cl
 }
 

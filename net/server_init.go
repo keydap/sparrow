@@ -193,7 +193,7 @@ func loadProviders(domainsDir string, sc *conf.ServerConf) {
 				if err != nil {
 					log.Infof("Could not create a provider for the domain %s [%s]", layout.Name(), err.Error())
 				} else {
-					prv.PubKey = sc.PubKey
+					prv.Cert = sc.CertChain[0]
 					prv.PrivKey = sc.PrivKey
 					prv.ServerId = sc.ServerId
 					providers[lName] = prv
@@ -234,7 +234,7 @@ func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 		panic(err)
 	}
 
-	prv.PubKey = sc.PubKey
+	prv.Cert = sc.CertChain[0]
 	prv.PrivKey = sc.PrivKey
 	prv.ServerId = sc.ServerId
 	providers[layout.Name()] = prv
@@ -321,6 +321,10 @@ func writeDefaultHtmlTemplates(tmplDir string) {
 	// consent.html
 	consentTmpl := filepath.Join(tmplDir, "consent.html")
 	writeFile(consentTmpl, consent_html)
+
+	// saml_response.html
+	samlResponseTmpl := filepath.Join(tmplDir, "saml_response.html")
+	writeFile(samlResponseTmpl, saml_response_html)
 }
 
 func writeFile(name string, content string) {
