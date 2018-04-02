@@ -41,7 +41,7 @@ copyVersionFile() {
 copyVersionFile() {
     cp resources/version.txt net/version.go
     ver="1.0-alpha"
-    rev=`git log --format=%H | head -n 1`
+    rev=`git log --format=%h | head -n 1`
     time=`date`
     sed -e "s/\$version/$ver/g" -i '' net/version.go
     sed -e "s/\$revision/$rev/g" -i '' net/version.go
