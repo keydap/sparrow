@@ -75,9 +75,9 @@ type ResourceConf struct {
 }
 
 type DomainConfig struct {
-	Scim           *ScimConfig    `json:"scim"`
-	Oauth          *OauthConfig   `json:"oauth"`
-	Ppolicy        *Ppolicy       `json:"ppolicy"`
+	Scim    *ScimConfig  `json:"scim"`
+	Oauth   *OauthConfig `json:"oauth"`
+	Ppolicy *Ppolicy     `json:"ppolicy"`
 }
 
 type Ppolicy struct {

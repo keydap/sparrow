@@ -742,7 +742,7 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(version))
+	w.Write([]byte(SparrowVersion))
 }
 
 func directLogin(w http.ResponseWriter, r *http.Request) {

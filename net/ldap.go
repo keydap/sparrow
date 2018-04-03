@@ -378,7 +378,7 @@ func sendRootDSE(messageId int, ls *LdapSession) {
 	addAttributeStringsPacket(vendorLdapAt, attributes, "Keydap Software")
 
 	versionLdapAt := &schema.LdapAttribute{LdapAttrName: "vendorVersion"}
-	addAttributeStringsPacket(versionLdapAt, attributes, "1.0") //TODO fix the hardcoded version
+	addAttributeStringsPacket(versionLdapAt, attributes, SparrowVersion)
 
 	namingContextsAt := &schema.LdapAttribute{LdapAttrName: "namingContexts"}
 	for k, _ := range providers {

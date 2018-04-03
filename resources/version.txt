@@ -1,7 +1,7 @@
 package net
 
-
-const version = `
+const SparrowVersion = `$version`
+const aboutStr = `
 Name     : Sparrow Identity Server
 Version  : $version
 Revision : $revision
