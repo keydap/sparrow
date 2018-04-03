@@ -109,8 +109,6 @@
     },
 
     "ppolicy": {
-
-    },
-
-    "passwordHashAlgo": "sha256"
+        "passwordHashAlgo": "sha256"
+    }
 }

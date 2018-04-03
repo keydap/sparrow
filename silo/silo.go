@@ -751,7 +751,7 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 		passwordAt := inRes.GetAttr("password")
 		if passwordAt != nil {
 			vals := passwordAt.GetSimpleAt().Values
-			vals[0] = utils.HashPassword(vals[0].(string), prvConf.PasswdHashType)
+			vals[0] = utils.HashPassword(vals[0].(string), prvConf.Ppolicy.PasswdHashType)
 		}
 
 		acType := rt.GetAtType("active")

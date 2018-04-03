@@ -78,11 +78,11 @@ type DomainConfig struct {
 	Scim           *ScimConfig    `json:"scim"`
 	Oauth          *OauthConfig   `json:"oauth"`
 	Ppolicy        *Ppolicy       `json:"ppolicy"`
-	PasswdHashAlgo string         `json:"passwordHashAlgo"`
-	PasswdHashType utils.HashType `json:"-"`
 }
 
 type Ppolicy struct {
+	PasswdHashAlgo string         `json:"passwordHashAlgo"`
+	PasswdHashType utils.HashType `json:"-"`
 }
 
 type OauthConfig struct {
@@ -163,13 +163,13 @@ func DefaultDomainConfig() *DomainConfig {
 	oauthCf.TokenPurgeInterval = 2 * 60   // 2 minutes
 
 	ppolicy := &Ppolicy{}
+	ppolicy.PasswdHashAlgo = "sha256"
+	ppolicy.PasswdHashType = utils.SHA256
 
 	cf := &DomainConfig{}
 	cf.Scim = scim
 	cf.Oauth = oauthCf
 	cf.Ppolicy = ppolicy
-	cf.PasswdHashAlgo = "sha256"
-	cf.PasswdHashType = utils.SHA256
 
 	return cf
 }
@@ -187,9 +187,9 @@ func ParseDomainConfig(file string) (*DomainConfig, error) {
 		return nil, err
 	}
 
-	cf.PasswdHashType = utils.FindHashType(strings.ToLower(cf.PasswdHashAlgo))
-	if cf.PasswdHashType == 0 {
-		panic(fmt.Errorf("%s is not a supported hashing algorithm", cf.PasswdHashAlgo))
+	cf.Ppolicy.PasswdHashType = utils.FindHashType(strings.ToLower(cf.Ppolicy.PasswdHashAlgo))
+	if cf.Ppolicy.PasswdHashType == 0 {
+		panic(fmt.Errorf("%s is not a supported hashing algorithm", cf.Ppolicy.PasswdHashAlgo))
 	}
 
 	return cf, nil

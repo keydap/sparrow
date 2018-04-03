@@ -83,8 +83,8 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	}
 
 	cf := prv.Config
-	cf.PasswdHashAlgo = strings.ToLower(cf.PasswdHashAlgo)
-	cf.PasswdHashType = utils.FindHashType(cf.PasswdHashAlgo)
+	cf.Ppolicy.PasswdHashAlgo = strings.ToLower(cf.Ppolicy.PasswdHashAlgo)
+	cf.Ppolicy.PasswdHashType = utils.FindHashType(cf.Ppolicy.PasswdHashAlgo)
 
 	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
 
