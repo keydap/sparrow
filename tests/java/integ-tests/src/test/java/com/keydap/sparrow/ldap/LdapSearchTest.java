@@ -14,10 +14,11 @@ import org.apache.directory.api.ldap.model.cursor.EntryCursor;
 import org.apache.directory.api.ldap.model.entry.Entry;
 import org.apache.directory.api.ldap.model.message.SearchScope;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
-import org.apache.directory.ldap.client.api.NoVerificationTrustManager;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
+
+import com.keydap.sparrow.TestBase;
 
 /**
  *
@@ -30,11 +31,7 @@ public class LdapSearchTest {
     @BeforeClass
     public static void connect() throws Exception {
         //System.setProperty("javax.net.debug", "ssl");
-        con = new LdapNetworkConnection("localhost", 7092);
-        con.getConfig().setTrustManagers(new NoVerificationTrustManager());
-        con.connect();
-        con.startTls();
-        con.bind("uid=admin,ou=Users,dc=example,dc=com", "secret");
+        con = TestBase.createLdapCon("uid=admin,ou=Users,dc=example,dc=com", "secret");
     }
     
     @Test

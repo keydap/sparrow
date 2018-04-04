@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.TimeZone;
 
+import org.apache.directory.ldap.client.api.LdapNetworkConnection;
+import org.apache.directory.ldap.client.api.NoVerificationTrustManager;
 import org.apache.http.HttpStatus;
 import org.junit.BeforeClass;
 
@@ -88,6 +90,15 @@ public abstract class TestBase {
         }
     }
 
+    public static LdapNetworkConnection createLdapCon(String userDn, String password) throws Exception {
+        LdapNetworkConnection con = new LdapNetworkConnection("localhost", 7092);
+        con.getConfig().setTrustManagers(new NoVerificationTrustManager());
+        con.connect();
+        con.startTls();
+        con.bind(userDn, password);
+        return con;
+    }
+    
     protected Email searchMails(User user, String mailType) {
         List<Email> emails = user.getEmails();
         for(Email m : emails) {

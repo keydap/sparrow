@@ -341,6 +341,26 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 		return
 	}
 
+	attrByRtName := make(map[string]map[string]*base.AttributeParam)
+	domainBaseDn := domainNameToDn(pr.Name)
+	for _, rt := range sc.ResTypes {
+		rp := ls.OpContext.Session.EffPerms[rt.Name]
+		if rp == nil {
+			continue
+		}
+
+		if !rp.ReadPerm.AllowAll {
+			tmp := make(map[string]*base.AttributeParam)
+			for k, v := range attrLst {
+				tmp[k] = v
+			}
+			filterAllowedAttrs(rp.ReadPerm.AllowAttrs, tmp)
+			attrByRtName[rt.Name] = tmp
+		} else {
+			attrByRtName[rt.Name] = attrLst
+		}
+	}
+
 	outPipe := make(chan *base.Resource, 0)
 
 	// search starts a go routine and returns nil error immediately
@@ -356,7 +376,7 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 
 	for rs := range outPipe {
 		//log.Debugf("sending ldap entry %s", rs)
-		sendSearchResultEntry(rs, attrLst, pr, messageId, ls)
+		sendSearchResultEntry(rs, pr, messageId, ls, domainBaseDn, attrByRtName)
 	}
 
 	entryEnvelope := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultSuccess, "")
@@ -404,10 +424,16 @@ func sendRootDSE(messageId int, ls *LdapSession) {
 	ls.con.Write(result.Bytes())
 }
 
-func sendSearchResultEntry(rs *base.Resource, attrLst map[string]*base.AttributeParam, pr *provider.Provider, messageId int, ls *LdapSession) {
+func sendSearchResultEntry(rs *base.Resource, pr *provider.Provider, messageId int, ls *LdapSession, domainBaseDn string, attrByRtName map[string]map[string]*base.AttributeParam) {
 	typeName := rs.GetType().Name
 	tmpl := pr.LdapTemplates[typeName]
 	if tmpl == nil {
+		return
+	}
+
+	attrLst := attrByRtName[typeName]
+	// no read permission for this ResourceType
+	if attrLst == nil {
 		return
 	}
 
@@ -422,7 +448,6 @@ func sendSearchResultEntry(rs *base.Resource, attrLst map[string]*base.Attribute
 		isGroup = true
 	}
 
-	domainBaseDn := domainNameToDn(pr.Name)
 	dn := fmt.Sprintf(tmpl.DnPrefix, dnAtVal, domainBaseDn)
 
 	entryEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")

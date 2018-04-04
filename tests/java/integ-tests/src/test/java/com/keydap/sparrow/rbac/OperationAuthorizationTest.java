@@ -11,6 +11,10 @@ import static org.junit.Assert.*;
 import java.util.List;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
+import org.apache.directory.api.ldap.model.cursor.EntryCursor;
+import org.apache.directory.api.ldap.model.entry.Entry;
+import org.apache.directory.api.ldap.model.message.SearchScope;
+import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.apache.http.HttpStatus;
 import org.junit.Test;
 
@@ -231,7 +235,6 @@ public class OperationAuthorizationTest extends RbacTestBase {
             assertNotNull(fetched.getSchemas());
         }
         
-        
         resp = partialWriteClient.searchResource(User.class);
         assertEquals(HttpStatus.SC_FORBIDDEN, resp.getHttpCode());
         
@@ -266,6 +269,65 @@ public class OperationAuthorizationTest extends RbacTestBase {
             assertNull(fetched.getEmails());
             assertNotNull(fetched.getEnterpriseUser());
         }
+    }
+    
+    @Test
+    public void testLdapSearch() throws Exception {
+        // test the same using LDAP connection
+        String rootSuffix = "dc=example,dc=com";
+        String usersSuffix = "ou=Users," + rootSuffix;
+        LdapNetworkConnection ldapCon = createLdapCon("uid=" + uPartialRead.getUserName() + "," + usersSuffix, uPartialRead.getPassword());
+        EntryCursor cursor = ldapCon.search(usersSuffix, "(id=*)", SearchScope.ONELEVEL, "*");
+        int count = 0;
+        while(cursor.next()) {
+            Entry e = cursor.get();
+            assertNull(e.get("cn"));
+            assertNull(e.get("sn"));
+            assertNotNull(e.get("uid"));
+            assertNotNull(e.get("mail"));
+            count++;
+        }
+        cursor.close();
+        ldapCon.close();
+        assertTrue(count >= 2);
+        
+        ldapCon = createLdapCon("uid=" + uReadOnly.getUserName() + "," + usersSuffix, uReadOnly.getPassword());
+        cursor = ldapCon.search(usersSuffix, "(cn=*)", SearchScope.ONELEVEL, "*");
+        count = 0;
+        while(cursor.next()) {
+            Entry e = cursor.get();
+            assertNotNull(e.get("cn"));
+            assertNotNull(e.get("sn"));
+            assertNotNull(e.get("uid"));
+            assertNotNull(e.get("mail"));
+            count++;
+        }
+        cursor.close();
+        ldapCon.close();
+        assertTrue(count >= 2);
+
+        // search for all resources
+        ldapCon = createLdapCon("uid=" + uReadOnly.getUserName() + "," + usersSuffix, uReadOnly.getPassword());
+        cursor = ldapCon.search(rootSuffix, "(objectClass=*)", SearchScope.SUBTREE, "*");
+        int userCount = 0;
+        int groupCount = 0;
+        
+        while(cursor.next()) {
+            Entry e = cursor.get();
+            String dn = e.getDn().toString();
+            //System.out.println(dn);
+            if(dn.contains(",ou=Groups,")) {
+                groupCount++;
+            }
+
+            if(dn.contains(",ou=Users,")) {
+                userCount++;
+            }
+        }
+        cursor.close();
+        ldapCon.close();
+        assertTrue(userCount >= 2);
+        assertTrue(groupCount >= 2);        
     }
     
     private void compareEmails(List<Email> lst1, List<Email> lst2) {

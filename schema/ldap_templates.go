@@ -194,6 +194,7 @@ outer:
 
 				if v == '}' {
 					atName = strings.TrimSpace(atName)
+					atName = strings.ToLower(atName)
 					if len(atName) == 0 {
 						buf.WriteString("{}")
 					} else {

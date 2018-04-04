@@ -91,7 +91,7 @@ public class RbacTestBase extends TestBase {
         Group gReadOnly = new Group();
         gReadOnly.setDisplayName("ReadOnly");
         Permission readP = new Permission();
-        readP.setResName("User");
+        readP.setResName("*");
         readP.setOpsArr(OperationPermission.withAllowAttributes("read", "*", "ANY").asJsonArray());
         gReadOnly.setPermissions(Collections.singletonList(readP));
         Member readOnlyMember1 = new Member();
