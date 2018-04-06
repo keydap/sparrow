@@ -34,6 +34,7 @@ type ResourceType struct {
 	AtsAlwaysRtn  map[string]int     // names of attributes that are always returned
 	AtsRequestRtn map[string]int     // names of attributes that are returned if requested
 	AtsDefaultRtn map[string]int     // names of attributes that are returned by default
+	AtsReadOnly   map[string]int     // names of attributes that are readonly
 }
 
 func LoadResourceType(name string, sm map[string]*Schema) (*ResourceType, error) {
@@ -83,6 +84,7 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 	rt.AtsAlwaysRtn = make(map[string]int)
 	rt.AtsRequestRtn = make(map[string]int)
 	rt.AtsDefaultRtn = make(map[string]int)
+	rt.AtsReadOnly = make(map[string]int)
 
 	if len(rt.SchemaExtensions) != 0 {
 		for _, ext := range rt.SchemaExtensions {
@@ -136,6 +138,10 @@ func copyReturnAttrs(rt *ResourceType, sc *Schema) {
 
 	for _, v := range sc.AtsDefaultRtn {
 		rt.AtsDefaultRtn[prefix+v] = 1
+	}
+
+	for _, v := range sc.AtsReadOnly {
+		rt.AtsReadOnly[prefix+v] = 1
 	}
 }
 

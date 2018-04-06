@@ -39,6 +39,7 @@ type Provider struct {
 	immResIds     map[string]int // map of IDs of resources that cannot be deleted
 	domainCode    uint32
 	osl           *oauth.OauthSilo
+	interceptors  []base.Interceptor
 }
 
 const adminGroupId = "01000000-0000-4000-4000-000000000000"
@@ -58,6 +59,9 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	prv = &Provider{}
 	prv.Schemas = schemas
+	prv.interceptors = make([]base.Interceptor, 2)
+	prv.interceptors[0] = &ApplicationInterceptor{}
+	prv.interceptors[1] = &RemoveNeverAttrInterceptor{}
 
 	prv.RsTypes, prv.RtPathMap, err = base.LoadResTypes(layout.ResTypesDir, prv.Schemas)
 	if err != nil {
@@ -242,7 +246,20 @@ func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resour
 		return nil, base.NewForbiddenError("Insufficent privileges to create a resource")
 	}
 
-	return prv.sl.Insert(crCtx.InRes)
+	err = prv.firePreInterceptors(crCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err = prv.sl.Insert(crCtx.InRes)
+
+	if err == nil {
+		for _, intrcptr := range prv.interceptors {
+			intrcptr.PostCreate(crCtx)
+		}
+	}
+
+	return res, err
 }
 
 func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) error {
@@ -409,4 +426,25 @@ func (prv *Provider) DomainCode() uint32 {
 	}
 
 	return prv.domainCode
+}
+
+func (prv *Provider) firePreInterceptors(ctx interface{}) (err error) {
+	for _, i := range prv.interceptors {
+		switch t := ctx.(type) {
+		case *base.CreateContext:
+			err = i.PreCreate(ctx.(*base.CreateContext))
+
+		case *base.PatchContext:
+			err = i.PrePatch(ctx.(*base.PatchContext))
+
+		default:
+			log.Warningf("Unknown operation context type %t", t)
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

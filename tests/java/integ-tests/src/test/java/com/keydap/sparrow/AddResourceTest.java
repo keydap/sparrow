@@ -85,6 +85,9 @@ public class AddResourceTest extends TestBase {
         assertEquals(1, created.getSchemas().length);
         assertEquals(resp.getHttpCode(), HttpStatus.SC_CREATED);
         assertNull(resp.getError());
+
+        // check never returned attributes are null
+        assertNull(created.getPassword());
         
         assertTrue(resp.getLocation().endsWith(created.getId()));
         

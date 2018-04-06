@@ -6,10 +6,8 @@ package net
 import (
 	"bytes"
 	"encoding/gob"
-	"fmt"
 	"net/http"
 	"net/url"
-	"sparrow/base"
 	"sparrow/oauth"
 	"sparrow/utils"
 	"strings"
@@ -33,34 +31,6 @@ type authFlow struct {
 	GrantedAuthz bool
 	UserId       string
 	DomainCode   uint32
-}
-
-func validateClient(rs *base.Resource, opCtx *base.OpContext) error {
-	var receivedCl oauth.Client
-	redirectUriAt := rs.GetAttr("redirecturi").GetSimpleAt()
-
-	redUrl, err := url.Parse(strings.ToLower(redirectUriAt.GetStringVal()))
-
-	if err != nil {
-		msg := fmt.Sprintf("Invalid redirect URI %s", receivedCl.Oauth.RedUri)
-		log.Debugf(msg)
-		return base.NewBadRequestError(msg)
-	}
-
-	if redUrl.Scheme != "http" && redUrl.Scheme != "https" {
-		msg := fmt.Sprintf("Unknown protocol in the redirect URI %s", receivedCl.Oauth.RedUri)
-		log.Debugf(msg)
-		return base.NewBadRequestError(msg)
-	}
-
-	rs.AddSA("secret", utils.NewRandShaStr())
-	rs.AddSA("serversecret", utils.NewRandShaStr())
-	hasQuery := (len(redUrl.RawQuery) != 0)
-	rs.AddSA("hasqueryinuri", hasQuery)
-
-	rs.AddSA("regfromipaddress", opCtx.ClientIP)
-
-	return nil
 }
 
 func sendToken(w http.ResponseWriter, r *http.Request) {

@@ -519,6 +519,14 @@ func _removeReadOnly(atg *AtGroup) {
 		for k, v := range atg.ComplexAts {
 			if v.GetType().IsReadOnly() {
 				delete(atg.ComplexAts, k)
+			} else {
+				for _, subAtMap := range v.SubAts {
+					for k, v := range subAtMap {
+						if v.GetType().IsReadOnly() {
+							delete(subAtMap, k)
+						}
+					}
+				}
 			}
 		}
 	}

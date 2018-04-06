@@ -421,23 +421,6 @@ func createResource(hc *httpContext) {
 		writeError(hc.w, err)
 		return
 	}
-	// FIXME special handling for Application resource
-	// this logic MUST go into a plugin, but that is
-	// part of yet another big change in future
-	// for now cooking it in the main hall
-	if rtByPath.Name == "Application" {
-		err = rs.CheckMissingRequiredAts()
-		if err != nil {
-			writeError(hc.w, err)
-			return
-		}
-
-		err = validateClient(rs, hc.OpContext)
-		if err != nil {
-			writeError(hc.w, err)
-			return
-		}
-	}
 
 	createCtx := base.CreateContext{InRes: rs, OpContext: hc.OpContext}
 	insertedRs, err := hc.pr.CreateResource(&createCtx)
@@ -562,6 +545,7 @@ func patchResource(hc *httpContext) {
 	if reqAttr == "" {
 		hc.w.WriteHeader(http.StatusNoContent)
 	} else {
+		// FIXME apply permissions
 		attrLst := parseAttrParam(reqAttr, rtByPath)
 		if attrLst != nil {
 			data := patchedRes.FilterAndSerialize(attrLst, true)

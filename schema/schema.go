@@ -9,6 +9,7 @@ import (
 	logger "github.com/juju/loggo"
 	"io/ioutil"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -73,6 +74,7 @@ type Schema struct {
 	AtsAlwaysRtn  []string // names of attributes that are always returned
 	AtsRequestRtn []string // names of attributes that are returned if requested
 	AtsDefaultRtn []string // names of attributes that are returned by default
+	AtsReadOnly   []string // names of attributes that are readonly
 }
 
 var log logger.Logger
@@ -242,11 +244,15 @@ func (sc *Schema) collectReturnAttrs() {
 	sc.AtsAlwaysRtn = make([]string, 0)
 	sc.AtsRequestRtn = make([]string, 0)
 	sc.AtsDefaultRtn = make([]string, 0)
+	sc.AtsReadOnly = make([]string, 0)
 
 	for _, attr := range sc.Attributes {
-		name := strings.ToLower(attr.Name)
+		name := attr.NormName
+		never := false
+		readonly := false
 		if attr.Returned == "never" {
 			sc.AtsNeverRtn = append(sc.AtsNeverRtn, name)
+			never = true
 		}
 
 		if attr.Returned == "always" {
@@ -260,7 +266,36 @@ func (sc *Schema) collectReturnAttrs() {
 		if attr.Returned == "default" {
 			sc.AtsDefaultRtn = append(sc.AtsDefaultRtn, name)
 		}
+
+		// readonly is not a return characteristic but this method
+		// is anyway iterating over all ATs so just placed this block here
+		if attr.IsReadOnly() {
+			sc.AtsReadOnly = append(sc.AtsReadOnly, name)
+			readonly = true
+		}
+
+		// when the parent is not read-only or never returned check
+		// for these qualities on sub-attributes
+		if !never || !readonly {
+			if attr.IsComplex() {
+				for _, at := range attr.SubAttributes {
+					subAtName := name + "." + at.NormName
+					if at.Returned == "never" {
+						sc.AtsNeverRtn = append(sc.AtsNeverRtn, subAtName)
+					} else if at.IsReadOnly() {
+						sc.AtsReadOnly = append(sc.AtsReadOnly, subAtName)
+					}
+				}
+			}
+		}
 	}
+
+	// sorting them just to keep them in order, helps while debugging
+	sort.Strings(sc.AtsAlwaysRtn)
+	sort.Strings(sc.AtsDefaultRtn)
+	sort.Strings(sc.AtsNeverRtn)
+	sort.Strings(sc.AtsReadOnly)
+	sort.Strings(sc.AtsRequestRtn)
 }
 
 func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
