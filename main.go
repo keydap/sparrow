@@ -19,7 +19,7 @@ func init() {
 
 func main() {
 	logger.ConfigureLoggers("<root>=debug;")
-	net.Start("/tmp/sparrow")
+	go net.Start("/tmp/sparrow")
 	//	net.Start("/Volumes/EVOSSD/sparrow-bench")
 
 	sigs := make(chan os.Signal, 1)

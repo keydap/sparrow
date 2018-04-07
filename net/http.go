@@ -150,11 +150,11 @@ func logUrls() {
 }
 
 func stopHttp() {
-	log.Debugf("Stopping HTTP server")
-	server.Close()
+	server.Close() // first stop the HTTP server to prevent incoming request processing
 	for _, pr := range providers {
 		pr.Close()
 	}
+	log.Debugf("Stopped HTTP server")
 }
 
 func bulkUpdate(w http.ResponseWriter, r *http.Request) {

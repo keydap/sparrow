@@ -57,8 +57,8 @@ func startLdap() error {
 }
 
 func stopLdap() {
-	log.Debugf("Stopping LDAP server")
 	listener.Close()
+	log.Debugf("Stopped LDAP server")
 }
 
 func acceptConns(listener *net.TCPListener) {
