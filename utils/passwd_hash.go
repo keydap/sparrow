@@ -42,6 +42,7 @@ func init() {
 }
 
 func FindHashType(algoName string) HashType {
+	algoName = strings.ToLower(algoName)
 	return nameHashTypeMap[algoName]
 }
 
@@ -79,11 +80,11 @@ func _hashPassword(plaintext string, salt []byte, algo HashType) []byte {
 }
 
 func ComparePassword(plaintext string, hashVal string) bool {
-	end := strings.IndexRune(hashVal, '}')
-	if end <= 0 {
-		return false
+	if !IsPasswordHashed(hashVal) {
+		return (plaintext == hashVal)
 	}
 
+	end := strings.IndexRune(hashVal, '}')
 	hashAlgo := hashVal[1:end]
 	hashBytes := B64Decode(hashVal[end+1:])
 
@@ -96,4 +97,34 @@ func ComparePassword(plaintext string, hashVal string) bool {
 	newHash := _hashPassword(plaintext, salt, nameHashTypeMap[hashAlgo])
 
 	return bytes.Equal(newHash, hashBytes)
+}
+
+func IsPasswordHashed(password string) bool {
+	pLen := len(password)
+	if pLen == 0 {
+		return false
+	}
+
+	if !strings.HasPrefix(password, "{") {
+		return false
+	}
+
+	endPos := 0
+	for i, c := range password[:] { // start from beginning anyway to keep endPos accurate
+		endPos = i
+		if c == '}' {
+			break
+		}
+	}
+
+	if endPos == (pLen - 1) {
+		return false
+	}
+
+	algoName := password[1:endPos]
+	if FindHashType(algoName) == 0 {
+		return false
+	}
+
+	return true
 }

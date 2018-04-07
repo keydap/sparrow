@@ -59,9 +59,6 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	prv = &Provider{}
 	prv.Schemas = schemas
-	prv.interceptors = make([]base.Interceptor, 2)
-	prv.interceptors[0] = &ApplicationInterceptor{}
-	prv.interceptors[1] = &RemoveNeverAttrInterceptor{}
 
 	prv.RsTypes, prv.RtPathMap, err = base.LoadResTypes(layout.ResTypesDir, prv.Schemas)
 	if err != nil {
@@ -89,6 +86,11 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	cf := prv.Config
 	cf.Ppolicy.PasswdHashAlgo = strings.ToLower(cf.Ppolicy.PasswdHashAlgo)
 	cf.Ppolicy.PasswdHashType = utils.FindHashType(cf.Ppolicy.PasswdHashAlgo)
+
+	prv.interceptors = make([]base.Interceptor, 3)
+	prv.interceptors[0] = &ApplicationInterceptor{}
+	prv.interceptors[1] = &RemoveNeverAttrInterceptor{}
+	prv.interceptors[2] = &PpolicyInterceptor{Config: cf.Ppolicy}
 
 	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
 
@@ -133,7 +135,6 @@ func (prv *Provider) createDefaultResources() error {
                    "id": "%s",
                    "userName":"admin",
                    "displayName":"Administrator",
-                   "password":"secret",
 				   "active": true,
                    "emails":[
                        {
@@ -151,6 +152,8 @@ func (prv *Provider) createDefaultResources() error {
 			return err
 		}
 
+		password := utils.HashPassword("secret", utils.SHA256)
+		userRes.AddSA("password", password)
 		_, err = prv.sl.InsertInternal(userRes)
 		if err != nil {
 			return err
@@ -365,7 +368,20 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err
 		}
 	}
 
-	return prv.sl.Patch(patchCtx.Rid, patchCtx.Pr, patchCtx.Rt)
+	err = prv.firePreInterceptors(patchCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err = prv.sl.Patch(patchCtx.Rid, patchCtx.Pr, patchCtx.Rt)
+
+	if err == nil {
+		for _, intrcptr := range prv.interceptors {
+			intrcptr.PostPatch(res, patchCtx)
+		}
+	}
+
+	return res, err
 }
 
 func (prv *Provider) Authenticate(username string, password string) (res *base.Resource) {

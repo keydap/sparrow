@@ -70,6 +70,10 @@ const LDAP_User_Entry = `{
 			"scimAttrPath": "groups",
 			"ldapAttrName": "member",
 			"format": "cn={display},ou=Groups,{dn}"
+		},
+		{
+			"scimAttrPath": "password",
+			"ldapAttrName": "userPassword"
 		}]
 }`
 

@@ -1004,7 +1004,6 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 		}
 	}
 
-	newHash := utils.HashPassword(newPasswd, pr.Config.Ppolicy.PasswdHashType)
 	patchCtx := &base.PatchContext{}
 	patchCtx.OpContext = ls.OpContext
 	patchCtx.Rid = user.GetId()
@@ -1016,7 +1015,7 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 	replace.Op = "replace"
 	replace.Path = "password"
 	replace.ParsedPath, _ = base.ParsePath(replace.Path, patchCtx.Rt)
-	replace.Value = newHash
+	replace.Value = newPasswd
 
 	patchReq := base.NewPatchReq()
 	patchReq.IfNoneMatch = user.GetVersion()

@@ -747,21 +747,6 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 		}
 	}
 
-	if rt.Name == "User" {
-		passwordAt := inRes.GetAttr("password")
-		if passwordAt != nil {
-			vals := passwordAt.GetSimpleAt().Values
-			vals[0] = utils.HashPassword(vals[0].(string), prvConf.Ppolicy.PasswdHashType)
-		}
-
-		acType := rt.GetAtType("active")
-		activeAt := inRes.GetAttr(acType.NormName)
-		if activeAt == nil {
-			sa := base.NewSimpleAt(acType, true)
-			inRes.AddSimpleAt(sa)
-		}
-	}
-
 	sl.storeResource(tx, inRes)
 
 	return inRes, nil

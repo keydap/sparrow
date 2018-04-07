@@ -8,6 +8,7 @@ package com.keydap.sparrow.ldap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.apache.directory.api.ldap.model.cursor.EntryCursor;
@@ -56,9 +57,11 @@ public class LdapSearchTest {
 
         Entry user = searchOne(userDn, "(uid=*)");
         assertEquals(groupDn.toLowerCase(), user.get("member").getString().toLowerCase());
+        assertNull(user.get("userPassword")); // password has a "never" return qualifier
         
         user = searchOne(userDn, "(objectClass=person)"); // test using objectClass filter
         assertEquals(groupDn.toLowerCase(), user.get("member").getString().toLowerCase());
+        assertNull(user.get("userPassword")); // password has a "never" return qualifier
         
         Entry group = searchOne(groupDn, "(cn=*)");
         assertEquals(userDn.toLowerCase(), group.get("uniqueMember").getString().toLowerCase());
