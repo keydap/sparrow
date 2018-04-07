@@ -16,7 +16,6 @@ import org.apache.directory.api.ldap.model.entry.Entry;
 import org.apache.directory.api.ldap.model.message.SearchScope;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.keydap.sparrow.TestBase;
@@ -25,7 +24,6 @@ import com.keydap.sparrow.TestBase;
  *
  * @author Kiran Ayyagari (kayyagari@keydap.com)
  */
-@Ignore
 public class LdapSearchTest {
     private static LdapNetworkConnection con;
     

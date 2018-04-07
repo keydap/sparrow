@@ -1,9 +1,11 @@
 package provider
 
 import (
+	"fmt"
 	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/utils"
+	"strings"
 )
 
 type PpolicyInterceptor struct {
@@ -21,7 +23,7 @@ func (pi *PpolicyInterceptor) PreCreate(crCtx *base.CreateContext) (err error) {
 		vals := passwordAt.GetSimpleAt().Values
 		passwdVal := vals[0].(string)
 		if !utils.IsPasswordHashed(passwdVal) {
-			vals[0] = utils.HashPassword(passwdVal, pi.Config.PasswdHashType)
+			vals[0] = utils.HashPassword(passwdVal, pi.Config.PasswdHashAlgo)
 		}
 	}
 
@@ -44,12 +46,29 @@ func (pi *PpolicyInterceptor) PrePatch(patchCtx *base.PatchContext) error {
 		return nil
 	}
 
+outer:
 	for _, o := range patchCtx.Pr.Operations {
-		// only modify user's password attribute do not touch any other password attribute
-		if o.ParsedPath.ParentType == nil && o.ParsedPath.AtType.NormName == "password" {
+		if o.Op == "remove" {
+			continue
+		}
+
+		// only modify user's password attribute do not touch any other container's password attribute
+		if o.ParsedPath == nil {
+			m := o.Value.(map[string]interface{})
+			for k, v := range m {
+				if strings.ToLower(k) == "password" {
+					passwdVal := fmt.Sprint(v) // do not cast to guard against malicious input e.g an integer was given instead of a string
+					if !utils.IsPasswordHashed(passwdVal) {
+						passwdVal = utils.HashPassword(passwdVal, pi.Config.PasswdHashAlgo)
+						m[k] = passwdVal
+					}
+					break outer
+				}
+			}
+		} else if o.ParsedPath.ParentType == nil && o.ParsedPath.AtType.NormName == "password" {
 			passwdVal := o.Value.(string)
 			if !utils.IsPasswordHashed(passwdVal) {
-				o.Value = utils.HashPassword(passwdVal, pi.Config.PasswdHashType)
+				o.Value = utils.HashPassword(passwdVal, pi.Config.PasswdHashAlgo)
 			}
 			break
 		}

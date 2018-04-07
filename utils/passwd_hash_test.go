@@ -10,8 +10,8 @@ import (
 const plaintext = "secret"
 
 func TestPasswordHashing(t *testing.T) {
-	for k, v := range hashTypeMap {
-		hash := HashPassword(plaintext, k)
+	for _, v := range nameHashMechMap {
+		hash := HashPassword(plaintext, v.AlgoName)
 		t.Log(hash)
 		result := ComparePassword(plaintext, hash)
 		if !result {

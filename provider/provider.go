@@ -85,7 +85,6 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	cf := prv.Config
 	cf.Ppolicy.PasswdHashAlgo = strings.ToLower(cf.Ppolicy.PasswdHashAlgo)
-	cf.Ppolicy.PasswdHashType = utils.FindHashType(cf.Ppolicy.PasswdHashAlgo)
 
 	prv.interceptors = make([]base.Interceptor, 3)
 	prv.interceptors[0] = &ApplicationInterceptor{}
@@ -152,7 +151,7 @@ func (prv *Provider) createDefaultResources() error {
 			return err
 		}
 
-		password := utils.HashPassword("secret", utils.SHA256)
+		password := utils.HashPassword("secret", prv.Config.Ppolicy.PasswdHashAlgo)
 		userRes.AddSA("password", password)
 		_, err = prv.sl.InsertInternal(userRes)
 		if err != nil {

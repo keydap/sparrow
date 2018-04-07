@@ -9,66 +9,71 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
-	"fmt"
 	"hash"
 	"strings"
 )
 
 const salt_size = 8 //64 bits, common size for all salts
 
-type HashType uint
-
-const (
-	MD5 HashType = 1 + iota
-	SHA1
-	SHA256
-	SHA512
-)
-
-var hashTypeMap = map[HashType]string{
-	MD5:    "md5",
-	SHA1:   "sha1",
-	SHA256: "sha256",
-	SHA512: "sha512",
+type hashMech struct {
+	Name     string
+	AlgoName string
+	Salted   bool
 }
 
-var nameHashTypeMap map[string]HashType
+var nameHashMechMap map[string]*hashMech
 
 func init() {
-	nameHashTypeMap = make(map[string]HashType)
-	for k, v := range hashTypeMap {
-		nameHashTypeMap[v] = k
+	arr := make([]*hashMech, 7)
+	arr[0] = &hashMech{Name: "md5", AlgoName: "md5", Salted: false}
+	arr[1] = &hashMech{Name: "sha", AlgoName: "sha", Salted: false}
+	arr[2] = &hashMech{Name: "ssha", AlgoName: "sha", Salted: true}
+	arr[3] = &hashMech{Name: "sha256", AlgoName: "sha256", Salted: false}
+	arr[4] = &hashMech{Name: "ssha256", AlgoName: "sha256", Salted: true}
+	arr[5] = &hashMech{Name: "sha512", AlgoName: "sha512", Salted: false}
+	arr[6] = &hashMech{Name: "ssha512", AlgoName: "sha512", Salted: true}
+
+	nameHashMechMap = make(map[string]*hashMech)
+	for _, v := range arr {
+		nameHashMechMap[v.Name] = v
 	}
 }
 
-func FindHashType(algoName string) HashType {
-	algoName = strings.ToLower(algoName)
-	return nameHashTypeMap[algoName]
+func IsHashAlgoSupported(algoName string) bool {
+	return (nameHashMechMap[strings.ToLower(algoName)] != nil)
 }
 
-func HashPassword(plaintext string, algo HashType) string {
-	salt := RandBytes(salt_size)
-	sum := _hashPassword(plaintext, salt, algo)
-	return "{" + hashTypeMap[algo] + "}" + B64Encode(sum)
-}
-
-func _hashPassword(plaintext string, salt []byte, algo HashType) []byte {
+func (hm *hashMech) newHash() hash.Hash {
 	var instance hash.Hash
-
-	switch algo {
-	case MD5:
+	switch hm.AlgoName {
+	case "md5":
 		instance = md5.New()
-	case SHA1:
+	case "sha":
 		instance = sha1.New()
-	case SHA256:
+	case "sha256":
 		instance = sha256.New()
-	case SHA512:
+	case "sha512":
 		instance = sha512.New()
-
-	default:
-		panic(fmt.Errorf("Unsupported hashing algorithm %s", algo))
 	}
 
+	return instance
+}
+
+func HashPassword(plaintext string, algo string) string {
+	algo = strings.ToLower(algo)
+	hashMech := nameHashMechMap[algo]
+
+	var salt []byte
+	if hashMech.Salted {
+		salt = RandBytes(salt_size)
+	}
+
+	sum := _hashPassword(plaintext, salt, hashMech)
+	return "{" + algo + "}" + B64Encode(sum)
+}
+
+func _hashPassword(plaintext string, salt []byte, hashMech *hashMech) []byte {
+	instance := hashMech.newHash()
 	instance.Write([]byte(plaintext))
 	if salt != nil {
 		instance.Write(salt)
@@ -80,51 +85,47 @@ func _hashPassword(plaintext string, salt []byte, algo HashType) []byte {
 }
 
 func ComparePassword(plaintext string, hashVal string) bool {
-	if !IsPasswordHashed(hashVal) {
+	hashMech := FindHashMech(hashVal)
+	if hashMech == nil {
 		return (plaintext == hashVal)
 	}
 
 	end := strings.IndexRune(hashVal, '}')
-	hashAlgo := hashVal[1:end]
 	hashBytes := B64Decode(hashVal[end+1:])
 
 	var salt []byte
-	if len(hashBytes) > salt_size {
+	if hashMech.Salted {
 		salt = make([]byte, salt_size)
 		copy(salt, hashBytes[:salt_size])
 	}
 
-	newHash := _hashPassword(plaintext, salt, nameHashTypeMap[hashAlgo])
+	newHash := _hashPassword(plaintext, salt, hashMech)
 
 	return bytes.Equal(newHash, hashBytes)
 }
 
 func IsPasswordHashed(password string) bool {
+	return (FindHashMech(password) != nil)
+}
+
+func FindHashMech(password string) *hashMech {
 	pLen := len(password)
 	if pLen == 0 {
-		return false
+		return nil
 	}
 
 	if !strings.HasPrefix(password, "{") {
-		return false
+		return nil
 	}
 
-	endPos := 0
-	for i, c := range password[:] { // start from beginning anyway to keep endPos accurate
-		endPos = i
-		if c == '}' {
-			break
-		}
-	}
+	endPos := strings.IndexRune(password, '}')
 
 	if endPos == (pLen - 1) {
-		return false
+		return nil
 	}
 
 	algoName := password[1:endPos]
-	if FindHashType(algoName) == 0 {
-		return false
-	}
+	algoName = strings.ToLower(algoName)
 
-	return true
+	return nameHashMechMap[algoName]
 }

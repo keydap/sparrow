@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sparrow/utils"
-	"strings"
 	"time"
 )
 
@@ -81,8 +80,7 @@ type DomainConfig struct {
 }
 
 type Ppolicy struct {
-	PasswdHashAlgo string         `json:"passwordHashAlgo"`
-	PasswdHashType utils.HashType `json:"-"`
+	PasswdHashAlgo string `json:"passwordHashAlgo"`
 }
 
 type OauthConfig struct {
@@ -164,7 +162,6 @@ func DefaultDomainConfig() *DomainConfig {
 
 	ppolicy := &Ppolicy{}
 	ppolicy.PasswdHashAlgo = "sha256"
-	ppolicy.PasswdHashType = utils.SHA256
 
 	cf := &DomainConfig{}
 	cf.Scim = scim
@@ -187,8 +184,7 @@ func ParseDomainConfig(file string) (*DomainConfig, error) {
 		return nil, err
 	}
 
-	cf.Ppolicy.PasswdHashType = utils.FindHashType(strings.ToLower(cf.Ppolicy.PasswdHashAlgo))
-	if cf.Ppolicy.PasswdHashType == 0 {
+	if !utils.IsHashAlgoSupported(cf.Ppolicy.PasswdHashAlgo) {
 		panic(fmt.Errorf("%s is not a supported hashing algorithm", cf.Ppolicy.PasswdHashAlgo))
 	}
 
