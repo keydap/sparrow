@@ -148,7 +148,10 @@ public class OperationAuthorizationTest extends RbacTestBase {
         pr = pg.create(id, patched, modified, version);
         pr.setAttributes("*");
         resp = partialWriteClient.patchResource(pr);
-        assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
+        assertEquals(HttpStatus.SC_NO_CONTENT, resp.getHttpCode());
+
+        // partialWriteClient has no read permission so fetch the resource using a different client
+        resp = readOnlyClient.getResource(original.getId(), User.class);
         User patched2 = resp.getResource();
         version = resp.getETag();
         compareEmails(original.getEmails(), patched2.getEmails());

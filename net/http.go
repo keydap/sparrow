@@ -545,12 +545,21 @@ func patchResource(hc *httpContext) {
 	if reqAttr == "" {
 		hc.w.WriteHeader(http.StatusNoContent)
 	} else {
-		// FIXME apply permissions
 		attrLst := parseAttrParam(reqAttr, rtByPath)
+		rp := hc.OpContext.Session.EffPerms[rtByPath.Name]
 		if attrLst != nil {
-			data := patchedRes.FilterAndSerialize(attrLst, true)
-			hc.w.WriteHeader(http.StatusOK)
-			hc.w.Write(data)
+			if !rp.ReadPerm.AllowAll {
+				filterAllowedAttrs(rp.ReadPerm.AllowAttrs, attrLst)
+			}
+
+			// send no content if none of the attributes are allowed to be read
+			if len(attrLst) == 0 {
+				hc.w.WriteHeader(http.StatusNoContent)
+			} else {
+				data := patchedRes.FilterAndSerialize(attrLst, true)
+				hc.w.WriteHeader(http.StatusOK)
+				hc.w.Write(data)
+			}
 		}
 	}
 }
