@@ -453,8 +453,6 @@ func (rs *Resource) AddMeta() *ComplexAttribute {
 	atMap := make(map[string]*SimpleAttribute)
 	ca.SubAts[RandStr()] = atMap
 
-	// FIXME the sub-attributes resourcetype, location and version can be injected on demand during querying
-	// this will save some disk space
 	resTypeAt := &SimpleAttribute{Name: "resourcetype"}
 	resTypeAt.atType = parentAt.SubAttrMap[resTypeAt.Name]
 	resTypeAt.Values = make([]interface{}, 1)

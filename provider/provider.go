@@ -307,7 +307,6 @@ func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, e
 
 		allow := getCtx.AllowRead(res)
 		if allow {
-			//FIXME filter resource attributes
 			return res, nil
 		} else {
 			return nil, base.NewForbiddenError("Insufficent privileges to read the resource")
