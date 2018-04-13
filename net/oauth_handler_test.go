@@ -52,3 +52,34 @@ func TestCodeGeneration(t *testing.T) {
 		t.Errorf("Decoding should fail when code is tampered")
 	}
 }
+
+func TestBitFlags(t *testing.T) {
+	af := &authFlow{}
+	yes := true
+	af.SetFromOauth(yes)
+	af.SetFromSaml(yes)
+	af.SetPasswordVerified(yes)
+	af.SetTfaRequired(yes)
+	af.SetTfaVerified(yes)
+	if af.BitFlag != 31 { // 2^5 - 1
+		t.Error("Incorrect bit flags")
+	}
+
+	yes = false
+	af.SetFromOauth(yes)
+	af.SetFromSaml(yes)
+	af.SetPasswordVerified(yes)
+	af.SetTfaRequired(yes)
+	af.SetTfaVerified(yes)
+	if af.BitFlag != 0 {
+		t.Error("Incorrect bit flags")
+	}
+
+	af = &authFlow{}
+	af.SetPasswordVerified(true)
+	af.SetFromOauth(true)
+	af.SetTfaRequired(false)
+	if !af.FromOauth() {
+		t.Error("oauth flag was not set")
+	}
+}

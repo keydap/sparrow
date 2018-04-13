@@ -99,7 +99,7 @@ func handleSamlReq(w http.ResponseWriter, r *http.Request) {
 	}
 
 	af := &authFlow{}
-	af.From = FROM_SAML
+	af.SetFromSaml(true)
 
 	setAuthFlow(af, w)
 

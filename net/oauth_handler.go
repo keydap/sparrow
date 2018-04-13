@@ -20,17 +20,74 @@ const BASIC_AUTHZ_PREFIX string = "Basic "
 
 // the number of seconds an oauth code is valid for
 const OAUTH_CODE_TTL int = 600
-const FROM_OAUTH = 0x1
-const FROM_SAML = 0x2
+
+const (
+	verified_password = 1 << iota
+	verified_tfa
+	required_tfa
+	from_oauth
+	from_saml
+)
 
 type authFlow struct {
-	PsVerified   bool
-	TfaVerified  bool
-	TfaRequired  bool
-	From         byte
-	GrantedAuthz bool
-	UserId       string
-	DomainCode   uint32
+	BitFlag    uint16 // holds the state of login options in various bits
+	UserId     string
+	DomainCode uint32
+}
+
+func (af *authFlow) setBit(bit uint16, yes bool) {
+	if yes {
+		af.BitFlag |= bit
+	} else {
+		af.BitFlag &= ^bit
+	}
+}
+
+func (af *authFlow) isSet(bit uint16) bool {
+	return (af.BitFlag & bit) == bit
+}
+
+func (af *authFlow) VerifiedPassword() bool {
+	return af.isSet(verified_password)
+}
+
+func (af *authFlow) SetPasswordVerified(yes bool) {
+	af.setBit(verified_password, yes)
+}
+
+func (af *authFlow) VerifiedTfa() bool {
+	return af.isSet(verified_tfa)
+}
+
+func (af *authFlow) SetTfaVerified(yes bool) {
+	af.setBit(verified_tfa, yes)
+}
+
+func (af *authFlow) RequiredTfa() bool {
+	return af.isSet(required_tfa)
+}
+
+func (af *authFlow) SetTfaRequired(yes bool) {
+	af.setBit(required_tfa, yes)
+}
+
+//func (af *authFlow) GrantedAuthz() bool {
+//}
+
+func (af *authFlow) FromOauth() bool {
+	return af.isSet(from_oauth)
+}
+
+func (af *authFlow) SetFromOauth(yes bool) {
+	af.setBit(from_oauth, yes)
+}
+
+func (af *authFlow) FromSaml() bool {
+	return af.isSet(from_saml)
+}
+
+func (af *authFlow) SetFromSaml(yes bool) {
+	af.setBit(from_saml, yes)
 }
 
 func sendToken(w http.ResponseWriter, r *http.Request) {
@@ -205,6 +262,7 @@ func getAuthFlow(r *http.Request) *authFlow {
 	var af authFlow
 	err = dec.Decode(&af)
 	if err != nil {
+		log.Debugf("unable to decode the authflow cookie %s", err)
 		return nil
 	}
 

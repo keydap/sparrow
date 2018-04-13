@@ -35,7 +35,7 @@ func authorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	af := &authFlow{}
-	af.From = FROM_OAUTH
+	af.SetFromOauth(true)
 
 	setAuthFlow(af, w)
 	paramMap, err := parseParamMap(r)
@@ -117,19 +117,19 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		af = &authFlow{}
 	}
 
-	af.PsVerified = true
+	af.SetPasswordVerified(true)
 	// TODO enable it when the account has TFA capability
-	af.TfaRequired = false
+	af.SetTfaRequired(false)
 	af.UserId = user.GetId()
 	af.DomainCode = prv.DomainCode()
 	setAuthFlow(af, w)
 
-	if af.From == FROM_OAUTH {
+	if af.FromOauth() {
 		// FIXME show consent only if application/client config enforces it
 		login := templates["consent.html"]
 		login.Execute(w, paramMap)
 		return
-	} else if af.From == FROM_SAML {
+	} else if af.FromSaml() {
 		log.Debugf("resuming SAML flow")
 		sendSamlResponse(w, r, session, af)
 		return
@@ -143,7 +143,7 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 	af := getAuthFlow(r)
 
 	if af != nil {
-		if af.PsVerified {
+		if af.VerifiedPassword() {
 			r.ParseForm()
 			consent := r.Form.Get("consent")
 			if consent == "authorize" {
