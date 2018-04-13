@@ -104,12 +104,12 @@ func rsCompare(node *FilterNode, rs *Resource) (sa *SimpleAttribute, result bool
 
 	parentType := atType.Parent()
 	if parentType != nil && parentType.MultiValued {
-		parentAt := rs.GetAttr(strings.ToLower(parentType.Name))
+		parentAt := rs.GetAttr(parentType.NormName)
 		if parentAt == nil {
 			return nil, false
 		}
 
-		atName := strings.ToLower(atType.Name)
+		atName := atType.NormName
 		ca := parentAt.GetComplexAt()
 
 		for _, smap := range ca.SubAts {

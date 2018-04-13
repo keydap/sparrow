@@ -32,8 +32,7 @@ func init() {
 type FilterNode struct {
 	Op        string
 	Name      string
-	ResType   *schema.ResourceType // resource type this attribute belongs to
-	atType    *schema.AttrType     // access AT type using Getter and Setter
+	atType    *schema.AttrType // access AT type using Getter and Setter
 	Value     string
 	NormValue interface{}
 	NvBytes   []byte // the norm value in bytes

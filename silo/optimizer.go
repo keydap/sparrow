@@ -365,7 +365,6 @@ func scanCounts(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl 
 }
 
 func equalityScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
-	node.ResType = rt
 	atType := rt.GetAtType(node.Name)
 	node.SetAtType(atType)
 	if atType == nil {
@@ -385,7 +384,6 @@ func equalityScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, s
 }
 
 func containsStringScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
-	node.ResType = rt
 	atType := rt.GetAtType(node.Name)
 	node.SetAtType(atType)
 	if atType == nil {
@@ -457,7 +455,6 @@ func containsStringScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt
 }
 
 func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
-	node.ResType = rt
 	atType := rt.GetAtType(node.Name)
 	node.SetAtType(atType)
 	if atType == nil {
@@ -531,7 +528,6 @@ func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl
 
 func presenceScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
 	// should we consider the count for more than one resource if searched at the server root? YES
-	node.ResType = rt
 	atType := rt.GetAtType(node.Name)
 	node.SetAtType(atType)
 	if atType == nil {
