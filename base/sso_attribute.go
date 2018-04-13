@@ -35,7 +35,10 @@ func (ssoAt *SsoAttr) GetValueFrom(res *Resource) interface{} {
 	atName := ssoAt.Name
 	if ssoAt.atOrFilter != nil {
 		if ssoAt.atOrFilter.filter != nil {
-			sa, result := rsCompare(ssoAt.atOrFilter.filter, res)
+			fltr := ssoAt.atOrFilter.filter
+			atType := res.GetType().GetAtType(fltr.Name)
+			fltr.SetAtType(atType)
+			sa, result := rsCompare(fltr, res)
 			if result {
 				return sa.Values[0]
 			}

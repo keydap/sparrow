@@ -197,7 +197,7 @@ public class OauthTokenTest extends TestBase {
         req.setName("test");
         req.setRedirectUri(redirectUri);
         req.add(new OauthAttribute("displayName", "displayName"));
-        req.add(new OauthAttribute("email", "emails.value"));
+        req.add(new OauthAttribute("email", "emails.value co \"admin\""));
         
         req.add(new SamlAttribute("displayName", "displayName"));
         req.add(new SamlAttribute("email", "emails.value"));
