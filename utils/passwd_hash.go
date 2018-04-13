@@ -91,8 +91,10 @@ func ComparePassword(plaintext string, hashVal string) bool {
 	}
 
 	end := strings.IndexRune(hashVal, '}')
-	hashBytes := B64Decode(hashVal[end+1:])
-
+	hashBytes, err := B64Decode(hashVal[end+1:])
+	if err != nil {
+		return false
+	}
 	var salt []byte
 	if hashMech.Salted {
 		salt = make([]byte, salt_size)

@@ -3,7 +3,6 @@ package net
 import (
 	"bytes"
 	"compress/flate"
-	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"github.com/beevik/etree"
@@ -153,7 +152,7 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 			log.Debugf("URL decoding the received SAMLRequest")
 			samlReq, _ = url.QueryUnescape(samlReq)
 		}
-		data, err = base64.StdEncoding.DecodeString(samlReq)
+		data, err = utils.B64Decode(samlReq)
 		if err != nil {
 			err = fmt.Errorf("Failed to base64 decode the SAML authentication request %s", err.Error())
 			log.Debugf("%s", err.Error())
@@ -175,7 +174,13 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 			return
 		}
 	} else {
-		data = utils.B64Decode(samlReq)
+		data, err = utils.B64Decode(samlReq)
+		if err != nil {
+			err = fmt.Errorf("Failed to base64 decode the SAML authentication request %s", err.Error())
+			log.Debugf("%s", err.Error())
+			sendSamlError(w, err, http.StatusBadRequest)
+			return
+		}
 	}
 
 	log.Debugf("Received SAMLRequest: %s", string(data))
@@ -268,7 +273,7 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 	doc.SetRoot(root)
 	signedContent, _ := doc.WriteToBytes()
 	sp.RelayStateVal = r.Form.Get("RelayState")
-	sp.ResponseText = base64.StdEncoding.WithPadding(base64.StdPadding).EncodeToString(signedContent)
+	sp.ResponseText = utils.B64Encode(signedContent)
 	log.Debugf("SAML response: %s", sp.ResponseText)
 	templates["saml_response.html"].Execute(w, sp)
 }

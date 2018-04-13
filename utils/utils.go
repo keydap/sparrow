@@ -24,6 +24,8 @@ var log logger.Logger
 
 var urlEncoder = base64.URLEncoding.WithPadding(base64.StdPadding)
 
+var stdEncoder = base64.StdEncoding.WithPadding(base64.StdPadding)
+
 func init() {
 	log = logger.GetLogger("sparrow.utils")
 }
@@ -171,11 +173,18 @@ func NewRandShaStr() string {
 	return B64Encode(hash[:])
 }
 
-func B64Encode(data []byte) string {
+func B64UrlEncode(data []byte) string {
 	return urlEncoder.EncodeToString(data)
 }
 
-func B64Decode(val string) []byte {
-	data, _ := urlEncoder.DecodeString(val)
-	return data
+func B64UrlDecode(val string) ([]byte, error) {
+	return urlEncoder.DecodeString(val)
+}
+
+func B64Encode(data []byte) string {
+	return stdEncoder.EncodeToString(data)
+}
+
+func B64Decode(val string) ([]byte, error) {
+	return stdEncoder.DecodeString(val)
 }

@@ -32,7 +32,7 @@ func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
 		oauthConf.HasQueryInUri = rs.GetAttr("hasqueryinuri").GetSimpleAt().Values[0].(bool)
 		oauthConf.Secret = safeGetStrVal("secret", rs)
 		ss := safeGetStrVal("serversecret", rs)
-		oauthConf.ServerSecret = utils.B64Decode(ss)
+		oauthConf.ServerSecret, _ = utils.B64Decode(ss) // safe to ignore error
 		oauthAt := rs.GetAttr("oauthattributes")
 		oauthConf.Attributes = parseSsoAttributes(oauthAt)
 	}

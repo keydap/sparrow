@@ -69,12 +69,12 @@ func newOauthCode(cl *oauth.Client, createdAt time.Time, userId string, domainCo
 	mac := hmacCalc.Sum(nil)
 
 	copy(dst, mac)
-	return utils.B64Encode(dst)
+	return utils.B64UrlEncode(dst)
 }
 
 func decryptOauthCode(code string, cl *oauth.Client) *oAuthCode {
-	data := utils.B64Decode(code)
-	if data == nil {
+	data, err := utils.B64UrlDecode(code)
+	if err != nil {
 		return nil
 	}
 

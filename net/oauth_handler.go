@@ -109,7 +109,16 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		idSecretPair := string(utils.B64Decode(authzHeader[len(BASIC_AUTHZ_PREFIX):]))
+		decodedSecret, err := utils.B64Decode(authzHeader[len(BASIC_AUTHZ_PREFIX):])
+		if err != nil {
+			ep := &oauth.ErrorResp{}
+			ep.Desc = "Failed to decode authorization header"
+			ep.Err = oauth.ERR_INVALID_REQUEST
+			sendOauthError(w, r, "", ep)
+			return
+		}
+
+		idSecretPair := string(decodedSecret)
 		tokens := strings.Split(idSecretPair, ":")
 		if len(tokens) != 2 {
 			ep := &oauth.ErrorResp{}
@@ -252,8 +261,8 @@ func getAuthFlow(r *http.Request) *authFlow {
 		return nil
 	}
 
-	data := utils.B64Decode(ck.Value)
-	if data == nil {
+	data, err := utils.B64UrlDecode(ck.Value)
+	if err != nil {
 		return nil
 	}
 
@@ -309,7 +318,7 @@ func setAuthFlow(af *authFlow, w http.ResponseWriter) {
 		enc := gob.NewEncoder(&buf)
 		enc.Encode(af)
 
-		sessionToken := utils.B64Encode(buf.Bytes())
+		sessionToken := utils.B64UrlEncode(buf.Bytes())
 
 		ck.Value = sessionToken
 		ck.Expires = time.Now().Add(2 * time.Minute)
