@@ -198,6 +198,8 @@ func (pc *PatchContext) EvalPatch(res *Resource) bool {
 	rp := pc.Session.EffPerms[pc.Rt.Name]
 	if rp.WritePerm == nil {
 		return false
+	} else if rp.WritePerm.AllowAll {
+		return true
 	}
 
 	entryOk := true
