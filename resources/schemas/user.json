@@ -225,7 +225,7 @@
                     "name":"display",
                     "type":"string",
                     "multiValued":false,
-                    "description":"A human-readable name, primarily used for display purposes.  READ-ONLY.",
+                    "description":"A human-readable name, primarily used for display purposes.",
                     "required":false,
                     "caseExact":false,
                     "mutability":"readWrite",
