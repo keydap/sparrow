@@ -21,31 +21,49 @@ func ParseResPerms(group *Resource, resTypes map[string]*schema.ResourceType) ma
 	perms := group.GetAttr("permissions")
 	if perms != nil {
 		permSubAts := perms.GetComplexAt().SubAts
+		// TODO avoid looping over all the perms once just for detecting a wildcard entry
 		for _, subAtMap := range permSubAts {
 			resNameAt := subAtMap["resname"]
-			opsArrAt := subAtMap["opsarr"]
 
 			resName := ""
 			if resNameAt != nil {
 				resName = resNameAt.Values[0].(string)
 			}
 
-			opsArr := "[]"
-			if opsArrAt != nil {
-				opsArr = opsArrAt.Values[0].(string)
-			}
-
+			// wildcard for all resources
 			if resName == "*" {
-				// wildcard for all resources
+				opsArrAt := subAtMap["opsarr"]
+				opsArr := "[]"
+				if opsArrAt != nil {
+					opsArr = opsArrAt.Values[0].(string)
+				}
+
 				for _, rt := range resTypes {
 					rp, err := createResPerms(opsArr, rt)
 					if err == nil {
 						resPerms[rt.Name] = rp
 					}
 				}
+				break // break out and loop again to process the non-wildcard entries
+			}
+		}
 
-				break // we do not need to process anything else
+		for _, subAtMap := range permSubAts {
+			resNameAt := subAtMap["resname"]
+
+			resName := ""
+			if resNameAt != nil {
+				resName = resNameAt.Values[0].(string)
+			}
+
+			if resName == "*" {
+				continue // this was already processed in the above loop
 			} else {
+				opsArrAt := subAtMap["opsarr"]
+				opsArr := "[]"
+				if opsArrAt != nil {
+					opsArr = opsArrAt.Values[0].(string)
+				}
 				rt := resTypes[resName]
 				if rt == nil {
 					log.Warningf("No resource type found with the name %s, ignoring permissions", resName)
