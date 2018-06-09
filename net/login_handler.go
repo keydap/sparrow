@@ -135,7 +135,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte("password verified"))
+	http.Redirect(w, r, "/ui", http.StatusFound)
 }
 
 // STEP 3. Authorization Server obtains End-User Consent/Authorization.

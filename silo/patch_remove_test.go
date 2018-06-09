@@ -28,7 +28,7 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 	assertIndexVal(deviceType.Name, "installedDate", utils.GetTimeMillis("2016-05-17T14:19:14Z"), false, t)
 
 	// apply the same patch on the already updated resource, resource should not get modified
-	pr.IfNoneMatch = updatedRs.GetVersion()
+	pr.IfMatch = updatedRs.GetVersion()
 	notUpdatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")

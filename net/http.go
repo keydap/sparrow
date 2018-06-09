@@ -52,6 +52,8 @@ var cookieKey []byte
 
 var issuerUrl = ""
 
+var uiHandler http.Handler
+
 func init() {
 	log = logger.GetLogger("sparrow.net")
 	cookieKey = utils.RandBytes(16)
@@ -72,6 +74,12 @@ func startHttp() {
 	router.StrictSlash(true)
 	router.HandleFunc("/", serveVersionInfo).Methods("GET")
 
+	// for serving the admin dashboard UI assets
+	fs := http.FileServer(http.Dir(homeDir + "/ui"))
+	uiHandler = http.StripPrefix("/ui/", fs)
+	router.HandleFunc("/ui/", serveUI).Methods("GET")
+	router.PathPrefix("/static/").Handler(fs)
+
 	// scim requests
 	scimRouter := router.PathPrefix(API_BASE).Subrouter()
 
@@ -89,6 +97,7 @@ func startHttp() {
 	scimRouter.HandleFunc("/.search", handleResRequest).Methods("POST")
 
 	// register routes for each resourcetype endpoint
+	// FIXME fix the routes with regex to ignore trailing / chars
 	for _, p := range providers {
 		for _, rt := range p.RsTypes {
 			scimRouter.HandleFunc("/ResourceTypes/"+rt.Name, getResTypes).Methods("GET")
@@ -176,10 +185,10 @@ func searchResource(hc *httpContext) {
 			return
 		}
 
-		ifNoneMatch := hc.r.Header.Get("If-None-Match")
-		if len(ifNoneMatch) != 0 {
+		ifMatch := hc.r.Header.Get("If-Match")
+		if len(ifMatch) != 0 {
 			version := rs.GetVersion()
-			if strings.Compare(ifNoneMatch, version) == 0 {
+			if strings.Compare(ifMatch, version) == 0 {
 				hc.w.Header().Add("Etag", version)
 				hc.w.WriteHeader(http.StatusNotModified)
 				return
@@ -476,7 +485,7 @@ func replaceResource(hc *httpContext) {
 	replaceCtx := base.ReplaceContext{InRes: rs, OpContext: hc.OpContext}
 	replaceCtx.Rid = rid
 	replaceCtx.Rt = rsType
-	replaceCtx.IfNoneMatch = hc.r.Header.Get("If-None-Match")
+	replaceCtx.IfMatch = hc.r.Header.Get("If-Match")
 	replacedRs, err := hc.pr.Replace(&replaceCtx)
 	if err != nil {
 		writeError(hc.w, err)
@@ -529,7 +538,7 @@ func patchResource(hc *httpContext) {
 		return
 	}
 
-	patchReq.IfNoneMatch = hc.r.Header.Get("If-None-Match")
+	patchReq.IfMatch = hc.r.Header.Get("If-Match")
 	patchCtx := base.PatchContext{Rid: rid, Rt: rtByPath, Pr: patchReq, OpContext: hc.OpContext}
 	patchedRes, err := hc.pr.Patch(&patchCtx)
 	if err != nil {
@@ -736,6 +745,36 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 
 func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(SparrowVersion))
+}
+
+func serveUI(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(SSO_COOKIE)
+	if err != nil {
+		showLogin(w, r)
+		return
+	}
+
+	pr, err := getPrFromParam(r)
+	if pr == nil {
+		showLogin(w, r)
+		return
+	}
+
+	session := pr.GetSsoSession(cookie.Value)
+
+	if session == nil {
+		log.Debugf("no session is found with the cookie %v", cookie)
+		showLogin(w, r)
+		return
+	}
+
+	if session.IsExpired() {
+		log.Debugf("Expired session %v", cookie)
+		showLogin(w, r)
+		return
+	}
+
+	uiHandler.ServeHTTP(w, r)
 }
 
 func directLogin(w http.ResponseWriter, r *http.Request) {

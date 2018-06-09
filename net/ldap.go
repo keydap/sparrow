@@ -1018,7 +1018,7 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 	replace.Value = newPasswd
 
 	patchReq := base.NewPatchReq()
-	patchReq.IfNoneMatch = user.GetVersion()
+	patchReq.IfMatch = user.GetVersion()
 	patchReq.Operations = append(patchReq.Operations, replace)
 	patchCtx.Pr = patchReq
 	_, err := pr.Patch(patchCtx)

@@ -12,9 +12,9 @@ import (
 )
 
 type PatchReq struct {
-	Schemas     []string
-	IfNoneMatch string
-	Operations  []*PatchOp
+	Schemas    []string
+	IfMatch    string
+	Operations []*PatchOp
 }
 
 type PatchOp struct {

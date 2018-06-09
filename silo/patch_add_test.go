@@ -44,7 +44,7 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	assertIndexVal(deviceType.Name, "rating", int64(1), true, t)
 
 	// apply the same patch on the already updated resource, resource should not get modified
-	pr.IfNoneMatch = updatedRs.GetVersion()
+	pr.IfMatch = updatedRs.GetVersion()
 	notUpdatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
@@ -198,7 +198,7 @@ func TestPatchAddComplexAT(t *testing.T) {
 	assertEquals(t, "location.longitude", updatedRs, "2.0")
 
 	// apply the same patch on the already updated resource, resource should not get modified
-	pr.IfNoneMatch = updatedRs.GetVersion()
+	pr.IfMatch = updatedRs.GetVersion()
 	notUpdatedRs, err := sl.Patch(rid, pr, deviceType)
 	if err != nil {
 		t.Errorf("Failed to apply patch req on the already updated resource")
@@ -368,6 +368,6 @@ func getPr(pr string, rt *schema.ResourceType, version string) *base.PatchReq {
 		panic(err)
 	}
 
-	req.IfNoneMatch = version
+	req.IfMatch = version
 	return req
 }
