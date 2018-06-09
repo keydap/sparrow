@@ -8,11 +8,17 @@ package com.keydap.sparrow.rbac;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import com.keydap.sparrow.Response;
+import com.keydap.sparrow.SearchResponse;
 import com.keydap.sparrow.SparrowClient;
 import com.keydap.sparrow.TestBase;
 import com.keydap.sparrow.scim.Group;
@@ -161,7 +167,16 @@ public class RbacTestBase extends TestBase {
         opsArr.append(OperationPermission.withAllowAttributes("read", "*", "ANY").toJson()).append(",");
         opsArr.append(OperationPermission.withAllowAttributes("write", "*", "ANY").toJson()).append("]");
         readWriteP.setOpsArr(opsArr.toString());
-        gReadAndWrite.setPermissions(Collections.singletonList(readWriteP));
+        
+        // the below permission MUST get overwritten by the above User specific permission
+        Permission wildcardOverwritableP = new Permission();
+        wildcardOverwritableP.setResName("*");
+        wildcardOverwritableP.setOpsArr(OperationPermission.withAllowAttributes("read", "displayname", "ANY").asJsonArray());
+
+        List<Permission> lstPerms = new ArrayList<>();
+        lstPerms.add(readWriteP);
+        lstPerms.add(wildcardOverwritableP);
+        gReadAndWrite.setPermissions(lstPerms);
         client.addResource(gReadAndWrite);
 
         Group gDenyReadAndWrite = new Group();
@@ -179,5 +194,27 @@ public class RbacTestBase extends TestBase {
         mixedUnionClient = createClient(uMixedUnion.getUserName(), uMixedUnion.getPassword());
         denyAllClient = createClient(uDenyAll.getUserName(), uDenyAll.getPassword());
         enterpriseReadOnlyClient = createClient(uEnterpriseReadOnly.getUserName(), uEnterpriseReadOnly.getPassword());
+    }
+    
+    //@AfterClass
+    public static void fetchAllResources() {
+        SearchResponse<User> sr = client.searchResource(User.class);
+        client.normalizeKeys(sr);
+        print(sr);
+
+        System.out.println("groups");
+        SearchResponse<Group> groups = client.searchResource(Group.class);
+        client.normalizeKeys(groups);
+        print(groups);
+    }
+    
+    private static void print(SearchResponse sr) {
+        JsonParser parser = new JsonParser();
+        JsonArray arr = parser.parse(sr.getHttpBody()).getAsJsonObject().get("resources").getAsJsonArray();
+        Iterator<JsonElement> itr = arr.iterator();
+        while(itr.hasNext()) {
+            System.out.println(itr.next());
+        }
+
     }
 }
