@@ -598,6 +598,10 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 			}
 
 			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
+			if sa.GetType().IsImmutable() {
+				detail := fmt.Sprintf("Cannot update immutable attribute %s", sa.Name)
+				panic(base.NewBadRequestError(detail))
+			}
 
 			if sa.Name == "primary" {
 				if sa.Values[0].(bool) {
@@ -833,8 +837,19 @@ func (sl *Silo) addSubAtMapToIndex(parentName string, saMap map[string]*base.Sim
 				panic(err)
 			}
 
+			val := sa.Values[0]
+
+			if !idx.AllowDupKey {
+				if idx.HasVal(val, tx) {
+					detail := fmt.Sprintf("Uniqueness violation, value %s of attribute %s already exists", val, sa.Name)
+					err := base.NewConflictError(detail)
+					err.ScimType = base.ST_UNIQUENESS
+					panic(err)
+				}
+			}
+
 			// the SimpleAttributes here will always be single valued
-			err = idx.add(sa.Values[0], rid, tx)
+			err = idx.add(val, rid, tx)
 			if err != nil {
 				panic(err)
 			}

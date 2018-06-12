@@ -555,11 +555,15 @@ func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.Attr
 	idx.BnameBytes = bnameBytes
 	idx.CaseSensitive = at.CaseExact
 	idx.ValType = at.Type
-	// parent's singularity applies for complex attributes
-	if at.Parent() != nil {
-		idx.AllowDupKey = at.Parent().MultiValued
+	if at.IsUnique() {
+		idx.AllowDupKey = false
 	} else {
-		idx.AllowDupKey = at.MultiValued
+		// parent's singularity applies for complex attributes
+		if at.Parent() != nil {
+			idx.AllowDupKey = at.Parent().MultiValued
+		} else {
+			idx.AllowDupKey = at.MultiValued
+		}
 	}
 	idx.db = sl.db
 
@@ -778,7 +782,7 @@ func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string,
 				panic(base.NewNotFoundError(detail))
 			}
 
-			refRes, _ := sl.Get(refId, refRType)
+			refRes, _ := sl.getUsingTx(refId, refRType, tx)
 
 			if refRes == nil {
 				detail := fmt.Sprintf("There is no resource of type %s with the referenced value %s", refTypeVal, refId)
