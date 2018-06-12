@@ -840,7 +840,10 @@ func (sl *Silo) addSubAtMapToIndex(parentName string, saMap map[string]*base.Sim
 			val := sa.Values[0]
 
 			if !idx.AllowDupKey {
-				if idx.HasVal(val, tx) {
+				// see if the value is already mapped to any resource's ID
+				key := idx.convert(val)
+				existingRid := idx.GetRid(key, tx)
+				if existingRid == rid {
 					detail := fmt.Sprintf("Uniqueness violation, value %s of attribute %s already exists", val, sa.Name)
 					err := base.NewConflictError(detail)
 					err.ScimType = base.ST_UNIQUENESS
