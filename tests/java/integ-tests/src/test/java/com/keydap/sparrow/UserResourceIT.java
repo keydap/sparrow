@@ -314,7 +314,7 @@ public class UserResourceIT extends TestBase {
         // update a multi-valued attribute (replace)
         pr = new PatchRequest(user.getId(), User.class);
         pr.replace("emails[type eq \"work\"]", "{value: \"abc@work.com\", display: \"new work address\"}");
-        pr.setIfNoneMatch(resp.getETag());
+        pr.setIfMatch(resp.getETag());
         resp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_NO_CONTENT, resp.getHttpCode());
         resp = client.getResource(user.getId(), User.class);
@@ -334,7 +334,7 @@ public class UserResourceIT extends TestBase {
 
         pr = new PatchRequest(user.getId(), User.class);
         pr.replace("addresses", "[{country: \"India\", locality: \"Hyderabad\", type: \"home\"}]");
-        pr.setIfNoneMatch(resp.getETag());
+        pr.setIfMatch(resp.getETag());
         resp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_NO_CONTENT, resp.getHttpCode());
         resp = client.getResource(user.getId(), User.class);
@@ -345,7 +345,7 @@ public class UserResourceIT extends TestBase {
         //Remove a value from a multi-valued attribute with PATCH (remove)
         pr = new PatchRequest(user.getId(), User.class);
         pr.remove("emails[type eq \"work\"]");
-        pr.setIfNoneMatch(resp.getETag());
+        pr.setIfMatch(resp.getETag());
         resp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_NO_CONTENT, resp.getHttpCode());
         resp = client.getResource(user.getId(), User.class);
@@ -364,7 +364,7 @@ public class UserResourceIT extends TestBase {
 
         pr = new PatchRequest(user.getId(), User.class);
         pr.replace("addresses[type eq \"home\" and locality eq \"hyderabad\"]", client.serialize(home));
-        pr.setIfNoneMatch(resp.getETag());
+        pr.setIfMatch(resp.getETag());
         resp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_NO_CONTENT, resp.getHttpCode());
         resp = client.getResource(user.getId(), User.class);
@@ -375,7 +375,7 @@ public class UserResourceIT extends TestBase {
         // (additional) update a simple attribute of a multi-valued complex attribute
         pr = new PatchRequest(user.getId(), User.class);
         pr.replace("addresses[type eq \"home\"].locality", new JsonPrimitive("Hyderabad"));
-        pr.setIfNoneMatch(resp.getETag());
+        pr.setIfMatch(resp.getETag());
         resp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_NO_CONTENT, resp.getHttpCode());
         resp = client.getResource(user.getId(), User.class);
@@ -385,7 +385,7 @@ public class UserResourceIT extends TestBase {
         //6.6 Update a complex multi-valued address with an ambiguous filter - addresses.type eq “home” and addresses.locality eq “Redwood Shores”
         pr = new PatchRequest(user.getId(), User.class);
         pr.replace("addresses.type eq \"home\" and addresses.locality eq \"satkol\"", client.serialize(home));
-        pr.setIfNoneMatch(resp.getETag());
+        pr.setIfMatch(resp.getETag());
         resp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_BAD_REQUEST, resp.getHttpCode());
         pr = new PatchRequest(user.getId(), User.class);
@@ -393,7 +393,7 @@ public class UserResourceIT extends TestBase {
         //6.7   Update a user with non-matching If-Match etag header using PATCH - should return a 412 status code and not update the user
         pr = new PatchRequest(user.getId(), User.class);
         pr.replace("addresses[type eq \"home\"].locality", new JsonPrimitive("Hyderabad"));
-        pr.setIfNoneMatch("invalid-etag");
+        pr.setIfMatch("invalid-etag");
         resp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_PRECONDITION_FAILED, resp.getHttpCode());
     }

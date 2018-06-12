@@ -67,7 +67,7 @@ public class UsecaseIT extends TestBase {
         sc.authenticate();
         
         PatchRequest pr = new PatchRequest(user.getId(), User.class);
-        pr.setIfNoneMatch(resp.getETag());
+        pr.setIfMatch(resp.getETag());
         pr.replace("active", new JsonPrimitive(false));
         resp = client.patchResource(pr);
         
@@ -79,7 +79,7 @@ public class UsecaseIT extends TestBase {
             assertTrue(true);
         }
         
-        pr.setIfNoneMatch(resp.getETag());
+        pr.setIfMatch(resp.getETag());
         pr.replace("active", new JsonPrimitive(true));
         resp = client.patchResource(pr);
         sc.authenticate(); // must pass

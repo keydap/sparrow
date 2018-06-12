@@ -6,17 +6,22 @@
  */
 package com.keydap.sparrow;
 
+import static org.junit.Assert.*;
+import static org.junit.Assert.assertNotNull;
+
+import java.util.List;
+
+import org.apache.http.HttpStatus;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.keydap.sparrow.scim.Device;
 import com.keydap.sparrow.scim.Device.Location;
-
-import static org.junit.Assert.*;
-
-import java.util.Arrays;
-
-import org.apache.http.HttpStatus;
+import com.keydap.sparrow.scim.Group;
+import com.keydap.sparrow.scim.Group.Member;
+import com.keydap.sparrow.scim.User;
 
 /**
  * @author Kiran Ayyagari (kayyagari@keydap.com)
@@ -26,8 +31,11 @@ public class PatchResourceTest extends TestBase {
     Device thermostat;
     
     @Before
-    public void insertDevice() throws Exception {
+    public void init() throws Exception {
         deleteAll(Device.class);
+        deleteAll(User.class);
+        deleteAll(Group.class);
+        
         thermostat = new Device();
         thermostat.setManufacturer("GMBH");
         thermostat.setPrice(900.07);
@@ -60,8 +68,75 @@ public class PatchResourceTest extends TestBase {
         pr.setAttributes(null);
         pr.getOperations().clear();
         pr.remove("location");
-        pr.setIfNoneMatch(resp.getETag());
+        pr.setIfMatch(resp.getETag());
         resp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_NO_CONTENT, resp.getHttpCode());
+    }
+    
+    @Test
+    public void testPatchGroup() {
+        User u = buildUser();
+        Response<User> uResp = client.addResource(u);
+        u = uResp.getResource();
+        
+        Group g = new Group();
+        g.setDisplayName(u.getUserName() + "-group");
+        Response<Group> gResp = client.addResource(g);
+        g = gResp.getResource();
+
+        String gId = g.getId();
+        List<Member> members = g.getMembers();
+        assertFalse(hasMemberId(u.getId(), members));
+        
+        // add to group
+        PatchRequest pr = new PatchRequest(gId, Group.class);
+        pr.setIfMatch(g.getMeta().getVersion());
+        JsonObject m = new JsonObject();
+        m.addProperty("value", u.getId());
+        JsonArray arr = new JsonArray();
+        arr.add(m);
+        pr.add("members", arr);
+        pr.setAttributes("*");
+        Response<Group> patchedGroupResp = client.patchResource(pr);
+        assertEquals(HttpStatus.SC_OK, patchedGroupResp.getHttpCode());
+        g = patchedGroupResp.getResource();
+        members = g.getMembers();
+        assertEquals(1, members.size());
+        assertTrue(hasMemberId(u.getId(), members));
+        
+        // try again adding the same member, should not get added
+        pr.setIfMatch(patchedGroupResp.getETag());
+        patchedGroupResp = client.patchResource(pr);
+        assertEquals(HttpStatus.SC_CONFLICT, patchedGroupResp.getHttpCode());
+        
+        g = client.getResource(gId, Group.class).getResource();
+        members = g.getMembers();
+        assertTrue(hasMemberId(u.getId(), members));
+        uResp = client.getResource(u.getId(), User.class);
+        u = uResp.getResource();
+        assertNotNull(u.getGroups());
+        assertTrue(hasGroupId(gId, u.getGroups()));
+    }
+    
+    private boolean hasMemberId(String uid, List<Member> members) {
+        if(members != null) {
+            for(Member m : members) {
+                if(m.getValue().equals(uid)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
+    private boolean hasGroupId(String gid, List<com.keydap.sparrow.scim.User.Group> groups) {
+        if(groups != null) {
+            for(com.keydap.sparrow.scim.User.Group g : groups) {
+                if(g.getValue().equals(gid)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
