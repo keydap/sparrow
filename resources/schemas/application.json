@@ -15,10 +15,21 @@
             "uniqueness":"none"
         },
         {
-            "name":"descritpion",
+            "name":"description",
             "type":"string",
             "multiValued":false,
             "description":"Description of the application",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"active",
+            "type":"boolean",
+            "multiValued":false,
+            "description":"Flag to enable or disable this application",
             "required":false,
             "caseExact":false,
             "mutability":"readWrite",
