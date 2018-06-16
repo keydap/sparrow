@@ -84,19 +84,16 @@ public class PatchResourceTest extends TestBase {
         Response<Group> gResp = client.addResource(g);
         g = gResp.getResource();
 
+        Group g2 = new Group();
+        g2.setDisplayName(u.getUserName() + "-group-two");
+        Response<Group> g2Resp = client.addResource(g2);
+        g2 = g2Resp.getResource();
+
         String gId = g.getId();
         List<Member> members = g.getMembers();
         assertFalse(hasMemberId(u.getId(), members));
         
-        // add to group
-        PatchRequest pr = new PatchRequest(gId, Group.class);
-        pr.setIfMatch(g.getMeta().getVersion());
-        JsonObject m = new JsonObject();
-        m.addProperty("value", u.getId());
-        JsonArray arr = new JsonArray();
-        arr.add(m);
-        pr.add("members", arr);
-        pr.setAttributes("*");
+        PatchRequest pr = createPatch(u, g);
         Response<Group> patchedGroupResp = client.patchResource(pr);
         assertEquals(HttpStatus.SC_OK, patchedGroupResp.getHttpCode());
         g = patchedGroupResp.getResource();
@@ -105,17 +102,43 @@ public class PatchResourceTest extends TestBase {
         assertTrue(hasMemberId(u.getId(), members));
         
         // try again adding the same member, should not get added
-        pr.setIfMatch(patchedGroupResp.getETag());
+        String version = patchedGroupResp.getETag();
+        pr.setIfMatch(version);
         patchedGroupResp = client.patchResource(pr);
-        assertEquals(HttpStatus.SC_CONFLICT, patchedGroupResp.getHttpCode());
-        
-        g = client.getResource(gId, Group.class).getResource();
+        assertEquals(HttpStatus.SC_OK, patchedGroupResp.getHttpCode());
+        // resource shoul not get modified
+        assertEquals(version, patchedGroupResp.getETag());
+        g = patchedGroupResp.getResource();
         members = g.getMembers();
+        assertEquals(1, members.size());
         assertTrue(hasMemberId(u.getId(), members));
+        
         uResp = client.getResource(u.getId(), User.class);
         u = uResp.getResource();
         assertNotNull(u.getGroups());
         assertTrue(hasGroupId(gId, u.getGroups()));
+
+        // add the same user to a different group
+        pr = createPatch(u, g2);
+        patchedGroupResp = client.patchResource(pr);
+        assertEquals(HttpStatus.SC_OK, patchedGroupResp.getHttpCode());
+        uResp = client.getResource(u.getId(), User.class);
+        u = uResp.getResource();
+        assertEquals(2, u.getGroups().size());
+        assertTrue(hasGroupId(g2.getId(), u.getGroups()));
+    }
+    
+    private PatchRequest createPatch(User u, Group g) {
+        // add to group
+        PatchRequest pr = new PatchRequest(g.getId(), Group.class);
+        pr.setIfMatch(g.getMeta().getVersion());
+        JsonArray arr = new JsonArray();
+        JsonObject m = new JsonObject();
+        m.addProperty("value", u.getId());
+        arr.add(m);
+        pr.add("members", arr);
+        pr.setAttributes("*");
+        return pr;
     }
     
     private boolean hasMemberId(String uid, List<Member> members) {
