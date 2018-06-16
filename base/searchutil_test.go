@@ -176,22 +176,19 @@ func TestParseAttrsWithWildcard(t *testing.T) {
 	}
 
 	attrMap, subAtPresent = SplitAttrCsv("*, emails.type", restypes...)
-	allAtTypeCount := 0
-	for _, v := range rTypesMap {
-		c := getAtTypeCount(v)
-		log.Debugf("resource %s has %d attributes", v.Endpoint, c)
-		allAtTypeCount += c
-	}
+	allAtTypeCount := getAtTypeCount()
 
 	atParams = ConvertToParamAttributes(attrMap, subAtPresent)
-	if len(atParams) != allAtTypeCount {
-		t.Errorf("Incorrect AttributeParam list, must include all attributes of all resource types")
+	convertedParamCount := len(atParams)
+	if convertedParamCount != allAtTypeCount {
+		t.Errorf("Incorrect AttributeParam list, must include all attributes of all resource types expected %d found %d", allAtTypeCount, convertedParamCount)
 	}
 
 	attrMap, subAtPresent = SplitAttrCsv("emails.type, *", restypes...) //reverse the position of wildcard
 	atParams = ConvertToParamAttributes(attrMap, subAtPresent)
-	if len(atParams) != allAtTypeCount {
-		t.Errorf("Incorrect AttributeParam list, must include all attributes of all resource types")
+	convertedParamCount = len(atParams)
+	if convertedParamCount != allAtTypeCount {
+		t.Errorf("Incorrect AttributeParam list, must include all attributes of all resource types expected %d found %d", allAtTypeCount, convertedParamCount)
 	}
 }
 
@@ -199,11 +196,14 @@ func findAtParam(name string, atParams map[string]*AttributeParam) *AttributePar
 	return atParams[name]
 }
 
-func getAtTypeCount(rt *schema.ResourceType) int {
-	count := len(rt.GetMainSchema().Attributes)
-	for _, se := range rt.SchemaExtensions {
-		count += len(rt.GetSchema(se.Schema).Attributes)
+func getAtTypeCount() int {
+	attrMap := make(map[string]int)
+	for _, rt := range rTypesMap {
+		collectAllAtNames(rt.GetMainSchema(), attrMap, false)
+		for _, se := range rt.SchemaExtensions {
+			collectAllAtNames(rt.GetSchema(se.Schema), attrMap, false)
+		}
 	}
 
-	return count
+	return len(attrMap)
 }
