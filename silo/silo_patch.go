@@ -191,7 +191,6 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 							}
 						}
 
-						// the ca should hold only one subAtMap so keeping the key as a constant
 						ca.SubAts[base.RandStr()] = subAtMap
 					}
 
@@ -204,6 +203,7 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 
 					tCa.SubAts = ca.SubAts
 					sl.addCAtoIndex(tCa, prIdx, rt.Name, rid, tx)
+					mh.markDirty()
 				} else {
 					subAtMap, primary := base.ParseSubAtList(po.Value, pp.AtType)
 					if primary {
