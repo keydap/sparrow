@@ -43,17 +43,17 @@ func TestParsingInvalidPatchReq(t *testing.T) {
 func TestParsingValidPatchReq(t *testing.T) {
 	rt := rTypesMap["User"]
 	patches := []string{
-		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"add", "path":"emails", "value":\"a@x.com\"}]}`,
-		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"replace", "path":"emails[value eq \"x\" or type \"work\"].value", "value":\"abc\"}]}`,
-		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"remove", "path":"emails[value eq \"x\" or type \"work\"].value"}]}`,
-		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"replace", "path":"emails[value eq \"x\" AND type \"work\"].value", "value":\"abc\"}]}`,
+		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"add", "path":"emails", "value":"a@x.com"}]}`,
+		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"replace", "path":"emails[value eq \"x\" or type eq \"work\"].value", "value":"abc"}]}`,
+		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"remove", "path":"emails[value eq \"x\" or type eq \"work\"].value"}]}`,
+		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations":[{"op":"replace", "path":"emails[value eq \"x\" AND type eq \"work\"].value", "value":"abc"}]}`,
 	}
 
 	for i, p := range patches {
 		reader := bytes.NewReader([]byte(p))
 		_, err := ParsePatchReq(reader, rt)
 		if err != nil {
-			t.Errorf("Failed to parse valid %d request %s", i, p)
+			t.Errorf("Failed to parse valid %d request %s %#v", i, p, err)
 		}
 	}
 }
