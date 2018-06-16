@@ -170,7 +170,7 @@ func Rand32() []byte {
 
 func NewRandShaStr() string {
 	hash := sha256.Sum256(RandBytes(16))
-	return B64Encode(hash[:])
+	return fmt.Sprintf("%x", hash[:])
 }
 
 func B64UrlEncode(data []byte) string {

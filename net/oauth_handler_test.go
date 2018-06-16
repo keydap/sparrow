@@ -4,6 +4,7 @@
 package net
 
 import (
+	"encoding/hex"
 	"fmt"
 	"sparrow/oauth"
 	"sparrow/utils"
@@ -25,7 +26,7 @@ func TestCodeGeneration(t *testing.T) {
 	cl.Id = id
 	cl.Oauth = &oauth.ClientOauthConf{}
 	cl.Oauth.Secret = utils.NewRandShaStr()
-	cl.Oauth.ServerSecret, _ = utils.B64Decode(utils.NewRandShaStr())
+	cl.Oauth.ServerSecret, _ = hex.DecodeString(utils.NewRandShaStr())
 
 	code := newOauthCode(cl, ttl, id, domCode, OAuth2)
 	fmt.Println(code)

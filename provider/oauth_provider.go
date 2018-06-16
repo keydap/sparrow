@@ -5,9 +5,9 @@ package provider
 
 import (
 	//logger "github.com/juju/loggo"
+	"encoding/hex"
 	"sparrow/base"
 	"sparrow/oauth"
-	"sparrow/utils"
 )
 
 func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
@@ -32,7 +32,7 @@ func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
 		oauthConf.HasQueryInUri = rs.GetAttr("hasqueryinuri").GetSimpleAt().Values[0].(bool)
 		oauthConf.Secret = safeGetStrVal("secret", rs)
 		ss := safeGetStrVal("serversecret", rs)
-		oauthConf.ServerSecret, _ = utils.B64Decode(ss) // safe to ignore error
+		oauthConf.ServerSecret, _ = hex.DecodeString(ss) // safe to ignore error
 		oauthAt := rs.GetAttr("oauthattributes")
 		oauthConf.Attributes = parseSsoAttributes(oauthAt)
 	}

@@ -8,6 +8,7 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sparrow/oauth"
 	"sparrow/utils"
@@ -59,7 +60,15 @@ func newOauthCode(cl *oauth.Client, createdAt time.Time, userId string, domainCo
 
 	// generate a new key using ServerSecret and Secret
 	hmacKeySrc := make([]byte, 0)
-	hmacKeySrc = append(hmacKeySrc, []byte(cl.Oauth.Secret)...)
+	// secret is stored in hex form
+	secretBytes, err := hex.DecodeString(cl.Oauth.Secret)
+	if err != nil {
+		msg := fmt.Sprintf("Decoding hex value of OAuth secret of client %s failed", cl.Id)
+		log.Criticalf(msg)
+		panic(msg)
+	}
+
+	hmacKeySrc = append(hmacKeySrc, secretBytes...)
 	hmacKeySrc = append(hmacKeySrc, cl.Oauth.ServerSecret...)
 
 	hmacKey := sha256.Sum256(hmacKeySrc)
@@ -89,7 +98,8 @@ func decryptOauthCode(code string, cl *oauth.Client) *oAuthCode {
 	// verify HMAC first
 	// generate a new key using ServerSecret and Secret
 	hmacKeySrc := make([]byte, 0)
-	hmacKeySrc = append(hmacKeySrc, []byte(cl.Oauth.Secret)...)
+	secretBytes, _ := hex.DecodeString(cl.Oauth.Secret) // safe to ignore error if the secret is incorrect code wouldn't have been issued
+	hmacKeySrc = append(hmacKeySrc, secretBytes...)
 	hmacKeySrc = append(hmacKeySrc, cl.Oauth.ServerSecret...)
 
 	hmacKey := sha256.Sum256(hmacKeySrc)
