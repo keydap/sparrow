@@ -559,6 +559,19 @@ func _checkMissingReqAts(sc *schema.Schema, rs *Resource) error {
 	return nil
 }
 
+func (ca *ComplexAttribute) HasValue(val interface{}) bool {
+	for _, subAtMap := range ca.SubAts {
+		existingValAt := subAtMap["value"]
+		if existingValAt != nil {
+			existingVal := existingValAt.GetSimpleAt().Values[0]
+			if existingVal == val {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (sa *SimpleAttribute) Equals(other *SimpleAttribute) bool {
 	if other == nil {
 		return false
