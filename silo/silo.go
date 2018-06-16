@@ -312,6 +312,29 @@ func (idx *Index) GetRids(valKey []byte, tx *bolt.Tx) []string {
 	return rids
 }
 
+// Checks if the given key value pair exist in the index
+func (idx *Index) HasKeyAndVal(key []byte, val string, tx *bolt.Tx) bool {
+	buck := tx.Bucket(idx.BnameBytes)
+
+	found := false
+	if idx.AllowDupKey {
+		dupBuck := buck.Bucket(key)
+
+		if dupBuck != nil {
+			valBytes := []byte(val)
+			dupVal := dupBuck.Get(valBytes)
+			found = (dupVal != nil)
+		}
+	} else {
+		data := buck.Get(key)
+		if data != nil {
+			found = (val == string(data))
+		}
+	}
+
+	return found
+}
+
 func (idx *Index) HasVal(val interface{}, tx *bolt.Tx) bool {
 	if idx.AllowDupKey {
 		return idx.keyCount(val, tx) > 0
@@ -555,15 +578,11 @@ func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.Attr
 	idx.BnameBytes = bnameBytes
 	idx.CaseSensitive = at.CaseExact
 	idx.ValType = at.Type
-	if at.IsUnique() {
-		idx.AllowDupKey = false
+	// parent's singularity applies for complex attributes
+	if at.Parent() != nil {
+		idx.AllowDupKey = at.Parent().MultiValued
 	} else {
-		// parent's singularity applies for complex attributes
-		if at.Parent() != nil {
-			idx.AllowDupKey = at.Parent().MultiValued
-		} else {
-			idx.AllowDupKey = at.MultiValued
-		}
+		idx.AllowDupKey = at.MultiValued
 	}
 	idx.db = sl.db
 

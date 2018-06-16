@@ -529,8 +529,18 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 						}
 
 						if isMembers {
+							incomingVal := subAtMap["value"]
+							if incomingVal != nil {
+								duplicateVal := tCa.HasValue(incomingVal.GetSimpleAt().Values[0])
+								if duplicateVal {
+									continue
+								}
+							}
 							// the ca should hold only one subAtMap so keeping the key as a constant
 							ca.SubAts["1"] = subAtMap
+							// check if the attribute already exists
+							// only values of 'value'attribute are considered for equality
+
 							sl.addGroupMembers(ca, rid, displayName, tx)
 							// the $ref and type values will be updated in the subAtMap when addGroupMembers is called
 							// so use this updated subAtMap
@@ -710,13 +720,25 @@ func (sl *Silo) addAttrTo(target *base.Resource, attr base.Attribute, tx *bolt.T
 					tCa.UnsetPrimaryFlag()
 				}
 
-				for _, subAtMap := range ca.SubAts {
-					// the old key might have been regenerated so do not use the key
-					// from the above loop, instead generate a new random key
-					tCa.SubAts[base.RandStr()] = subAtMap
-					sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
+				// check if the attribute already exists
+				// only values of 'value'attribute are considered for equality
+				for k, subAtMap := range ca.SubAts {
+					incomingVal := subAtMap["value"]
+					duplicateVal := tCa.HasValue(incomingVal)
+					if duplicateVal {
+						delete(ca.SubAts, k)
+					}
 				}
-				mh.markDirty()
+
+				if len(ca.SubAts) > 0 {
+					for _, subAtMap := range ca.SubAts {
+						// the old key might have been regenerated so do not use the key
+						// from the above loop, instead generate a new random key
+						tCa.SubAts[base.RandStr()] = subAtMap
+						sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
+					}
+					mh.markDirty()
+				}
 			} else {
 				// merge complex attributes
 				sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
@@ -839,11 +861,11 @@ func (sl *Silo) addSubAtMapToIndex(parentName string, saMap map[string]*base.Sim
 
 			val := sa.Values[0]
 
-			if !idx.AllowDupKey {
+			if sa.GetType().IsUnique() {
 				// see if the value is already mapped to any resource's ID
 				key := idx.convert(val)
 				existingRid := idx.GetRid(key, tx)
-				if existingRid == rid {
+				if (len(existingRid) > 0) && existingRid != rid {
 					detail := fmt.Sprintf("Uniqueness violation, value %s of attribute %s already exists", val, sa.Name)
 					err := base.NewConflictError(detail)
 					err.ScimType = base.ST_UNIQUENESS
