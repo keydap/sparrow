@@ -60,6 +60,7 @@ type Resource struct {
 	TypeName string // resourcetype's name
 	Core     *AtGroup
 	Ext      map[string]*AtGroup
+	AuthData *AuthData // only non-nil for User resource rest of all resources contain nil values
 }
 
 type postParsingHints struct {
@@ -1508,4 +1509,21 @@ func (rs *Resource) FilterAndSerialize(attrs map[string]*AttributeParam, include
 	}
 
 	return data
+}
+
+func (res *Resource) IsTfaEnabled() bool {
+	tftAt := res.GetAttr("twofactortype")
+	if tftAt != nil {
+		tfType := tftAt.GetSimpleAt().GetStringVal()
+		if strings.ToLower(tfType) == "totp" {
+			// only TOTP is supported at the moment
+			return true
+		}
+	}
+
+	return false
+}
+
+func (res *Resource) IsTfaSetupComplete() bool {
+	return res.AuthData.TotpSecret != ""
 }

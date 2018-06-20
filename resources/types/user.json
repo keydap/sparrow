@@ -11,6 +11,10 @@
         {
             "schema":"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
             "required":false
+        },
+        {
+            "schema":"urn:keydap:params:scim:schemas:extension:authentication:2.0:User",
+            "required":false
         }
     ],
     "meta":{

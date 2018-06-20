@@ -1,0 +1,37 @@
+{
+    "id":"urn:keydap:params:scim:schemas:extension:authentication:2.0:User",
+    "name":"Authentication",
+    "description":"Authentication mechanism details of a user",
+    "attributes":[
+        {
+            "name":"twofactorType",
+            "type":"string",
+            "multiValued":false,
+            "description":"Name of the Twofactor Auth enabled for this user",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none",
+            "canonicalValues":[
+                        "TOTP",
+                        "WebAuthn"
+                    ]
+        },
+        {
+            "name":"changePassword",
+            "type":"boolean",
+            "multiValued":false,
+            "description":"Flag to force user to change password during next login",
+            "required":false,
+            "caseExact":true,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        }
+ ],
+ "meta":{
+        "resourceType":"Schema",
+        "location":"/v2/Schemas/urn:keydap:params:scim:schemas:extension:authentication:2.0:User"
+    }
+ }

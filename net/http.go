@@ -138,6 +138,7 @@ func startHttp() {
 
 	router.HandleFunc("/login", showLogin).Methods("GET")
 	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
+	router.HandleFunc("/registerTotp", registerTotp).Methods("POST")
 
 	if srvConf.Https {
 		issuerUrl = "https://" + hostAddr
@@ -801,13 +802,14 @@ func directLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ar.Domain = normDomain
-	user := pr.Authenticate(ar.Username, ar.Password)
-	if user == nil {
+	// TODO directlogin MUST be deprecated after introducing OTP
+	lr := pr.Authenticate(ar.Username, ar.Password)
+	if lr.Status != base.LOGIN_SUCCESS {
 		writeError(w, base.NewBadRequestError("Invalid credentials"))
 		return
 	}
 
-	token := pr.GenSessionForUser(user)
+	token := pr.GenSessionForUser(lr.User)
 	pr.StoreOauthSession(token)
 
 	log.Debugf("Issued token %s by %s", token.Jti, ar.Domain)

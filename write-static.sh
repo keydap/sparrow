@@ -13,6 +13,8 @@ writeHtml() {
   writeConst "login_html" "templates/login.html" $targetFile
   writeConst "consent_html" "templates/consent.html" $targetFile
   writeConst "saml_response_html" "templates/saml_response.html" $targetFile
+  writeConst "totp_register_html" "templates/totp-register.html" $targetFile
+  writeConst "totp_send_html" "templates/totp-send.html" $targetFile
 }
 
 writeSchemas() {
@@ -23,6 +25,7 @@ writeSchemas() {
   writeConst "group_schema" "resources/schemas/group.json" $targetFile
   writeConst "user_schema" "resources/schemas/user.json" $targetFile
   writeConst "application_schema" "resources/schemas/application.json" $targetFile
+  writeConst "authentication_schema" "resources/schemas/authentication.json" $targetFile
 }
 
 writeResourceTypes() {

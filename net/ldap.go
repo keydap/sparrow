@@ -208,7 +208,7 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 	}
 
 	bindReq.Username = getUsernameFromDn(bindReq.Username)
-	user := pr.Authenticate(bindReq.Username, bindReq.Password)
+	user := ldap_authenticate(bindReq.Username, bindReq.Password, pr)
 	if user == nil {
 		errResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultInvalidCredentials, "Invalid username or password")
 		ls.con.Write(errResp.Bytes())
@@ -955,7 +955,7 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 		}
 
 		if effSession == nil {
-			user = pr.Authenticate(getCtx.Username, oldPasswd)
+			user = ldap_authenticate(getCtx.Username, oldPasswd, pr)
 			if user == nil {
 				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultNoSuchObject, "user doesn't exist")
 				ls.con.Write(errResp.Bytes())
@@ -966,7 +966,7 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 		} else {
 			getCtx.OpContext = ls.OpContext
 
-			user = pr.GetUserByName(getCtx)
+			user = pr.GetUserByName(getCtx.Username)
 			if user == nil {
 				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultNoSuchObject, "user doesn't exist")
 				ls.con.Write(errResp.Bytes())
@@ -1152,4 +1152,39 @@ func canChangePassword(effSession *base.RbacSession, user *base.Resource) bool {
 	}
 
 	return rp.WritePerm.EvalFilter(user)
+}
+
+func ldap_authenticate(username string, password string, pr *provider.Provider) (user *base.Resource) {
+	user = pr.GetUserByName(username)
+	if user == nil {
+		return nil
+	}
+
+	tfaEnabled := user.IsTfaEnabled()
+	totpCode := ""
+	// in case of LDAP, if TFA is enabled for a user then it is assumed that
+	// user already performed the necessary setup to obtain OTPs
+	if tfaEnabled {
+		plen := len(password)
+		// OTP code contains 6 digits
+		if plen <= OTP_LEN {
+			return nil
+		}
+
+		plen = plen - OTP_LEN
+		totpCode = password[plen:]
+		password = password[:plen]
+	}
+
+	lr := pr.Authenticate(username, password)
+
+	if lr.Status == base.LOGIN_TFA_REQUIRED {
+		lr = pr.VerifyOtp(lr.Id, totpCode)
+	}
+
+	if lr.Status == base.LOGIN_SUCCESS {
+		return lr.User
+	}
+
+	return nil
 }

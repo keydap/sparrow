@@ -328,6 +328,14 @@ func writeDefaultHtmlTemplates(tmplDir string) {
 	// saml_response.html
 	samlResponseTmpl := filepath.Join(tmplDir, "saml_response.html")
 	writeFile(samlResponseTmpl, saml_response_html)
+
+	// totp-register.html
+	totpRegisterTmpl := filepath.Join(tmplDir, "totp-register.html")
+	writeFile(totpRegisterTmpl, totp_register_html)
+
+	// totp-send.html
+	totpSendTmpl := filepath.Join(tmplDir, "totp-send.html")
+	writeFile(totpSendTmpl, totp_send_html)
 }
 
 func writeFile(name string, content string) {
@@ -353,6 +361,9 @@ func writeSchemas(schemaDir string) {
 
 	application := filepath.Join(schemaDir, "application.json")
 	writeFile(application, application_schema)
+
+	authentication := filepath.Join(schemaDir, "authentication.json")
+	writeFile(authentication, authentication_schema)
 }
 
 func writeResourceTypes(rtDir string) {

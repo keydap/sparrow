@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"github.com/pquerna/otp/totp"
 	"math"
 	"runtime/debug"
 	"sparrow/base"
@@ -16,6 +17,7 @@ import (
 	"sparrow/utils"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/coreos/bbolt"
 	logger "github.com/juju/loggo"
@@ -768,6 +770,11 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 			ca := members.GetComplexAt()
 			sl.addGroupMembers(ca, rid, displayName, tx)
 		}
+	}
+
+	// for User resource initialize AuthData
+	if rt.Name == "User" {
+		inRes.AuthData = &base.AuthData{}
 	}
 
 	sl.storeResource(tx, inRes)
@@ -1578,18 +1585,11 @@ func (sl *Silo) GetUserByName(username string) (user *base.Resource, err error) 
 	return user, nil
 }
 
-func (sl *Silo) Authenticate(principal string, password string) (user *base.Resource, err error) {
-	pos := strings.IndexRune(principal, '/')
-	if pos > 0 {
-		principal = principal[0:pos]
-	}
-
-	rt := sl.resTypes["User"]
-	idx := sl.getIndex(rt.Name, "username")
-
-	tx, err := sl.db.Begin(false)
+func (sl *Silo) StoreTotpSecret(rid string, totpSecret string) error {
+	tx, err := sl.db.Begin(true)
 	if err != nil {
-		return nil, err
+		log.Warningf("Failed to begin transaction %#v", err)
+		return err
 	}
 
 	defer func() {
@@ -1599,44 +1599,200 @@ func (sl *Silo) Authenticate(principal string, password string) (user *base.Reso
 		}
 
 		if err != nil {
-			log.Debugf("Error while authenticating principal %s %#v", principal, err)
+			tx.Rollback()
+			log.Debugf("Error while storing TOTP secret %#v", err)
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	rt := sl.resTypes["User"]
+	user, err := sl.getUsingTx(rid, rt, tx)
+	if err != nil {
+		return err
+	}
+
+	user.AuthData.TotpSecret = totpSecret
+	user.AuthData.TotpCodes = nil
+
+	user.UpdateLastModTime(sl.cg.NewCsn())
+	sl.storeResource(tx, user)
+
+	return nil
+}
+
+func (sl *Silo) Authenticate(principal string, password string) (lr base.LoginResult, err error) {
+	pos := strings.IndexRune(principal, '/')
+	if pos > 0 {
+		principal = principal[0:pos]
+	}
+
+	lr = base.LoginResult{}
+
+	rt := sl.resTypes["User"]
+	idx := sl.getIndex(rt.Name, "username")
+
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		return lr, err
+	}
+
+	defer func() {
+		e := recover()
+		// panic error
+		var pErr error
+		if e != nil {
+			pErr = e.(error)
 		}
 
-		tx.Rollback()
+		if pErr != nil {
+			tx.Rollback()
+			err = pErr
+			log.Warningf("Error while authenticating principal %s %#v", principal, pErr)
+		} else {
+			// commit the changes made to AuthData
+			tx.Commit()
+		}
 	}()
 
 	rid := idx.GetRid(idx.convert(principal), tx)
 
 	if len(rid) == 0 {
-		return nil, fmt.Errorf("User with principal %s not found", principal)
+		lr.Status = base.LOGIN_USER_NOT_FOUND
+		return lr, fmt.Errorf("User with principal %s not found", principal)
 	}
 
-	user, err = sl.getUsingTx(rid, rt, tx)
+	user, err := sl.getUsingTx(rid, rt, tx)
 	if err != nil {
-		return nil, err
+		lr.Status = base.LOGIN_USER_NOT_FOUND
+		return lr, err
 	}
 
+	lr.Id = rid
 	active := false
 	activeAt := user.GetAttr("active")
 	if activeAt != nil {
 		active = activeAt.GetSimpleAt().Values[0].(bool)
 	}
 
+	ad := user.AuthData
+
 	if !active {
-		return nil, base.NewForbiddenError("Account is not active")
+		lr.Status = base.LOGIN_ACCOUNT_NOT_ACTIVE
+		ad.LastFLogin = time.Now().UTC()
+		ad.FLoginCount++
+		err = base.NewForbiddenError("Account is not active")
 	}
 
-	at := user.GetAttr("password")
-	if at == nil {
-		return nil, fmt.Errorf("No password present for the user %s", principal)
+	skipAdUpdate := false
+	tfaEn := user.IsTfaEnabled()
+	if err == nil {
+		at := user.GetAttr("password")
+		if at == nil {
+			lr.Status = base.LOGIN_NO_PASSWORD
+			ad.LastFLogin = time.Now().UTC()
+			ad.FLoginCount++
+			err = fmt.Errorf("No password present for the user %s", principal)
+		}
+
+		if err == nil {
+			hashedPasswd := at.GetSimpleAt().Values[0].(string)
+
+			// compare passwords
+			if utils.ComparePassword(password, hashedPasswd) {
+				// update authdata in this case only if TFA is not enabled for the user
+				if !tfaEn {
+					lr.Status = base.LOGIN_SUCCESS
+					lr.User = user
+					ad.LastSLogin = time.Now().UTC()
+					ad.FLoginCount = 0
+					err = nil
+				} else {
+					skipAdUpdate = true
+					if user.IsTfaSetupComplete() {
+						lr.Status = base.LOGIN_TFA_REQUIRED
+						err = fmt.Errorf("TFA code is required for the user %s", principal)
+					} else {
+						lr.Status = base.LOGIN_TFA_REGISTER
+						err = fmt.Errorf("TFA registration is pending for the user %s", principal)
+					}
+				}
+			} else {
+				ad.LastFLogin = time.Now().UTC()
+				ad.FLoginCount++
+				err = fmt.Errorf("Invalid password, did not match")
+			}
+
+		}
 	}
 
-	hashedPasswd := at.GetSimpleAt().Values[0].(string)
-
-	// compare passwords
-	if utils.ComparePassword(password, hashedPasswd) {
-		return user, nil
+	// only needs to be updated either when authentication failed or when authentication was
+	// successful and no TFA is enabled
+	if !skipAdUpdate {
+		user.UpdateLastModTime(sl.cg.NewCsn())
+		sl.storeResource(tx, user)
 	}
 
-	return nil, fmt.Errorf("Invalid password, did not match")
+	return lr, err
+}
+
+func (sl *Silo) VerifyOtp(rid string, totpCode string) (lr base.LoginResult, err error) {
+	rt := sl.resTypes["User"]
+
+	lr = base.LoginResult{}
+	lr.Id = rid
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		log.Warningf("Failed to begin transaction %#v", err)
+		return lr, err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			tx.Rollback()
+			log.Debugf("Error while validating OTP %#v", err)
+		} else {
+			// commit the changes made to AuthData
+			tx.Commit()
+		}
+	}()
+
+	user, err := sl.getUsingTx(rid, rt, tx)
+	if err != nil {
+		lr.Status = base.LOGIN_USER_NOT_FOUND
+		log.Warningf("Failed to get user %#v", err)
+		return lr, err
+	}
+
+	ad := user.AuthData
+	validOtp := totp.Validate(totpCode, ad.TotpSecret)
+	if !validOtp {
+		// check in the recovery codes
+		_, ok := ad.TotpCodes[totpCode]
+		if ok {
+			delete(ad.TotpCodes, totpCode)
+			validOtp = true
+		}
+	}
+
+	if validOtp {
+		lr.Status = base.LOGIN_SUCCESS
+		lr.User = user
+		ad.LastSLogin = time.Now().UTC()
+		ad.FLoginCount = 0
+	} else {
+		lr.Status = base.LOGIN_FAILED
+		ad.LastFLogin = time.Now().UTC()
+		ad.FLoginCount++
+	}
+
+	user.UpdateLastModTime(sl.cg.NewCsn())
+	sl.storeResource(tx, user)
+
+	return lr, nil
 }

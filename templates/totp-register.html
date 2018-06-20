@@ -1,0 +1,31 @@
+<html>
+<head>
+<meta charset="utf-8">
+<title>TOTP Registration</title>
+</head>
+<body>
+	<div>
+		<form method="post" action="/registerTotp">
+		 <div>Scan the below QR code using your OTP generating mobile app (e.x google authenticator)</div>
+			<table>
+            <tr>
+             <td><img id="qrcode" src="" /></td>
+            </tr>
+			<tr>
+			  <td><input type="submit" value="Register"/></td>
+			</tr>
+			<tr>
+			</tr>
+            {{range $k, $v := .paramMap}}
+            <tr>
+                <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
+            </tr>
+            {{end}}
+			</table>
+		</form>
+	</div>
+	<script type="text/javascript">
+        document.getElementById('qrcode').src = "{{.qrcode}}"
+	</script>
+</body>
+</html>

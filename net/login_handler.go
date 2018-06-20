@@ -67,23 +67,29 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := r.Form.Get("username")
-	password := r.Form.Get("password")
+	af := getAuthFlow(r)
 
-	domain := defaultDomain
-
-	pos := strings.LastIndexByte(username, '@')
-	unameLen := len(username) - 1
-	if pos > 0 && pos != unameLen {
-		username = username[:pos]
-		domain = strings.ToLower(username[pos+1:])
+	if af == nil {
+		af = &authFlow{}
 	}
 
-	prv := providers[domain]
-
 	paramMap := copyParams(r)
-	delete(paramMap, "username")
-	delete(paramMap, "password")
+
+	domain := defaultDomain
+	var prv *provider.Provider
+
+	username := r.Form.Get("username")
+	if !af.VerifiedPassword() {
+		pos := strings.LastIndexByte(username, '@')
+		unameLen := len(username) - 1
+		if pos > 0 && pos != unameLen {
+			username = username[:pos]
+			domain = strings.ToLower(username[pos+1:])
+		}
+		prv = providers[domain]
+	} else {
+		prv = dcPrvMap[af.DomainCode]
+	}
 
 	if prv == nil {
 		login := templates["login.html"]
@@ -91,51 +97,59 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := prv.Authenticate(username, password)
-	if user == nil {
-		login := templates["login.html"]
-		login.Execute(w, paramMap)
-		return
+	if !af.VerifiedPassword() {
+		password := r.Form.Get("password")
+
+		delete(paramMap, "username")
+		delete(paramMap, "password")
+
+		lr := prv.Authenticate(username, password)
+		if lr.Status == base.LOGIN_FAILED {
+			login := templates["login.html"]
+			login.Execute(w, paramMap)
+			return
+		} else if lr.Status == base.LOGIN_SUCCESS {
+			af.SetPasswordVerified(true)
+			af.UserId = lr.Id
+			af.DomainCode = prv.DomainCode()
+			setAuthFlow(af, w)
+			setSessionCookie(lr.User, af, prv, w, r, paramMap)
+			return
+		}
+
+		log.Debugf("password verified")
+
+		af.SetPasswordVerified(true)
+		af.UserId = lr.Id
+		af.DomainCode = prv.DomainCode()
+
+		// check TFA settings and enable appropriate flags
+		if lr.Status == base.LOGIN_TFA_REGISTER {
+			af.SetTfaRegister(true)
+		} else if lr.Status == base.LOGIN_TFA_REQUIRED {
+			af.SetTfaRequired(true)
+		}
+
+		setAuthFlow(af, w)
+
+		if af.RegisterTfa() {
+			showTotpRegistration(username, prv, af, w, paramMap)
+			return
+		}
 	}
 
-	log.Debugf("password verified")
-	session := prv.GenSessionForUser(user)
-	prv.StoreSsoSession(session)
-
-	cookie := &http.Cookie{}
-	cookie.Path = "/"
-	cookie.Expires = time.Now().Add(time.Duration(prv.Config.Oauth.SsoSessionIdleTime) * time.Second)
-	cookie.HttpOnly = true
-	cookie.Name = SSO_COOKIE
-	cookie.Value = session.Jti
-	//cookie.Secure
-	http.SetCookie(w, cookie)
-
-	af := getAuthFlow(r)
-
-	if af == nil {
-		af = &authFlow{}
+	if af.RequiredTfa() {
+		otp := r.Form.Get("otp")
+		delete(paramMap, "otp")
+		lr := prv.VerifyOtp(af.UserId, otp)
+		if lr.Status == base.LOGIN_FAILED {
+			totp := templates["totp-send.html"]
+			totp.Execute(w, paramMap)
+			return
+		} else if lr.Status == base.LOGIN_SUCCESS {
+			setSessionCookie(lr.User, af, prv, w, r, paramMap)
+		}
 	}
-
-	af.SetPasswordVerified(true)
-	// TODO enable it when the account has TFA capability
-	af.SetTfaRequired(false)
-	af.UserId = user.GetId()
-	af.DomainCode = prv.DomainCode()
-	setAuthFlow(af, w)
-
-	if af.FromOauth() {
-		// FIXME show consent only if application/client config enforces it
-		login := templates["consent.html"]
-		login.Execute(w, paramMap)
-		return
-	} else if af.FromSaml() {
-		log.Debugf("resuming SAML flow")
-		sendSamlResponse(w, r, session, af)
-		return
-	}
-
-	http.Redirect(w, r, "/ui", http.StatusFound)
 }
 
 // STEP 3. Authorization Server obtains End-User Consent/Authorization.
@@ -378,4 +392,33 @@ func isValidAuthzReq(w http.ResponseWriter, r *http.Request, areq *oauth.Authori
 	sendOauthError(w, r, areq.RedUri, ep)
 
 	return false
+}
+
+func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider, w http.ResponseWriter, r *http.Request, paramMap map[string]string) *base.RbacSession {
+	session := prv.GenSessionForUser(user)
+	prv.StoreSsoSession(session)
+
+	cookie := &http.Cookie{}
+	cookie.Path = "/"
+	cookie.Expires = time.Now().Add(time.Duration(prv.Config.Oauth.SsoSessionIdleTime) * time.Second)
+	cookie.HttpOnly = true
+	cookie.Name = SSO_COOKIE
+	cookie.Value = session.Jti
+	//cookie.Secure
+	http.SetCookie(w, cookie)
+
+	if af.FromOauth() {
+		// FIXME show consent only if application/client config enforces it
+		login := templates["consent.html"]
+		login.Execute(w, paramMap)
+		return session
+	} else if af.FromSaml() {
+		log.Debugf("resuming SAML flow")
+		sendSamlResponse(w, r, session, af)
+		return session
+	}
+
+	http.Redirect(w, r, "/ui", http.StatusFound)
+
+	return session
 }

@@ -218,7 +218,9 @@ public class OauthTokenTest extends TestBase {
     
     @Test
     public void testOauthTokenReq() throws Exception {
-        browser.get(baseOauthUrl + "/authorize?client_id=" + clientId + "&response_type=code&redirect_uri=" + encodedRedirectUri);
+        String url = baseOauthUrl + "/authorize?client_id=" + clientId + "&response_type=code&redirect_uri=" + encodedRedirectUri;
+        System.out.println(url);
+        browser.get(url);
         
         WebElement username = browser.findElement(By.name("username"));
         username.sendKeys("admin");

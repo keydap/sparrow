@@ -1,0 +1,39 @@
+<html>
+<head>
+<meta charset="utf-8">
+<title>Input OTP</title>
+</head>
+<body>
+	<div>
+		<form method="post" action="/verifyPassword">
+			<table>
+            <tr>
+             <td><span>OTP:</span></td><td><input type="text" id="otp" name="otp" /></td>
+            </tr>
+			<tr>
+			  <td colspan="2"><input type="button" value="Next" onclick="sendOtp()"/></td>
+			</tr>
+			<tr>
+			</tr>
+            {{range $k, $v := .paramMap}}
+            <tr>
+                <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
+            </tr>
+            {{end}}
+			</table>
+		</form>
+	</div>
+	<script type="text/javascript">
+        function sendOtp() {
+            var el = document.getElementById('otp');
+            var otp = el.value.trim();
+            if(otp.length >= 6) {
+                document.forms[0].submit();
+            }
+            else {
+                el.focus();
+            }
+        }
+	</script>
+</body>
+</html>

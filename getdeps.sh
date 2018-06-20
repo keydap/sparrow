@@ -20,3 +20,5 @@ go get github.com/gorilla/securecookie
 go get github.com/gorilla/sessions
 
 go get github.com/russellhaering/gosaml2
+
+go get github.com/pquerna/otp

@@ -27,12 +27,14 @@ const (
 	required_tfa
 	from_oauth
 	from_saml
+	register_tfa
 )
 
 type authFlow struct {
 	BitFlag    uint16 // holds the state of login options in various bits
 	UserId     string
 	DomainCode uint32
+	TotpSecret string // the TOTP 2F secret
 }
 
 func (af *authFlow) setBit(bit uint16, yes bool) {
@@ -69,6 +71,14 @@ func (af *authFlow) RequiredTfa() bool {
 
 func (af *authFlow) SetTfaRequired(yes bool) {
 	af.setBit(required_tfa, yes)
+}
+
+func (af *authFlow) RegisterTfa() bool {
+	return af.isSet(register_tfa)
+}
+
+func (af *authFlow) SetTfaRegister(yes bool) {
+	af.setBit(register_tfa, yes)
 }
 
 //func (af *authFlow) GrantedAuthz() bool {
@@ -305,6 +315,7 @@ func copyParams(r *http.Request) map[string]string {
 	return paramMap
 }
 
+//FIXME encrypt authflow cookie
 func setAuthFlow(af *authFlow, w http.ResponseWriter) {
 	ck := &http.Cookie{}
 	ck.HttpOnly = true

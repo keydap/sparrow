@@ -66,6 +66,8 @@ public class UsecaseIT extends TestBase {
         SparrowClient sc = new SparrowClient(baseApiUrl, auth);
         sc.authenticate();
         
+        // fetch the user again because its version changes after a login attempt 
+        resp = client.getResource(user.getId(), User.class);
         PatchRequest pr = new PatchRequest(user.getId(), User.class);
         pr.setIfMatch(resp.getETag());
         pr.replace("active", new JsonPrimitive(false));
@@ -79,6 +81,8 @@ public class UsecaseIT extends TestBase {
             assertTrue(true);
         }
         
+        // fetch the user again because its version changes after a login attempt
+        resp = client.getResource(user.getId(), User.class);
         pr.setIfMatch(resp.getETag());
         pr.replace("active", new JsonPrimitive(true));
         resp = client.patchResource(pr);

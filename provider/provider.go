@@ -382,24 +382,46 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err
 	return res, err
 }
 
-func (prv *Provider) Authenticate(username string, password string) (res *base.Resource) {
-	user, err := prv.sl.Authenticate(username, password)
-
+func (prv *Provider) StoreTotpSecret(rid string, totpSecret string) error {
+	err := prv.sl.StoreTotpSecret(rid, totpSecret)
 	if err != nil {
-		msg := "Invalid username or password"
-		log.Debugf(msg)
-		return nil
+		log.Warningf("%s", err)
 	}
 
-	return user
+	return err
 }
 
-func (prv *Provider) GetUserByName(getCtx *base.GetContext) (res *base.Resource) {
-	user, err := prv.sl.GetUserByName(getCtx.Username)
+func (prv *Provider) Authenticate(username string, password string) (lr base.LoginResult) {
+	lr, err := prv.sl.Authenticate(username, password)
+
+	if lr.Status != base.LOGIN_SUCCESS {
+		log.Debugf("%s", err)
+		if lr.Status != base.LOGIN_TFA_REGISTER && lr.Status != base.LOGIN_TFA_REQUIRED {
+			// erase all other statuses
+			lr.Status = base.LOGIN_FAILED
+		}
+	}
+
+	return lr
+}
+
+func (prv *Provider) VerifyOtp(rid string, totpCode string) (lr base.LoginResult) {
+	lr, err := prv.sl.VerifyOtp(rid, totpCode)
+
+	if lr.Status != base.LOGIN_SUCCESS {
+		log.Debugf("%s", err)
+		// erase all other statuses
+		lr.Status = base.LOGIN_FAILED
+	}
+
+	return lr
+}
+
+func (prv *Provider) GetUserByName(username string) (res *base.Resource) {
+	user, err := prv.sl.GetUserByName(username)
 
 	if err != nil {
-		msg := "Invalid username"
-		log.Debugf(msg)
+		log.Debugf("No user found with username %s", username)
 		return nil
 	}
 
