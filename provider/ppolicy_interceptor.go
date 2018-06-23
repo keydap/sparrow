@@ -53,7 +53,7 @@ outer:
 		}
 
 		// only modify user's password attribute do not touch any other container's password attribute
-		if o.ParsedPath == nil {
+		if o.ParsedPath == nil || o.ParsedPath.IsExtContainer {
 			m := o.Value.(map[string]interface{})
 			for k, v := range m {
 				if strings.ToLower(k) == "password" {

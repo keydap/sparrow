@@ -100,10 +100,18 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 		displayName = res.GetAttr("displayname").GetSimpleAt().GetStringVal()
 	}
 
-	if pp == nil { // no path is provided
+	if pp == nil || pp.IsExtContainer { // no path is provided or path is an extension container
 		var addRs *base.Resource
 		var err error
 		if obj, ok := po.Value.(map[string]interface{}); ok {
+			// ToResource() looks for extension URI to be able
+			// to successfully parse it as part of the main resource type
+			// so store the map as a value of the extension URI in a new map
+			if pp != nil && pp.IsExtContainer {
+				tmpMap := make(map[string]interface{})
+				tmpMap[pp.Schema] = obj
+				obj = tmpMap
+			}
 			addRs, err = base.ToResource(res.GetType(), sl.schemas, obj)
 			if err != nil {
 				panic(err)
@@ -446,10 +454,19 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 		displayName = res.GetAttr("displayname").GetSimpleAt().GetStringVal()
 	}
 
-	if pp == nil {
+	if pp == nil || pp.IsExtContainer {
 		var addRs *base.Resource
 		var err error
 		if obj, ok := po.Value.(map[string]interface{}); ok {
+			// ToResource() looks for extension URI to be able
+			// to successfully parse it as part of the main resource type
+			// so store the map as a value of the extension URI in a new map
+			if pp != nil && pp.IsExtContainer {
+				tmpMap := make(map[string]interface{})
+				tmpMap[pp.Schema] = obj
+				obj = tmpMap
+			}
+
 			addRs, err = base.ToResource(res.GetType(), sl.schemas, obj)
 			if err != nil {
 				panic(err)
@@ -694,6 +711,8 @@ func (sl *Silo) addAttrTo(target *base.Resource, attr base.Attribute, tx *bolt.T
 			atg = base.NewAtGroup()
 		}
 		target.Ext[atType.SchemaId] = atg
+		// also update the schemas attribute which otherwise will never get updated
+		// due to its readonly nature
 		target.UpdateSchemas()
 	}
 

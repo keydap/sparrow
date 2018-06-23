@@ -26,11 +26,12 @@ type PatchOp struct {
 }
 
 type ParsedPath struct {
-	ParentType *schema.AttrType // name of the sub-attribute's parent
-	AtType     *schema.AttrType // name of the (sub-)attribute
-	Schema     string           // the schema of the attribute
-	Slctr      Selector         // the selection filter present in the path
-	Text       string
+	ParentType     *schema.AttrType // name of the sub-attribute's parent
+	AtType         *schema.AttrType // name of the (sub-)attribute
+	Schema         string           // the schema of the attribute
+	Slctr          Selector         // the selection filter present in the path
+	Text           string
+	IsExtContainer bool
 }
 
 func NewPatchReq() *PatchReq {
@@ -153,6 +154,10 @@ func ParsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error)
 	colonPos := strings.LastIndex(runningPath, ":")
 
 	if colonPos > 0 {
+		// when colon is present there are two cases
+		// 1. an attribute of extension container or
+		// 2. the extension container itself as a whole
+		assumedContainerPath := runningPath
 		uri := path[:colonPos]
 		if rt.Schema == uri {
 			uri = "" // core schema
@@ -160,6 +165,12 @@ func ParsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error)
 			found := false
 			for _, extSc := range rt.SchemaExtensions {
 				if uri == extSc.Schema {
+					found = true
+					pp.Schema = uri
+					break
+				} else if assumedContainerPath == extSc.Schema {
+					pp.IsExtContainer = true
+					pp.Schema = assumedContainerPath
 					found = true
 					break
 				}
@@ -169,9 +180,11 @@ func ParsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error)
 				detail := fmt.Sprintf("Unknown schema URI %s in the attribute path %s", uri, path)
 				return nil, NewBadRequestError(detail)
 			}
-		}
 
-		pp.Schema = uri
+			if pp.IsExtContainer {
+				return pp, nil
+			}
+		}
 
 		colonPos++
 		if colonPos >= len(path) {

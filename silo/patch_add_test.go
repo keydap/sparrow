@@ -326,8 +326,19 @@ func TestPatchAddExtensionAts(t *testing.T) {
 		t.Errorf("Failed to apply patch req with extended object")
 	}
 
+	// patch user with a new extension's data while using the URN as path
+	pr = getPr(`{"Operations":[{"op":"add", "path": "urn:keydap:params:scim:schemas:extension:authentication:2.0:User", "value":
+	               {"twofactorType": "Totp"}
+    		     }]}`, userType, updatedRs.GetVersion())
+
+	updatedRs, err = sl.Patch(rs.GetId(), pr, userType)
+	if err != nil {
+		t.Errorf("Failed to apply patch req with extended object")
+	}
+
 	scIds := updatedRs.GetAttr("schemas").GetSimpleAt()
-	if len(scIds.Values) != 2 {
+	t.Log(scIds.Values)
+	if len(scIds.Values) != 3 {
 		t.Errorf("Failed to include the extension schema's URN in the schemas array of updated resource")
 	}
 

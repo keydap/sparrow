@@ -630,13 +630,18 @@ func (rs *Resource) UpdateLastModTime(csn Csn) {
 }
 
 func (rs *Resource) UpdateSchemas() {
+	schemas := rs.Core.SimpleAts["schemas"]
+	if schemas == nil {
+		// this happens in special cases of patch requests dealing with extension container alone
+		// for example while parsing the patch requests present in TestPatchAddExtensionAts()
+		return
+	}
 	schemaIds := make([]interface{}, 1)
 	schemaIds[0] = rs.resType.Schema
 	for scId, _ := range rs.Ext {
 		schemaIds = append(schemaIds, scId)
 	}
 
-	schemas := rs.Core.SimpleAts["schemas"]
 	schemas.Values = schemaIds
 }
 
@@ -1032,9 +1037,9 @@ func parseJsonObject(obj map[string]interface{}, rt *schema.ResourceType, sc *sc
 			switch v.(type) {
 			case map[string]interface{}:
 				vObj = v.(map[string]interface{})
+				pph.updateSchemas = true
 				if len(vObj) == 0 {
 					log.Debugf("Skipping empty extended object")
-					pph.updateSchemas = true
 					continue
 				}
 
