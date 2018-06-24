@@ -95,6 +95,8 @@ func startHttp() {
 
 	// root level search
 	scimRouter.HandleFunc("/.search", handleResRequest).Methods("POST")
+	// for group management, Sparrow specific method, not a SCIM standard
+	scimRouter.HandleFunc("/ModifyGroupsOfUser", handleResRequest).Methods("POST")
 
 	// register routes for each resourcetype endpoint
 	// FIXME fix the routes with regex to ignore trailing / chars
@@ -413,6 +415,39 @@ func search(hc *httpContext, sr *base.SearchRequest, rTypes ...*schema.ResourceT
 	}
 
 	hc.w.Write([]byte(`], "totalResults":` + strconv.Itoa(count) + `}`))
+}
+
+func modifyGroupsOfUser(hc *httpContext) {
+	defer hc.r.Body.Close()
+	dec := json.NewDecoder(hc.r.Body)
+	var autg base.ModifyGroupsOfUserRequest
+
+	err := dec.Decode(&autg)
+	if err != nil {
+		log.Debugf("%#v", err)
+		err = base.NewBadRequestError(err.Error())
+		writeError(hc.w, err)
+		return
+	}
+
+	autg.UserVersion = hc.r.Header.Get("If-Match")
+	autg.OpContext = hc.OpContext
+
+	user, err := hc.pr.ModifyGroupsOfUser(autg)
+	if err != nil {
+		log.Debugf("%#v", err)
+		writeError(hc.w, err)
+		return
+	}
+
+	writeCommonHeaders(hc.w)
+	header := hc.w.Header()
+	header.Add("Location", hc.r.RequestURI+"/"+autg.UserRid)
+	header.Add("Etag", user.GetVersion())
+	hc.w.WriteHeader(http.StatusCreated)
+	d := user.Serialize()
+	hc.w.Write(d)
+	log.Debugf("Successfully added user to the given groups")
 }
 
 func createResource(hc *httpContext) {
@@ -844,6 +879,8 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 
 		if strings.HasSuffix(hc.Endpoint, "/.search") {
 			searchWithSearchRequest(hc)
+		} else if strings.HasSuffix(hc.Endpoint, "/ModifyGroupsOfUser") {
+			modifyGroupsOfUser(hc)
 		} else {
 			createResource(hc)
 		}

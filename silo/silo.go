@@ -820,47 +820,51 @@ func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string,
 			subAtMap["type"] = base.NewSimpleAt(gTypeAtType, refRType.Name)
 
 			if refRType.Name == "User" {
-				groups := refRes.GetAttr("groups")
-				subAt := make(map[string]interface{})
-				subAt["value"] = groupRid
-				subAt["$ref"] = "/Groups/" + groupRid
-				subAt["type"] = "Group"
-				subAt["display"] = displayName
-
-				updated := false
-				if groups == nil {
-					err := refRes.AddCA("groups", subAt)
-					if err != nil {
-						panic(err)
-					}
-					updated = true
-				} else {
-					ca := groups.GetComplexAt()
-					present := false
-					// add only if the group is not already present in this user
-					for _, groupAtMap := range ca.SubAts {
-						existingGid := groupAtMap["value"].Values[0].(string)
-						if existingGid == groupRid {
-							present = true
-							break
-						}
-					}
-
-					if !present {
-						ca.AddSubAts(subAt)
-						updated = true
-					}
-				}
-
+				updated := sl.addGroupToUser(refRes, groupRid, displayName)
 				if updated {
 					ugroupIdx.add(groupRid, refId, tx)
 					refRes.UpdateLastModTime(sl.cg.NewCsn())
 					sl.storeResource(tx, refRes)
 				}
 			}
-
 		}
 	}
+}
+
+func (sl *Silo) addGroupToUser(refRes *base.Resource, groupRid string, groupDisplayName string) bool {
+	groups := refRes.GetAttr("groups")
+	subAt := make(map[string]interface{})
+	subAt["value"] = groupRid
+	subAt["$ref"] = "/Groups/" + groupRid
+	subAt["type"] = "Group"
+	subAt["display"] = groupDisplayName
+
+	updated := false
+	if groups == nil {
+		err := refRes.AddCA("groups", subAt)
+		if err != nil {
+			panic(err)
+		}
+		updated = true
+	} else {
+		ca := groups.GetComplexAt()
+		present := false
+		// add only if the group is not already present in this user
+		for _, groupAtMap := range ca.SubAts {
+			existingGid := groupAtMap["value"].Values[0].(string)
+			if existingGid == groupRid {
+				present = true
+				break
+			}
+		}
+
+		if !present {
+			ca.AddSubAts(subAt)
+			updated = true
+		}
+	}
+
+	return updated
 }
 
 // FIXME there is a method duplicating this functionality in addSAtoIndex() in silo_patch.go
@@ -1795,4 +1799,152 @@ func (sl *Silo) VerifyOtp(rid string, totpCode string) (lr base.LoginResult, err
 	sl.storeResource(tx, user)
 
 	return lr, nil
+}
+
+func (sl *Silo) ModifyGroupsOfUser(mgur base.ModifyGroupsOfUserRequest) (res *base.Resource, err error) {
+	tx, err := sl.db.Begin(true)
+
+	if err != nil {
+		detail := fmt.Sprintf("Could not begin a transaction for adding user to groups [%s]", err.Error())
+		log.Criticalf(detail)
+		err = base.NewInternalserverError(detail)
+		return nil, err
+	}
+
+	userId := mgur.UserRid
+	sl.mutex.Lock()
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			tx.Rollback()
+			res = nil
+			log.Debugf("failed to add user %s to groups [%s]", userId, err)
+		} else {
+			tx.Commit()
+			log.Debugf("Successfully updated resource with id %s", userId)
+		}
+
+		sl.mutex.Unlock()
+	}()
+
+	rtUser := sl.resTypes["User"]
+	user, err := sl.getUsingTx(userId, rtUser, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.Compare(user.GetVersion(), mgur.UserVersion) != 0 {
+		msg := fmt.Sprintf("The given version %s of the user %s doesn't match with stored version", mgur.UserVersion, userId)
+		log.Debugf(msg)
+		return nil, base.NewPreCondError(msg)
+	}
+
+	added := false
+	removed := false
+
+	// groups that were fetched and modified during this transaction
+	fetchedGroups := make(map[string]*base.Resource)
+	if len(mgur.RemoveGids) > 0 {
+		removed = sl.removeUserFromGroups(user, mgur.RemoveGids, fetchedGroups, tx)
+	}
+
+	if len(mgur.AddGids) > 0 {
+		added = sl.addUserToGroups(user, mgur.AddGids, fetchedGroups, tx)
+	}
+
+	if added || removed {
+		for _, group := range fetchedGroups {
+			// now persist group immediately and user at the end of the loop
+			group.UpdateLastModTime(sl.cg.NewCsn())
+			sl.storeResource(tx, group)
+		}
+
+		user.UpdateLastModTime(sl.cg.NewCsn())
+		sl.storeResource(tx, user)
+	}
+
+	return user, nil
+}
+
+func (sl *Silo) addUserToGroups(user *base.Resource, gids []string, fetchedGroups map[string]*base.Resource, tx *bolt.Tx) (updated bool) {
+	rt := sl.resTypes["Group"]
+	atType := rt.GetAtType("members")
+	userId := user.GetId()
+	ugroupIdx := sl.getIndex(user.GetType().Name, "groups.value")
+	for _, id := range gids {
+		group := fetchedGroups[id]
+		var err error
+		if group == nil {
+			group, err = sl.getUsingTx(id, rt, tx)
+			if err != nil {
+				continue
+			}
+			fetchedGroups[id] = group
+		}
+
+		membersAt := group.GetAttr("members")
+		if membersAt == nil {
+			group.AddComplexAt(base.NewComplexAt(atType))
+			membersAt = group.GetAttr("members")
+		}
+
+		ca := membersAt.GetComplexAt()
+		// if the group already has this user as a member then do not add
+		if ca.HasValue(userId) {
+			continue
+		}
+
+		subAt := make(map[string]interface{})
+		subAt["value"] = userId
+		subAt["$ref"] = "/Users/" + userId
+		subAt["type"] = "User"
+		ca.AddSubAts(subAt)
+		displayName := group.GetAttr("displayname").GetSimpleAt().GetStringVal()
+		sl.addGroupToUser(user, id, displayName)
+		updated = true
+
+		ugroupIdx.add(id, userId, tx)
+	}
+
+	return updated
+}
+
+func (sl *Silo) removeUserFromGroups(user *base.Resource, gids []string, fetchedGroups map[string]*base.Resource, tx *bolt.Tx) (updated bool) {
+	userGroups := user.GetAttr("groups")
+	if userGroups == nil {
+		return false
+	}
+
+	rt := sl.resTypes["Group"]
+	ugroupIdx := sl.getIndex(user.GetType().Name, "groups.value")
+	userId := user.GetId()
+	for _, id := range gids {
+		group := fetchedGroups[id]
+		var err error
+		if group == nil {
+			group, err = sl.getUsingTx(id, rt, tx)
+			if err != nil {
+				continue
+			}
+			fetchedGroups[id] = group
+		}
+
+		removed := group.RemoveMember(userId)
+
+		if !removed {
+			continue
+		}
+
+		user.RemoveMemberOf(id)
+		updated = true
+
+		ugroupIdx.remove(id, userId, tx)
+	}
+
+	return updated
 }

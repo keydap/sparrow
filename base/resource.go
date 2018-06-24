@@ -427,18 +427,38 @@ func (rs *Resource) IsMemberOf(gid string) bool {
 	return false
 }
 
-func (rs *Resource) RemoveMember(uid string) {
-	ca := rs.Core.ComplexAts["members"]
+func (group *Resource) RemoveMember(uid string) bool {
+	ca := group.Core.ComplexAts["members"]
 	if ca == nil {
-		return
+		return false
 	}
 
 	for key, subAtMap := range ca.SubAts {
 		id := subAtMap["value"].Values[0].(string)
 		if id == uid {
 			delete(ca.SubAts, key)
+			return true
 		}
 	}
+
+	return false
+}
+
+func (user *Resource) RemoveMemberOf(gid string) bool {
+	ca := user.Core.ComplexAts["groups"]
+	if ca == nil {
+		return false
+	}
+
+	for key, subAtMap := range ca.SubAts {
+		id := subAtMap["value"].Values[0].(string)
+		if id == gid {
+			delete(ca.SubAts, key)
+			return true
+		}
+	}
+
+	return false
 }
 
 func (rs *Resource) AddMeta() *ComplexAttribute {

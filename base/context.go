@@ -90,6 +90,14 @@ type AuthRequest struct {
 	ClientIP string
 }
 
+type ModifyGroupsOfUserRequest struct {
+	UserRid     string   `json:"userrid"`    // user resource's ID
+	AddGids     []string `json:"addgids"`    // list of group resources' IDs
+	RemoveGids  []string `json:"removegids"` // list of group resources' IDs
+	UserVersion string
+	*OpContext
+}
+
 type OpDecision struct {
 	Allow            bool
 	Deny             bool
@@ -322,4 +330,24 @@ func (sc *SearchContext) CanDenyOp() (bool, *FilterNode) {
 
 	deny := ((flipped & powTwo) == 0)
 	return deny, fn
+}
+
+// only checks for permissions on User resourcetype even
+// though the associated operation updates groups as well
+func (auth ModifyGroupsOfUserRequest) AllowOp(res *Resource) bool {
+	rt := res.resType
+	rp := auth.Session.EffPerms[rt.Name]
+	if rp == nil {
+		return false
+	}
+
+	if rp.WritePerm.OnAnyResource && rp.WritePerm.AllowAll {
+		return true
+	}
+
+	entryOk := rp.WritePerm.EvalFilter(res)
+
+	// only allow the one who has write access to *all*
+	// attributes of User (a.k.a an admin)
+	return entryOk && rp.WritePerm.AllowAll
 }

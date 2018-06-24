@@ -451,6 +451,19 @@ func (prv *Provider) GetUserById(rid string) (user *base.Resource, err error) {
 	return user, nil
 }
 
+func (prv *Provider) ModifyGroupsOfUser(autg base.ModifyGroupsOfUserRequest) (user *base.Resource, err error) {
+	res, err := prv.sl.Get(autg.UserRid, prv.RsTypes["User"])
+	if err != nil {
+		return nil, err
+	}
+
+	if !autg.AllowOp(res) {
+		return nil, base.NewForbiddenError("Insufficent privileges to add groups to user")
+	}
+
+	return prv.sl.ModifyGroupsOfUser(autg)
+}
+
 func (prv *Provider) DomainCode() uint32 {
 	if prv.domainCode != 0 {
 		return prv.domainCode
