@@ -510,9 +510,11 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 		if tAt == nil {
 			// just add it
 			ca := base.ParseComplexAttr(pp.AtType, po.Value)
-			sl.addAttrTo(res, ca, tx, prIdx, mh)
-			if isMembers {
-				sl.addGroupMembers(ca, rid, displayName, tx)
+			if ca != nil {
+				sl.addAttrTo(res, ca, tx, prIdx, mh)
+				if isMembers {
+					sl.addGroupMembers(ca, rid, displayName, tx)
+				}
 			}
 		} else {
 			tCa := tAt.GetComplexAt()
