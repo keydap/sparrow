@@ -58,6 +58,16 @@ func showLogin(w http.ResponseWriter, r *http.Request) {
 	ologin.Execute(w, paramMap)
 }
 
+func showOtpPage(w http.ResponseWriter, paramMap map[string]string) {
+	totp := templates["totp-send.html"]
+	totp.Execute(w, paramMap)
+}
+
+func showChangePasswordPage(w http.ResponseWriter, paramMap map[string]string) {
+	cp := templates["changepassword.html"]
+	cp.Execute(w, paramMap)
+}
+
 // STEP 2 Authorization Server Authenticates the End-User
 func verifyPassword(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
@@ -112,7 +122,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			af.SetPasswordVerified(true)
 			af.UserId = lr.Id
 			af.DomainCode = prv.DomainCode()
-			setAuthFlow(af, w)
+			setAuthFlow(af, w) // FIXME shouldn't af be set to nil here?
 			setSessionCookie(lr.User, af, prv, w, r, paramMap)
 			return
 		}
@@ -128,6 +138,8 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			af.SetTfaRegister(true)
 		} else if lr.Status == base.LOGIN_TFA_REQUIRED {
 			af.SetTfaRequired(true)
+		} else if lr.Status == base.LOGIN_CHANGE_PASSWORD {
+			af.SetChangePassword(true)
 		}
 
 		setAuthFlow(af, w)
@@ -136,18 +148,56 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			showTotpRegistration(username, prv, af, w, paramMap)
 			return
 		}
+
+		if af.ChangePassword() {
+			showChangePasswordPage(w, paramMap)
+			return
+		}
+	}
+
+	if af.ChangePassword() {
+		newPassword := r.Form.Get("newPassword")
+		cnfNewPassword := r.Form.Get("cnfNewPassword")
+		delete(paramMap, "newPassword")
+		delete(paramMap, "cnfNewPassword")
+		if newPassword != cnfNewPassword {
+			paramMap["errMsg"] = "New passwords didn't match"
+			showChangePasswordPage(w, paramMap)
+			return
+		}
+
+		user, err := prv.ChangePassword(af.UserId, newPassword)
+		if err != nil {
+			showChangePasswordPage(w, paramMap)
+			return
+		} else {
+			af.SetChangePassword(false)
+			setAuthFlow(nil, w)
+			setSessionCookie(user, af, prv, w, r, paramMap)
+			return
+		}
 	}
 
 	if af.RequiredTfa() {
 		otp := r.Form.Get("otp")
 		delete(paramMap, "otp")
+
+		if otp == "" {
+			showOtpPage(w, paramMap)
+			return
+		}
+
 		lr := prv.VerifyOtp(af.UserId, otp)
 		if lr.Status == base.LOGIN_FAILED {
-			totp := templates["totp-send.html"]
-			totp.Execute(w, paramMap)
+			showOtpPage(w, paramMap)
 			return
 		} else if lr.Status == base.LOGIN_SUCCESS {
+			setAuthFlow(nil, w)
 			setSessionCookie(lr.User, af, prv, w, r, paramMap)
+		} else if lr.Status == base.LOGIN_CHANGE_PASSWORD {
+			af.SetChangePassword(true)
+			setAuthFlow(af, w)
+			showChangePasswordPage(w, paramMap)
 		}
 	}
 }

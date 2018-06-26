@@ -15,6 +15,7 @@ writeHtml() {
   writeConst "saml_response_html" "templates/saml_response.html" $targetFile
   writeConst "totp_register_html" "templates/totp-register.html" $targetFile
   writeConst "totp_send_html" "templates/totp-send.html" $targetFile
+  writeConst "changepassword_html" "templates/changepassword.html" $targetFile
 }
 
 writeSchemas() {

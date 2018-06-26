@@ -336,6 +336,10 @@ func writeDefaultHtmlTemplates(tmplDir string) {
 	// totp-send.html
 	totpSendTmpl := filepath.Join(tmplDir, "totp-send.html")
 	writeFile(totpSendTmpl, totp_send_html)
+
+	// changepassword.html
+	cpTmpl := filepath.Join(tmplDir, "changepassword.html")
+	writeFile(cpTmpl, changepassword_html)
 }
 
 func writeFile(name string, content string) {

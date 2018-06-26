@@ -396,7 +396,7 @@ func (prv *Provider) Authenticate(username string, password string) (lr base.Log
 
 	if lr.Status != base.LOGIN_SUCCESS {
 		log.Debugf("%s", err)
-		if lr.Status != base.LOGIN_TFA_REGISTER && lr.Status != base.LOGIN_TFA_REQUIRED {
+		if lr.Status != base.LOGIN_TFA_REGISTER && lr.Status != base.LOGIN_TFA_REQUIRED && lr.Status != base.LOGIN_CHANGE_PASSWORD {
 			// erase all other statuses
 			lr.Status = base.LOGIN_FAILED
 		}
@@ -408,13 +408,23 @@ func (prv *Provider) Authenticate(username string, password string) (lr base.Log
 func (prv *Provider) VerifyOtp(rid string, totpCode string) (lr base.LoginResult) {
 	lr, err := prv.sl.VerifyOtp(rid, totpCode)
 
-	if lr.Status != base.LOGIN_SUCCESS {
+	if lr.Status != base.LOGIN_SUCCESS && lr.Status != base.LOGIN_CHANGE_PASSWORD {
 		log.Debugf("%s", err)
 		// erase all other statuses
 		lr.Status = base.LOGIN_FAILED
 	}
 
 	return lr
+}
+
+func (prv *Provider) ChangePassword(rid string, newPassword string) (user *base.Resource, err error) {
+	user, err = prv.sl.ChangePassword(rid, newPassword, prv.Config.Ppolicy.PasswdHashAlgo)
+
+	if err != nil {
+		log.Debugf("%s", err)
+	}
+
+	return user, err
 }
 
 func (prv *Provider) GetUserByName(username string) (res *base.Resource) {

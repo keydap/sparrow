@@ -28,6 +28,7 @@ const (
 	from_oauth
 	from_saml
 	register_tfa
+	change_password
 )
 
 type authFlow struct {
@@ -98,6 +99,14 @@ func (af *authFlow) FromSaml() bool {
 
 func (af *authFlow) SetFromSaml(yes bool) {
 	af.setBit(from_saml, yes)
+}
+
+func (af *authFlow) SetChangePassword(yes bool) {
+	af.setBit(change_password, yes)
+}
+
+func (af *authFlow) ChangePassword() bool {
+	return af.isSet(change_password)
 }
 
 func sendToken(w http.ResponseWriter, r *http.Request) {

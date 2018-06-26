@@ -1706,7 +1706,11 @@ func (sl *Silo) Authenticate(principal string, password string) (lr base.LoginRe
 			if utils.ComparePassword(password, hashedPasswd) {
 				// update authdata in this case only if TFA is not enabled for the user
 				if !tfaEn {
-					lr.Status = base.LOGIN_SUCCESS
+					if isChangePassword(user) {
+						lr.Status = base.LOGIN_CHANGE_PASSWORD
+					} else {
+						lr.Status = base.LOGIN_SUCCESS
+					}
 					lr.User = user
 					ad.LastSLogin = time.Now().UTC()
 					ad.FLoginCount = 0
@@ -1785,7 +1789,11 @@ func (sl *Silo) VerifyOtp(rid string, totpCode string) (lr base.LoginResult, err
 	}
 
 	if validOtp {
-		lr.Status = base.LOGIN_SUCCESS
+		if isChangePassword(user) {
+			lr.Status = base.LOGIN_CHANGE_PASSWORD
+		} else {
+			lr.Status = base.LOGIN_SUCCESS
+		}
 		lr.User = user
 		ad.LastSLogin = time.Now().UTC()
 		ad.FLoginCount = 0
@@ -1947,4 +1955,70 @@ func (sl *Silo) removeUserFromGroups(user *base.Resource, gids []string, fetched
 	}
 
 	return updated
+}
+
+func (sl *Silo) ChangePassword(rid string, newPassword string, hashingAlgo string) (user *base.Resource, err error) {
+	tx, err := sl.db.Begin(true)
+
+	if err != nil {
+		detail := fmt.Sprintf("Could not begin a transaction for changing user's password [%s]", err.Error())
+		log.Criticalf(detail)
+		err = base.NewInternalserverError(detail)
+		return nil, err
+	}
+
+	sl.mutex.Lock()
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			tx.Rollback()
+			log.Debugf("failed to change password of user %s [%s]", rid, err)
+		} else {
+			tx.Commit()
+			log.Debugf("Successfully changed password of user %s", rid)
+		}
+
+		sl.mutex.Unlock()
+	}()
+
+	rtUser := sl.resTypes["User"]
+	user, err = sl.getUsingTx(rid, rtUser, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	newPassword = utils.HashPassword(newPassword, hashingAlgo)
+	atType := rtUser.GetAtType("password")
+	passwdAt := user.GetAttr(atType.NormName)
+	if passwdAt == nil {
+		user.AddSA(atType.NormName, newPassword)
+	} else {
+		passwdAt.GetSimpleAt().Values[0] = newPassword
+	}
+
+	cpType := rtUser.GetAtType("changepassword")
+	cpAt := user.GetAttr(cpType.NormName)
+	if cpAt != nil {
+		cpAt.GetSimpleAt().Values[0] = false
+	}
+
+	user.UpdateLastModTime(sl.cg.NewCsn())
+	sl.storeResource(tx, user)
+
+	return user, nil
+}
+
+func isChangePassword(user *base.Resource) bool {
+	changePasswordAt := user.GetAttr("changepassword")
+	cp := false
+	if changePasswordAt != nil {
+		cp = changePasswordAt.GetSimpleAt().Values[0].(bool)
+	}
+
+	return cp
 }
