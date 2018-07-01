@@ -122,9 +122,15 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			af.SetPasswordVerified(true)
 			af.UserId = lr.Id
 			af.DomainCode = prv.DomainCode()
-			setAuthFlow(af, w) // FIXME shouldn't af be set to nil here?
+			setAuthFlow(af, w)
 			setSessionCookie(lr.User, af, prv, w, r, paramMap)
 			return
+		} else if lr.Status == base.LOGIN_TFA_REGISTER { // check TFA settings and enable appropriate flags
+			af.SetTfaRegister(true)
+		} else if lr.Status == base.LOGIN_TFA_REQUIRED {
+			af.SetTfaRequired(true)
+		} else if lr.Status == base.LOGIN_CHANGE_PASSWORD {
+			af.SetChangePassword(true)
 		}
 
 		log.Debugf("password verified")
@@ -132,15 +138,6 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		af.SetPasswordVerified(true)
 		af.UserId = lr.Id
 		af.DomainCode = prv.DomainCode()
-
-		// check TFA settings and enable appropriate flags
-		if lr.Status == base.LOGIN_TFA_REGISTER {
-			af.SetTfaRegister(true)
-		} else if lr.Status == base.LOGIN_TFA_REQUIRED {
-			af.SetTfaRequired(true)
-		} else if lr.Status == base.LOGIN_CHANGE_PASSWORD {
-			af.SetChangePassword(true)
-		}
 
 		setAuthFlow(af, w)
 
@@ -172,7 +169,6 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			af.SetChangePassword(false)
-			setAuthFlow(nil, w)
 			setSessionCookie(user, af, prv, w, r, paramMap)
 			return
 		}
@@ -464,9 +460,12 @@ func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider,
 		return session
 	} else if af.FromSaml() {
 		log.Debugf("resuming SAML flow")
+		setAuthFlow(nil, w)
 		sendSamlResponse(w, r, session, af)
 		return session
 	}
+
+	setAuthFlow(nil, w)
 
 	http.Redirect(w, r, "/ui", http.StatusFound)
 
