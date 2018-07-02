@@ -9,7 +9,6 @@ import (
 	"io"
 	"reflect"
 	"sparrow/schema"
-	"sparrow/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -461,7 +460,7 @@ func (user *Resource) RemoveMemberOf(gid string) bool {
 	return false
 }
 
-func (rs *Resource) AddMeta() *ComplexAttribute {
+func (rs *Resource) AddMeta(csn Csn) *ComplexAttribute {
 	// manually adding with the assumption that this performs better than parsing map[string]interface{} when AddCA() is used
 	ca := &ComplexAttribute{}
 	ca.Name = "meta"
@@ -483,13 +482,13 @@ func (rs *Resource) AddMeta() *ComplexAttribute {
 	createdAt := &SimpleAttribute{Name: "created"}
 	createdAt.atType = parentAt.SubAttrMap[createdAt.Name]
 	createdAt.Values = make([]interface{}, 1)
-	createdAt.Values[0] = utils.DateTimeMillis()
+	createdAt.Values[0] = csn.TimeMillis()
 	atMap[createdAt.Name] = createdAt
 
 	lastModAt := &SimpleAttribute{Name: "lastmodified"}
 	lastModAt.atType = parentAt.SubAttrMap[lastModAt.Name]
 	lastModAt.Values = make([]interface{}, 1)
-	lastModAt.Values[0] = utils.DateTimeMillis()
+	lastModAt.Values[0] = csn.TimeMillis()
 	atMap[lastModAt.Name] = lastModAt
 
 	locationAt := &SimpleAttribute{Name: "location"}
@@ -501,7 +500,7 @@ func (rs *Resource) AddMeta() *ComplexAttribute {
 	versionAt := &SimpleAttribute{Name: "version"}
 	versionAt.atType = parentAt.SubAttrMap[versionAt.Name]
 	versionAt.Values = make([]interface{}, 1)
-	versionAt.Values[0] = fmt.Sprint(lastModAt.Values[0])
+	versionAt.Values[0] = csn.String()
 	atMap[versionAt.Name] = versionAt
 
 	return ca

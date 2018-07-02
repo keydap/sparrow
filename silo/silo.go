@@ -674,9 +674,6 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 	// validate the uniqueness constraints based on the schema
 	rt := inRes.GetType()
 
-	// now, add meta attribute
-	inRes.AddMeta()
-
 	tx, err := sl.db.Begin(true)
 
 	isGroup := false
@@ -713,6 +710,9 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 
 		sl.mutex.Unlock()
 	}()
+
+	// now, add meta attribute
+	inRes.AddMeta(sl.cg.NewCsn())
 
 	//log.Debugf("checking unique attributes %s", rt.UniqueAts)
 	//log.Debugf("indices map %#v", sl.indices[rtName])
