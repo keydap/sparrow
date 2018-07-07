@@ -59,7 +59,7 @@ func NewCsnGenerator(replicaId uint16) *csnGenerator {
 func (cg *csnGenerator) NewCsn() base.Csn {
 	cg.mutex.Lock()
 
-	now := time.Now()
+	now := time.Now().UTC()
 	millis := now.UnixNano() / 1000000
 
 	if cg.lastTime == millis {
