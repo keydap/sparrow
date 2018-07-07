@@ -113,7 +113,8 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		delete(paramMap, "username")
 		delete(paramMap, "password")
 
-		lr := prv.Authenticate(username, password)
+		ar := base.AuthRequest{Username: username, Password: password, ClientIP: r.RemoteAddr}
+		lr := prv.Authenticate(ar)
 		if lr.Status == base.LOGIN_FAILED {
 			login := templates["login.html"]
 			login.Execute(w, paramMap)
@@ -163,7 +164,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		user, err := prv.ChangePassword(af.UserId, newPassword)
+		user, err := prv.ChangePassword(af.UserId, newPassword, r.RemoteAddr)
 		if err != nil {
 			showChangePasswordPage(w, paramMap)
 			return
@@ -183,7 +184,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		lr := prv.VerifyOtp(af.UserId, otp)
+		lr := prv.VerifyOtp(af.UserId, otp, r.RemoteAddr)
 		if lr.Status == base.LOGIN_FAILED {
 			showOtpPage(w, paramMap)
 			return

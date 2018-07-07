@@ -208,7 +208,9 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 	}
 
 	bindReq.Username = getUsernameFromDn(bindReq.Username)
-	user := ldap_authenticate(bindReq.Username, bindReq.Password, pr)
+	ar := base.AuthRequest{Username: bindReq.Username, Password: bindReq.Password, ClientIP: ls.ClientIP}
+
+	user := ldap_authenticate(ar, pr)
 	if user == nil {
 		errResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultInvalidCredentials, "Invalid username or password")
 		ls.con.Write(errResp.Bytes())
@@ -250,7 +252,10 @@ func generateResultCode(messageId int, appRespTag ber.Tag, resultCode int, errMs
 }
 
 func toSearchContext(req ldap.SearchRequest, ls *LdapSession) (searchCtx *base.SearchContext, pr *provider.Provider, err error) {
+	sr := &base.SearchRequest{Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:SearchRequest"}}
+	sr.Count = req.SizeLimit
 	searchCtx = &base.SearchContext{}
+	searchCtx.RawReq = sr
 	searchCtx.OpContext = ls.OpContext
 
 	// detect ResourceTypes from baseDN
@@ -305,6 +310,10 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	}
 
 	sc, pr, err := toSearchContext(ldapReq, ls)
+
+	if pr != nil {
+		defer pr.Al.Log(sc, nil, err)
+	}
 
 	if err != nil {
 		log.Warningf("%s", err)
@@ -754,6 +763,7 @@ func getDomainAndEndpoint(baseDN string) (domain string, endPoint string) {
 
 func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base.SearchContext, pr *provider.Provider) (attrParam map[string]*base.AttributeParam, err error) {
 	scimFilter, err := ldapToScimFilter(packet.Children[6], searchCtx, pr)
+	searchCtx.RawReq.Filter = scimFilter
 	if err != nil {
 		return nil, err
 	}
@@ -829,7 +839,7 @@ func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base
 		reqAttrs += (name + ",")
 	}
 
-	searchCtx.ParamAttrs = reqAttrs
+	searchCtx.RawReq.Attributes = reqAttrs
 
 	attrSet, subAtPresent := base.SplitAttrCsv(reqAttrs, searchCtx.ResTypes...)
 
@@ -955,7 +965,8 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 		}
 
 		if effSession == nil {
-			user = ldap_authenticate(getCtx.Username, oldPasswd, pr)
+			ar := base.AuthRequest{Username: getCtx.Username, Password: oldPasswd, ClientIP: ls.ClientIP}
+			user = ldap_authenticate(ar, pr)
 			if user == nil {
 				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultNoSuchObject, "user doesn't exist")
 				ls.con.Write(errResp.Bytes())
@@ -1154,9 +1165,10 @@ func canChangePassword(effSession *base.RbacSession, user *base.Resource) bool {
 	return rp.WritePerm.EvalFilter(user)
 }
 
-func ldap_authenticate(username string, password string, pr *provider.Provider) (user *base.Resource) {
-	user = pr.GetUserByName(username)
+func ldap_authenticate(ar base.AuthRequest, pr *provider.Provider) (user *base.Resource) {
+	user = pr.GetUserByName(ar.Username)
 	if user == nil {
+		pr.Al.LogAuth("", ar.Username, ar.ClientIP, base.LOGIN_USER_NOT_FOUND)
 		return nil
 	}
 
@@ -1165,21 +1177,24 @@ func ldap_authenticate(username string, password string, pr *provider.Provider) 
 	// in case of LDAP, if TFA is enabled for a user then it is assumed that
 	// user already performed the necessary setup to obtain OTPs
 	if tfaEnabled {
-		plen := len(password)
+		plen := len(ar.Password)
 		// OTP code contains 6 digits
 		if plen <= OTP_LEN {
+			pr.Al.LogAuth("", ar.Username, ar.ClientIP, base.LOGIN_FAILED)
 			return nil
 		}
 
 		plen = plen - OTP_LEN
-		totpCode = password[plen:]
-		password = password[:plen]
+		totpCode = ar.Password[plen:]
+		ar.Password = ar.Password[:plen]
 	}
 
-	lr := pr.Authenticate(username, password)
+	lr := pr.Authenticate(ar)
+	pr.Al.LogAuth(lr.Id, ar.Username, ar.ClientIP, lr.Status)
 
 	if lr.Status == base.LOGIN_TFA_REQUIRED {
-		lr = pr.VerifyOtp(lr.Id, totpCode)
+		lr = pr.VerifyOtp(lr.Id, totpCode, ar.ClientIP)
+		pr.Al.LogOtp(lr.Id, ar.ClientIP, lr.User, lr.Status)
 	}
 
 	if lr.Status == base.LOGIN_SUCCESS {

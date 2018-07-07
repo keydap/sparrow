@@ -27,6 +27,7 @@ writeSchemas() {
   writeConst "user_schema" "resources/schemas/user.json" $targetFile
   writeConst "application_schema" "resources/schemas/application.json" $targetFile
   writeConst "authentication_schema" "resources/schemas/authentication.json" $targetFile
+  writeConst "auditevent_schema" "resources/schemas/auditevent.json" $targetFile
 }
 
 writeResourceTypes() {
@@ -36,6 +37,7 @@ writeResourceTypes() {
   writeConst "group_type" "resources/types/group.json" $targetFile
   writeConst "user_type" "resources/types/user.json" $targetFile
   writeConst "application_type" "resources/types/application.json" $targetFile
+  writeConst "auditevent_type" "resources/types/auditevent.json" $targetFile
 }
 
 copyVersionFile() {

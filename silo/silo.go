@@ -2022,3 +2022,7 @@ func isChangePassword(user *base.Resource) bool {
 
 	return cp
 }
+
+func (sl *Silo) Csn() base.Csn {
+	return sl.cg.NewCsn()
+}

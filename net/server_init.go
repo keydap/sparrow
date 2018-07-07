@@ -368,6 +368,9 @@ func writeSchemas(schemaDir string) {
 
 	authentication := filepath.Join(schemaDir, "authentication.json")
 	writeFile(authentication, authentication_schema)
+
+	auditevent := filepath.Join(schemaDir, "auditevent.json")
+	writeFile(auditevent, auditevent_schema)
 }
 
 func writeResourceTypes(rtDir string) {
@@ -382,4 +385,7 @@ func writeResourceTypes(rtDir string) {
 
 	application := filepath.Join(rtDir, "application.json")
 	writeFile(application, application_type)
+
+	auditevent := filepath.Join(rtDir, "auditevent.json")
+	writeFile(auditevent, auditevent_type)
 }

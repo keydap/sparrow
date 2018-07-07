@@ -1,0 +1,99 @@
+{
+    "id":"urn:keydap:params:scim:schemas:core:2.0:AuditEvent",
+    "name":"AuditEvent",
+    "description":"Audit event",
+    "attributes":[
+        {
+            "name":"uri",
+            "type":"string",
+            "multiValued":false,
+            "description":"URI of the endpoint",
+            "required":false,
+            "caseExact":false,
+            "mutability":"immutable",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"actorId",
+            "type":"string",
+            "multiValued":false,
+            "description":"ID of the acting resource",
+            "required":true,
+            "caseExact":false,
+            "mutability":"immutable",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"operation",
+            "type":"string",
+            "multiValued":false,
+            "description":"Name of the operation",
+            "required":true,
+            "caseExact":false,
+            "mutability":"immutable",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"statusCode",
+            "type":"integer",
+            "multiValued":false,
+            "description":"Status code result of the operation",
+            "required":true,
+            "caseExact":false,
+            "mutability":"immutable",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"desc",
+            "type":"string",
+            "multiValued":false,
+            "description":"Description of the event",
+            "required":false,
+            "caseExact":false,
+            "mutability":"immutable",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"ipAddress",
+            "type":"string",
+            "multiValued":false,
+            "description":"IP address of the client",
+            "required":true,
+            "caseExact":false,
+            "mutability":"immutable",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"payload",
+            "type":"string",
+            "multiValued":false,
+            "description":"Payload of the operation",
+            "required":false,
+            "caseExact":false,
+            "mutability":"immutable",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"channel",
+            "type":"string",
+            "multiValued":false,
+            "description":"Type of communication channel e.g LDAP, HTTP",
+            "required":false,
+            "caseExact":false,
+            "mutability":"immutable",
+            "returned":"default",
+            "uniqueness":"none"
+        }
+ ],
+ "meta":{
+        "resourceType":"Schema",
+        "location":"/v2/Schemas/urn:keydap:params:scim:schemas:core:2.0:AuditEvent"
+    }
+}

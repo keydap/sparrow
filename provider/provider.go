@@ -40,6 +40,7 @@ type Provider struct {
 	domainCode    uint32
 	osl           *oauth.OauthSilo
 	interceptors  []base.Interceptor
+	Al            *AuditLogger
 }
 
 const adminGroupId = "01000000-0000-4000-4000-000000000000"
@@ -117,6 +118,9 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	err = prv.createDefaultResources()
 
+	auditDataFilePath := filepath.Join(layout.DataDir, "audit-"+layout.name)
+	prv.Al = NewLocalAuditLogger(auditDataFilePath, prv.ServerId, prv.Config, prv.RsTypes, prv.Schemas)
+
 	return prv, err
 }
 
@@ -124,6 +128,7 @@ func (pr *Provider) Close() {
 	log.Debugf("Closing provider %s", pr.Name)
 	pr.sl.Close()
 	pr.osl.Close()
+	pr.Al.Close()
 }
 
 func (prv *Provider) createDefaultResources() error {
@@ -244,7 +249,13 @@ func (prv *Provider) GetConfigJson() (data []byte, err error) {
 }
 
 func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resource, err error) {
-	if !crCtx.AllowOp() {
+	defer func() {
+		prv.Al.Log(crCtx, res, err)
+	}()
+
+	isAuditRes := (crCtx.InRes.GetType() == prv.Al.rt)
+
+	if isAuditRes || !crCtx.AllowOp() {
 		return nil, base.NewForbiddenError("Insufficent privileges to create a resource")
 	}
 
@@ -264,17 +275,23 @@ func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resour
 	return res, err
 }
 
-func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) error {
+func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {
+	defer func() {
+		prv.Al.Log(delCtx, nil, err)
+	}()
+
 	od := delCtx.GetDecision()
 	if od.Deny {
-		return base.NewForbiddenError("Insufficent privileges to delete the resource")
+		err = base.NewForbiddenError("Insufficent privileges to delete the resource")
+		return err
 	}
 
 	if od.EvalFilter {
 		res, err := prv.sl.Get(delCtx.Rid, delCtx.Rt)
 		if res != nil {
 			if !delCtx.EvalDelete(res) {
-				return base.NewForbiddenError("Insufficent privileges to delete the resource")
+				err = base.NewForbiddenError("Insufficent privileges to delete the resource")
+				return err
 			}
 		} else {
 			// no need to attempt delete again, the entry is not found
@@ -283,24 +300,35 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) error {
 	}
 
 	if delCtx.Rid == delCtx.Session.Sub {
-		return base.NewForbiddenError("Cannot delete self")
+		err = base.NewForbiddenError("Cannot delete self")
+		return err
 	}
 
 	if _, ok := prv.immResIds[delCtx.Rid]; ok {
 		msg := fmt.Sprintf("Resource with ID %s cannot be deleted, it is required for the functioning of server", delCtx.Rid)
 		log.Debugf(msg)
-		return base.NewForbiddenError(msg)
+		err = base.NewForbiddenError(msg)
+		return err
 	}
 
 	return prv.sl.Delete(delCtx.Rid, delCtx.Rt)
 }
 
 func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, err error) {
+	defer func() {
+		prv.Al.Log(getCtx, res, err)
+	}()
+
+	sl := prv.sl
+	if getCtx.Rt == prv.Al.rt {
+		sl = prv.Al.sl
+	}
+
 	od := getCtx.GetDecision()
 	if od.Deny {
 		return nil, base.NewForbiddenError("Insufficent privileges to read the resource")
 	} else if od.EvalFilter {
-		res, err = prv.sl.Get(getCtx.Rid, getCtx.Rt)
+		res, err = sl.Get(getCtx.Rid, getCtx.Rt)
 		if err != nil {
 			return nil, err
 		}
@@ -313,13 +341,24 @@ func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, e
 		}
 	}
 
-	return prv.sl.Get(getCtx.Rid, getCtx.Rt)
+	return sl.Get(getCtx.Rid, getCtx.Rt)
 }
 
-func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
+func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource) (err error) {
+
+	defer func() {
+		prv.Al.Log(sc, nil, err)
+	}()
+
+	sl := prv.sl
+	if len(sc.ResTypes) == 1 && sc.ResTypes[0] == prv.Al.rt {
+		sl = prv.Al.sl
+	}
+
 	deny, fn := sc.CanDenyOp()
 	if deny {
-		return base.NewForbiddenError("Insufficent privileges to search resources")
+		err = base.NewForbiddenError("Insufficent privileges to search resources")
+		return err
 	}
 
 	if fn != nil {
@@ -332,12 +371,16 @@ func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource)
 	}
 
 	sc.MaxResults = prv.Config.Scim.Filter.MaxResults
-	go prv.sl.Search(sc, outPipe)
+	go sl.Search(sc, outPipe)
 
 	return nil
 }
 
 func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resource, err error) {
+	defer func() {
+		prv.Al.Log(replaceCtx, res, err)
+	}()
+
 	if !replaceCtx.AllowOp() {
 		return nil, base.NewForbiddenError("Insufficent privileges to replace the resource")
 	}
@@ -346,6 +389,10 @@ func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resourc
 }
 
 func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err error) {
+	defer func() {
+		prv.Al.Log(patchCtx, res, err)
+	}()
+
 	od := patchCtx.GetDecision()
 	if od.Deny {
 		return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
@@ -382,8 +429,12 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err
 	return res, err
 }
 
-func (prv *Provider) StoreTotpSecret(rid string, totpSecret string) error {
-	err := prv.sl.StoreTotpSecret(rid, totpSecret)
+func (prv *Provider) StoreTotpSecret(rid string, totpSecret string, clientIP string) (err error) {
+	defer func() {
+		prv.Al.LogStoreTotp(rid, clientIP, err)
+	}()
+
+	err = prv.sl.StoreTotpSecret(rid, totpSecret)
 	if err != nil {
 		log.Warningf("%s", err)
 	}
@@ -391,8 +442,15 @@ func (prv *Provider) StoreTotpSecret(rid string, totpSecret string) error {
 	return err
 }
 
-func (prv *Provider) Authenticate(username string, password string) (lr base.LoginResult) {
-	lr, err := prv.sl.Authenticate(username, password)
+func (prv *Provider) Authenticate(ar base.AuthRequest) (lr base.LoginResult) {
+	var originalStatus base.LoginStatus
+
+	defer func() {
+		prv.Al.LogAuth(lr.Id, ar.Username, ar.ClientIP, originalStatus)
+	}()
+
+	lr, err := prv.sl.Authenticate(ar.Username, ar.Password)
+	originalStatus = lr.Status
 
 	if lr.Status != base.LOGIN_SUCCESS {
 		log.Debugf("%s", err)
@@ -405,8 +463,15 @@ func (prv *Provider) Authenticate(username string, password string) (lr base.Log
 	return lr
 }
 
-func (prv *Provider) VerifyOtp(rid string, totpCode string) (lr base.LoginResult) {
+func (prv *Provider) VerifyOtp(rid string, totpCode string, clientIP string) (lr base.LoginResult) {
+	var originalStatus base.LoginStatus
+
+	defer func() {
+		prv.Al.LogOtp(rid, clientIP, lr.User, originalStatus)
+	}()
+
 	lr, err := prv.sl.VerifyOtp(rid, totpCode)
+	originalStatus = lr.Status
 
 	if lr.Status != base.LOGIN_SUCCESS && lr.Status != base.LOGIN_CHANGE_PASSWORD {
 		log.Debugf("%s", err)
@@ -417,7 +482,11 @@ func (prv *Provider) VerifyOtp(rid string, totpCode string) (lr base.LoginResult
 	return lr
 }
 
-func (prv *Provider) ChangePassword(rid string, newPassword string) (user *base.Resource, err error) {
+func (prv *Provider) ChangePassword(rid string, newPassword string, clientIP string) (user *base.Resource, err error) {
+	defer func() {
+		prv.Al.LogChangePasswd(rid, clientIP, user)
+	}()
+
 	user, err = prv.sl.ChangePassword(rid, newPassword, prv.Config.Ppolicy.PasswdHashAlgo)
 
 	if err != nil {

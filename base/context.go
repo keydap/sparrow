@@ -20,10 +20,12 @@ type CreateContext struct {
 }
 
 type GetContext struct {
-	Rid        string
-	Username   string
-	Rt         *schema.ResourceType
-	*OpContext // the operation context
+	Rid            string
+	Username       string
+	Rt             *schema.ResourceType
+	ParamAttrs     string
+	ParamExclAttrs string
+	*OpContext     // the operation context
 }
 
 type DeleteContext struct {
@@ -48,14 +50,12 @@ type PatchContext struct {
 }
 
 type SearchContext struct {
-	ParamFilter    string                 // the given filter parameter
-	ParamAttrs     string                 // requested list of attributes
-	ParamExclAttrs string                 // requested list of attributes to be excluded
-	MaxResults     int                    // the maximum number of results returned for a search request
-	Filter         *FilterNode            // the search filter
-	ResTypes       []*schema.ResourceType // the resource types
-	Attrs          []string               // attributes to sent
-	*OpContext                            // the operation context
+	MaxResults int                    // the maximum number of results returned for a search request
+	Filter     *FilterNode            // the search filter
+	ResTypes   []*schema.ResourceType // the resource types
+	Attrs      []string               // attributes to sent
+	RawReq     *SearchRequest
+	*OpContext // the operation context
 }
 
 type ListResponse struct {
@@ -74,13 +74,13 @@ type AttributeParam struct {
 // https://tools.ietf.org/html/rfc7644#section-3.4.3
 type SearchRequest struct {
 	Schemas            []string `json:"schemas"`
-	Attributes         string   `json:"attributes"`
-	ExcludedAttributes string   `json:"excludedAttributes"`
+	Attributes         string   `json:"attributes,omitempty"`
+	ExcludedAttributes string   `json:"excludedAttributes,omitempty"`
 	Filter             string   `json:"filter"`
-	SortBy             string   `json:"sortBy"`
-	SortOrder          string   `json:"sortOrder"`
-	StartIndex         int      `json:"startIndex"`
-	Count              int      `json:"count"`
+	SortBy             string   `json:"sortBy,omitempty"`
+	SortOrder          string   `json:"sortOrder,omitempty"`
+	StartIndex         int      `json:"startIndex,omitempty"`
+	Count              int      `json:"count,omitempty"`
 }
 
 type AuthRequest struct {
@@ -88,6 +88,21 @@ type AuthRequest struct {
 	Domain   string
 	Password string
 	ClientIP string
+	FromLdap bool
+}
+
+type VerifyOtpRequest struct {
+	Rid      string
+	Otp      string
+	ClientIP string
+	FromLdap bool
+}
+
+type ChangePasswordRequest struct {
+	Rid      string
+	Password string
+	ClientIP string
+	FromLdap bool
 }
 
 type ModifyGroupsOfUserRequest struct {

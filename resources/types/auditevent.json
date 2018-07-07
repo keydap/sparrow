@@ -1,0 +1,14 @@
+{
+    "schemas":[
+        "urn:ietf:params:scim:schemas:core:2.0:ResourceType"
+    ],
+    "id":"AuditEvent",
+    "name":"AuditEvent",
+    "endpoint":"/AuditEvents",
+    "description":"AuditEvent",
+    "schema":"urn:keydap:params:scim:schemas:core:2.0:AuditEvent",
+    "meta":{
+        "location":"v2/ResourceTypes/AuditEvent",
+        "resourceType":"ResourceType"
+    }
+}

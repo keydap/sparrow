@@ -176,12 +176,23 @@ func searchResource(hc *httpContext) {
 	log.Debugf("endpoint %s", hc.Endpoint)
 	pos := strings.LastIndex(hc.Endpoint, "/")
 
+	err := hc.r.ParseForm()
+	if err != nil {
+		writeError(hc.w, err)
+		return
+	}
+
+	attributes := hc.r.Form.Get("attributes")
+	exclAttributes := hc.r.Form.Get("excludedAttributes")
+
 	if pos > 0 {
 		rid := hc.Endpoint[pos+1:]
 		log.Debugf("Searching for the resource with ID %s", rid)
 		rtByPath := hc.pr.RtPathMap[hc.Endpoint[0:pos]]
 
 		getCtx := base.GetContext{Rid: rid, Rt: rtByPath, OpContext: hc.OpContext}
+		getCtx.ParamAttrs = attributes
+		getCtx.ParamExclAttrs = exclAttributes
 		rs, err := hc.pr.GetResource(&getCtx)
 		if err != nil {
 			writeError(hc.w, err)
@@ -197,15 +208,6 @@ func searchResource(hc *httpContext) {
 				return
 			}
 		}
-
-		err = hc.r.ParseForm()
-		if err != nil {
-			writeError(hc.w, err)
-			return
-		}
-
-		attributes := hc.r.Form.Get("attributes")
-		exclAttributes := hc.r.Form.Get("excludedAttributes")
 
 		var jsonData []byte
 
@@ -244,16 +246,10 @@ func searchResource(hc *httpContext) {
 
 	rtByPath := hc.pr.RtPathMap[hc.Endpoint]
 
-	err := hc.r.ParseForm()
-	if err != nil {
-		writeError(hc.w, err)
-		return
-	}
-
 	sr := &base.SearchRequest{}
 	sr.Filter = hc.r.Form.Get("filter")
-	sr.Attributes = hc.r.Form.Get("attributes")
-	sr.ExcludedAttributes = hc.r.Form.Get("excludedAttributes")
+	sr.Attributes = attributes
+	sr.ExcludedAttributes = exclAttributes
 
 	search(hc, sr, rtByPath)
 }
@@ -815,7 +811,7 @@ func serveUI(w http.ResponseWriter, r *http.Request) {
 
 func directLogin(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	ar := &base.AuthRequest{}
+	ar := base.AuthRequest{}
 	err := json.NewDecoder(r.Body).Decode(ar)
 	if err != nil {
 		e := base.NewBadRequestError("Invalid authentication request " + err.Error())
@@ -838,7 +834,7 @@ func directLogin(w http.ResponseWriter, r *http.Request) {
 
 	ar.Domain = normDomain
 	// TODO directlogin MUST be deprecated after introducing OTP
-	lr := pr.Authenticate(ar.Username, ar.Password)
+	lr := pr.Authenticate(ar)
 	if lr.Status != base.LOGIN_SUCCESS {
 		writeError(w, base.NewBadRequestError("Invalid credentials"))
 		return
