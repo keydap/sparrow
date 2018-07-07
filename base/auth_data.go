@@ -32,6 +32,6 @@ type AuthData struct {
 
 type LoginResult struct {
 	User   *Resource // user is non-nil only if the authentication is successful
-	Id     string    // user resource's ID will always be present irrespective if login status
+	Id     string    // user resource's ID will always be present unless the user is not found
 	Status LoginStatus
 }
