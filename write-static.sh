@@ -16,6 +16,9 @@ writeHtml() {
   writeConst "totp_register_html" "templates/totp-register.html" $targetFile
   writeConst "totp_send_html" "templates/totp-send.html" $targetFile
   writeConst "changepassword_html" "templates/changepassword.html" $targetFile
+
+  # default CSS
+  writeConst "login_style" "templates/login-style.css" $targetFile
 }
 
 writeSchemas() {

@@ -2,28 +2,33 @@
 <head>
 <meta charset="utf-8">
 <title>Input OTP</title>
+<link rel="stylesheet" href="/ui/login-style.css">
 </head>
 <body>
-	<div>
-		<form method="post" action="/verifyPassword">
-			<table>
-            <tr>
-             <td><span>OTP:</span></td><td><input type="text" id="otp" name="otp" /></td>
-            </tr>
-			<tr>
-			  <td colspan="2"><input type="button" value="Next" onclick="sendOtp()"/></td>
-			</tr>
-			<tr>
-			</tr>
-            {{range $k, $v := .paramMap}}
-            <tr>
-                <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
-            </tr>
-            {{end}}
-			</table>
-		</form>
-	</div>
-	<script type="text/javascript">
+    <div class="wrapper">
+        <form method="post" action="/verifyPassword" class="form-signin" style="max-width: 316px;">
+            <div>
+                <div style="float: left; width: 30px; padding-top: 15px;">
+                    <label>OTP:</label>
+                </div>
+                <div class="input-group" style="margin-left: 40px;">
+                    <input type="text" id="otp" name="otp" />
+                </div>
+            </div>
+            <div class="input-group" style="margin-left: 40px;">
+                <input type="button" class="btn" value="Next" onclick="sendOtp()" />
+                </td>
+            </div>
+            <table style="display: none;">
+                {{range $k, $v := .paramMap}}
+                <tr>
+                    <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
+                </tr>
+                {{end}}
+            </table>
+        </form>
+    </div>
+    <script type="text/javascript">
         function sendOtp() {
             var el = document.getElementById('otp');
             var otp = el.value.trim();

@@ -2,28 +2,32 @@
 <head>
 <meta charset="utf-8">
 <title>Grant Authorization</title>
+<link rel="stylesheet" href="/ui/login-style.css">
 </head>
 <body>
-	<div>
-		<form method="post" action="/oauth2/consent">
-		 <div>Do you want to authorize client {{.name}}</div>
-			<table>
-			<tr>
-			  <td><input type="button" id="authz" value="Authorize" onclick="authorize()"/></td>
-			  <td><input type="submit" id="deny" value="Deny"/></td>
-			</tr>
-			<tr>
-			 <td><input type="hidden" id="consent" name="consent" value="deny"/></td>
-			</tr>
-            {{range $k, $v := .}}
-            <tr>
-                <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
-            </tr>
-            {{end}}
-			</table>
-		</form>
-	</div>
-	<script type="text/javascript">
+    <div class="wrapper">
+        <form method="post" action="/oauth2/consent" class="form-signin" style="max-width: 310px">
+            <div>Do you want to authorize client {{.name}}</div>
+            <br />
+            <div style="float: left; padding-right: 7px">
+                <input class="btn-sm" style="background-color: green;" type="button" id="authz" value="Authorize" onclick="authorize()" />
+            </div>
+            <div>
+                <input class="btn-sm" style="background-color: gray" type="submit" id="deny" value="Deny" />
+            </div>
+            <table style="display: none;">
+                <tr>
+                    <td><input type="hidden" id="consent" name="consent" value="deny" /></td>
+                </tr>
+                {{range $k, $v := .}}
+                <tr>
+                    <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
+                </tr>
+                {{end}}
+            </table>
+        </form>
+    </div>
+    <script type="text/javascript">
 	   function authorize() {
 	       document.getElementById('consent').value = 'authorize';
 	       document.forms[0].submit();

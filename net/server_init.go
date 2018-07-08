@@ -139,6 +139,11 @@ func initHome(srvHome string) *conf.ServerConf {
 		createDefaultDomain(domainsDir, sc)
 	}
 
+	uiDir := filepath.Join(srvHome, "ui")
+	log.Debugf("Checking server UI directory %s", uiDir)
+	utils.CheckAndCreate(uiDir)
+	writeDefaultUiStyle(uiDir)
+
 	cs = sessions.NewCookieStore(securecookie.GenerateRandomKey(32))
 
 	return sc
@@ -316,6 +321,12 @@ func parseTemplates(tmplDir string) map[string]*template.Template {
 	return templates
 }
 
+func writeDefaultUiStyle(uiDir string) {
+	// login-style.css
+	loginStyle := filepath.Join(uiDir, "login-style.css")
+	writeFile(loginStyle, login_style)
+}
+
 func writeDefaultHtmlTemplates(tmplDir string) {
 	// login.html
 	loginTmpl := filepath.Join(tmplDir, "login.html")
@@ -343,6 +354,10 @@ func writeDefaultHtmlTemplates(tmplDir string) {
 }
 
 func writeFile(name string, content string) {
+	ff, _ := os.Stat(name)
+	if ff != nil {
+		return
+	}
 	err := ioutil.WriteFile(name, []byte(content), utils.FILE_PERM)
 	if err != nil {
 		log.Criticalf("Couldn't write the file %s %#v", name, err)

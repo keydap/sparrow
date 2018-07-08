@@ -77,8 +77,10 @@ func startHttp() {
 	// for serving the admin dashboard UI assets
 	fs := http.FileServer(http.Dir(homeDir + "/ui"))
 	uiHandler = http.StripPrefix("/ui/", fs)
-	router.HandleFunc("/ui/", serveUI).Methods("GET")
-	router.PathPrefix("/static/").Handler(fs)
+	router.PathPrefix("/ui").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+		p := r.URL.Path
+		return (p == "/ui" || strings.HasPrefix(p, "/ui/"))
+	}).Methods("GET").HandlerFunc(serveUI)
 
 	// scim requests
 	scimRouter := router.PathPrefix(API_BASE).Subrouter()
@@ -780,6 +782,12 @@ func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveUI(w http.ResponseWriter, r *http.Request) {
+	//static assets
+	if strings.HasSuffix(r.URL.Path, ".css") {
+		uiHandler.ServeHTTP(w, r)
+		return
+	}
+
 	cookie, err := r.Cookie(SSO_COOKIE)
 	if err != nil {
 		showLogin(w, r)

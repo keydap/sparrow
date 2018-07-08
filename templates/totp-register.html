@@ -2,29 +2,29 @@
 <head>
 <meta charset="utf-8">
 <title>TOTP Registration</title>
+<link rel="stylesheet" href="/ui/login-style.css">
 </head>
 <body>
-	<div>
-		<form method="post" action="/registerTotp">
-		 <div>Scan the below QR code using your OTP generating mobile app (e.x google authenticator)</div>
-			<table>
-            <tr>
-             <td><img id="qrcode" src="" /></td>
-            </tr>
-			<tr>
-			  <td><input type="submit" value="Register"/></td>
-			</tr>
-			<tr>
-			</tr>
-            {{range $k, $v := .paramMap}}
-            <tr>
-                <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
-            </tr>
-            {{end}}
-			</table>
-		</form>
-	</div>
-	<script type="text/javascript">
+    <div class="wrapper">
+        <form method="post" action="/registerTotp" class="form-signin" style="margin: 171px auto; max-width: 407px;">
+            <div>Scan the below QR code using your OTP generating mobile app (e.x google authenticator)</div>
+            <br />
+            <div style="padding-left: 45px; padding-bottom: 5px;">
+                <img id="qrcode" src="" />
+            </div>
+            <div style="padding-left: 45px;">
+                <input type="submit" class="btn" value="Register" />
+            </div>
+            <table style="display: none;">
+                {{range $k, $v := .paramMap}}
+                <tr>
+                    <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
+                </tr>
+                {{end}}
+            </table>
+        </form>
+    </div>
+    <script type="text/javascript">
         document.getElementById('qrcode').src = "{{.qrcode}}"
 	</script>
 </body>

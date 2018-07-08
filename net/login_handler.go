@@ -468,7 +468,7 @@ func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider,
 
 	setAuthFlow(nil, w)
 
-	http.Redirect(w, r, "/ui", http.StatusFound)
+	http.Redirect(w, r, "/ui/", http.StatusFound)
 
 	return session
 }
