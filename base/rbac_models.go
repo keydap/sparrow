@@ -45,12 +45,12 @@ type ResourcePermission struct {
 }
 
 type Permission struct {
-	Name          string
-	Filter        *FilterNode
-	OnAnyResource bool
-	AllowAttrs    map[string]*AttributeParam
-	AllowAll      bool
-	evaluator     Evaluator
+	Name          string                     `json:"-"`
+	Filter        *FilterNode                `json:"-"`
+	OnAnyResource bool                       `json:"onAnyRes"`
+	AllowAttrs    map[string]*AttributeParam `json:"-"`
+	AllowAll      bool                       `json:"allowAll"`
+	evaluator     Evaluator                  `json:"-"`
 }
 
 type RbacSession struct {
@@ -139,4 +139,13 @@ func CloneAtParamMap(m map[string]*AttributeParam) map[string]*AttributeParam {
 		nMap[k] = ap
 	}
 	return nMap
+}
+
+func (rp *ResourcePermission) MarshalJSON() ([]byte, error) {
+	tmpl := "\"%s\": {\"onAnyRes\": %t, \"allowAll\": %t}"
+	read := fmt.Sprintf(tmpl, "read", rp.ReadPerm.OnAnyResource, rp.ReadPerm.AllowAll)
+	write := fmt.Sprintf(tmpl, "write", rp.WritePerm.OnAnyResource, rp.WritePerm.AllowAll)
+	str := fmt.Sprintf("{\"resName\": \"%s\", %s, %s}", rp.RType.Name, read, write)
+
+	return []byte(str), nil
 }
