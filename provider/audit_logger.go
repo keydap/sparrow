@@ -81,6 +81,8 @@ func (al *AuditLogger) Log(ctx interface{}, res *base.Resource, err error) {
 func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 	ae := base.AuditEvent{}
 
+	_fillFromErr(&ae, err)
+
 	switch ctx.(type) {
 	case *base.GetContext:
 		gc := ctx.(*base.GetContext)
@@ -99,6 +101,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 
 		ae.Uri = gc.Endpoint
 		if err == nil {
+			ae.Desc = "Read a single resource of type " + gc.Rt.Name
 			ae.StatusCode = 200
 		}
 
@@ -108,7 +111,8 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		ae.ActorId = sc.Session.Sub
 		ae.Operation = "Search"
 		ae.Uri = sc.Endpoint
-		if len(sc.ResTypes) == 1 && sc.ResTypes[0] == al.rt {
+		singleRt := (len(sc.ResTypes) == 1)
+		if singleRt && sc.ResTypes[0] == al.rt {
 			ae.Operation = "AuditSearch"
 		}
 		if sc.RawReq != nil {
@@ -116,6 +120,11 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 			ae.Payload = string(data)
 		}
 		if err == nil {
+			if singleRt {
+				ae.Desc = "Searched for resources of type " + sc.ResTypes[0].Name
+			} else {
+				ae.Desc = "Searched for multiple resources"
+			}
 			ae.StatusCode = 200
 		}
 
@@ -128,6 +137,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 			ae.Uri = res.GetType().Endpoint + "/" + res.GetId()
 		}
 		if err == nil {
+			ae.Desc = "Created a " + res.GetType().Name + " resource"
 			ae.StatusCode = 201
 		}
 
@@ -138,6 +148,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		ae.Operation = "Patch"
 		ae.Uri = pc.Endpoint
 		if err == nil {
+			ae.Desc = "Modified a " + pc.Rt.Name + " resource"
 			ae.StatusCode = 200
 		}
 
@@ -148,6 +159,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		ae.Operation = "Replace"
 		ae.Uri = rc.Endpoint
 		if err == nil {
+			ae.Desc = "Replaced a " + rc.Rt.Name + " resource"
 			ae.StatusCode = 200
 		}
 
@@ -158,11 +170,11 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		ae.Operation = "Delete"
 		ae.Uri = dc.Endpoint
 		if err == nil {
+			ae.Desc = "Deleted a " + dc.Rt.Name + " resource"
 			ae.StatusCode = 200
 		}
 	}
 
-	_fillFromErr(&ae, err)
 	al.LogEvent(ae)
 }
 
@@ -203,23 +215,23 @@ func _setDesc(username string, ae *base.AuditEvent, status base.LoginStatus) {
 	case base.LOGIN_ACCOUNT_NOT_ACTIVE:
 		desc = "%s's account is not active"
 	case base.LOGIN_CHANGE_PASSWORD:
-		desc = "successfully authenticated %s"
+		desc = "Successfully authenticated %s"
 		ae.StatusCode = 200
 	case base.LOGIN_FAILED:
-		desc = "login failed for %s due to invalid credentials"
+		desc = "Login failed for %s due to invalid credentials"
 	case base.LOGIN_NO_PASSWORD:
-		desc = "account of %s has no password, login failed"
+		desc = "Account of %s has no password, login failed"
 	case base.LOGIN_SUCCESS:
-		desc = "successfully authenticated %s"
+		desc = "Successfully authenticated %s"
 		ae.StatusCode = 200
 	case base.LOGIN_TFA_REGISTER:
-		desc = "successfully verified password of %s"
+		desc = "Successfully verified password of %s"
 		ae.StatusCode = 200
 	case base.LOGIN_TFA_REQUIRED:
-		desc = "successfully verified password of %s"
+		desc = "Successfully verified password of %s"
 		ae.StatusCode = 200
 	case base.LOGIN_USER_NOT_FOUND:
-		desc = "user %s not found"
+		desc = "User %s not found"
 		ae.StatusCode = 404
 	}
 
@@ -281,7 +293,7 @@ func (al *AuditLogger) _logStoreTotp(rid string, clientIP string, err error) {
 	ae := base.AuditEvent{}
 	ae.IpAddress = clientIP
 	ae.ActorId = rid
-	ae.Operation = "StoreTOTP"
+	ae.Operation = "StoreTotpSecret"
 	if err == nil {
 		ae.Desc = "successfully stored TOTP secret"
 		ae.StatusCode = 200
