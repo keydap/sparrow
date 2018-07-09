@@ -1471,6 +1471,17 @@ func (rs *Resource) FilterAndSerialize(attrs map[string]*AttributeParam, include
 		return rs.Serialize()
 	}
 
+	coreObj := rs.ToJsonObject(attrs)
+	data, err := json.Marshal(coreObj)
+	if err != nil {
+		log.Criticalf("Failed to serialize the filtered resource %s", err)
+		return nil
+	}
+
+	return data
+}
+
+func (rs *Resource) ToJsonObject(attrs map[string]*AttributeParam) map[string]interface{} {
 	coreObj := make(map[string]interface{})
 
 	for _, ap := range attrs {
@@ -1526,13 +1537,7 @@ func (rs *Resource) FilterAndSerialize(attrs map[string]*AttributeParam, include
 		}
 	}
 
-	data, err := json.Marshal(coreObj)
-	if err != nil {
-		log.Criticalf("Failed to serialize the filtered resource %s", err)
-		return nil
-	}
-
-	return data
+	return coreObj
 }
 
 func (res *Resource) IsTfaEnabled() bool {
