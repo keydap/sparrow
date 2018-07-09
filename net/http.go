@@ -87,7 +87,7 @@ func startHttp() {
 
 	scimRouter.HandleFunc("/directLogin", directLogin).Methods("POST")
 	//scimRouter.HandleFunc("/revoke", handleRevoke).Methods("DELETE")
-	scimRouter.HandleFunc("/Me", selfServe).Methods("GET", "POST", "PUT", "PATCH", "DELETE")
+	scimRouter.HandleFunc("/Me", selfServe).Methods("GET")
 
 	// generic service provider methods
 	scimRouter.HandleFunc("/ServiceProviderConfigs", getSrvProvConf).Methods("GET")
@@ -756,13 +756,14 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 	pr := providers[opCtx.Session.Domain]
 	log.Debugf("handling %s request on %s for the domain %s", r.Method, r.RequestURI, pr.Name)
 
-	//hc := &httpContext{w, r, pr, opCtx}
+	//TODO add additional checks for preventing CSRF
 
 	switch r.Method {
 	case http.MethodGet:
 		getCtx := &base.GetContext{}
 		getCtx.OpContext = opCtx
-		getCtx.Rid = opCtx.Session.Sub
+		ses := opCtx.Session
+		getCtx.Rid = ses.Sub
 		getCtx.Rt = pr.RsTypes["User"]
 		user, err := pr.GetResource(getCtx)
 		if err != nil {
@@ -770,10 +771,13 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		//user.FilterAndSerialize(getCtx.Rt., include)
+		attrs := parseAttrParam("*", getCtx.Rt)
+		jsonMap := user.ToJsonObject(attrs)
+		jsonMap["perms"] = ses.EffPerms
+		data, _ := json.Marshal(jsonMap)
 
 		writeCommonHeaders(w)
-		w.Write(user.Serialize())
+		w.Write(data)
 	}
 }
 
