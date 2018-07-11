@@ -96,6 +96,12 @@ func serveClient(ls *LdapSession) {
 
 		log.Debugf("closing connection %s", ls.ClientIP)
 		ls.con.Close()
+		if ls.Session != nil {
+			pr := providers[ls.Session.Domain]
+			if pr != nil {
+				pr.Al.LogDelSession(ls.OpContext, true)
+			}
+		}
 	}()
 
 	for {

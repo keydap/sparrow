@@ -124,10 +124,14 @@ func (pr *Provider) GetSsoSession(jti string) *base.RbacSession {
 	return pr.osl.GetSsoSession(jti)
 }
 
-func (pr *Provider) DeleteOauthSession(jti string) bool {
-	return pr.osl.DeleteOauthSession(jti)
+func (pr *Provider) DeleteOauthSession(opCtx *base.OpContext) bool {
+	deleted := pr.osl.DeleteOauthSession(opCtx.Session.Jti)
+	pr.Al.LogDelSession(opCtx, deleted)
+	return deleted
 }
 
-func (pr *Provider) DeleteSsoSession(jti string) bool {
-	return pr.osl.DeleteSsoSession(jti)
+func (pr *Provider) DeleteSsoSession(opCtx *base.OpContext) bool {
+	deleted := pr.osl.DeleteSsoSession(opCtx.Session.Jti)
+	pr.Al.LogDelSession(opCtx, deleted)
+	return deleted
 }

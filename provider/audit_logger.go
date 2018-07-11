@@ -303,3 +303,28 @@ func (al *AuditLogger) _logStoreTotp(rid string, clientIP string, err error) {
 
 	al.LogEvent(ae)
 }
+
+func (al *AuditLogger) LogDelSession(opCtx *base.OpContext, deleted bool) {
+	go al._logDelSession(opCtx, deleted)
+}
+
+func (al *AuditLogger) _logDelSession(opCtx *base.OpContext, deleted bool) {
+	ae := base.AuditEvent{}
+	ae.IpAddress = opCtx.ClientIP
+	ae.ActorId = opCtx.Session.Sub
+	ae.Uri = opCtx.Session.Jti
+	ae.Operation = "Logout"
+	if deleted {
+		if opCtx.Sso {
+			ae.Desc = "Deleted SSO session"
+		} else {
+			ae.Desc = "Deleted OAuth session"
+		}
+		ae.StatusCode = 200
+	} else {
+		ae.Desc = "Session not found"
+		ae.StatusCode = 404
+	}
+
+	al.LogEvent(ae)
+}

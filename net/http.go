@@ -88,6 +88,7 @@ func startHttp() {
 	scimRouter.HandleFunc("/directLogin", directLogin).Methods("POST")
 	//scimRouter.HandleFunc("/revoke", handleRevoke).Methods("DELETE")
 	scimRouter.HandleFunc("/Me", selfServe).Methods("GET")
+	scimRouter.HandleFunc("/logout", handleLogout).Methods("POST")
 
 	// generic service provider methods
 	scimRouter.HandleFunc("/ServiceProviderConfigs", getSrvProvConf).Methods("GET")
@@ -742,6 +743,30 @@ func getSchemas(w http.ResponseWriter, r *http.Request) {
 
 	writeCommonHeaders(w)
 	w.Write([]byte(data))
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	opCtx, err := createOpCtx(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	pr := providers[opCtx.Session.Domain]
+	code := 404
+	deleted := false
+	if opCtx.Sso {
+		log.Debugf("deleting session of %s of the domain %s", opCtx.Session.Sub, pr.Name)
+		deleted = pr.DeleteSsoSession(opCtx)
+	} else {
+		log.Debugf("deleting OAuth token of %s of the domain %s", opCtx.Session.Sub, pr.Name)
+		deleted = pr.DeleteOauthSession(opCtx)
+	}
+
+	if deleted {
+		code = 200
+	}
+	w.WriteHeader(code)
 }
 
 func selfServe(w http.ResponseWriter, r *http.Request) {
