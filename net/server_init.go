@@ -43,6 +43,12 @@ func Start(srvHome string) {
 	srvConf = initHome(srvHome)
 	templates = parseTemplates(srvConf.TmplDir)
 
+	if len(providers) == 1 {
+		for _, pr := range providers {
+			defaultDomain = pr.Name
+		}
+	}
+
 	err := startLdap()
 	if err != nil {
 		panic(err)
