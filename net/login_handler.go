@@ -93,8 +93,8 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		pos := strings.LastIndexByte(username, '@')
 		unameLen := len(username) - 1
 		if pos > 0 && pos != unameLen {
-			username = username[:pos]
 			domain = strings.ToLower(username[pos+1:])
+			username = username[:pos]
 		}
 		prv = providers[domain]
 	} else {
