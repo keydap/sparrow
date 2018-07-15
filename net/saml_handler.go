@@ -20,50 +20,59 @@ import (
 	"time"
 )
 
-const respXml = `<saml2p:Response Destination="{{.DestinationUrl}}" ID="{{.RespId}}" InResponseTo="{{.ReqId}}" IssueInstant="{{.CurTime}}" Version="2.0" xmlns:saml2p="urn:oasis:names:tc:SAML:2.0:protocol">
-	<saml2:Issuer xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">{{.IssuerUrl}}</saml2:Issuer>
-	<saml2p:Status>
-		<saml2p:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
-	</saml2p:Status>
-	<saml2:Assertion ID="{{.AssertionId}}" IssueInstant="{{.CurTime}}" Version="2.0" xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">
-		<saml2:Issuer>{{.IssuerUrl}}</saml2:Issuer>
-		<saml2:Subject>
-			<saml2:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent">{{.NameId}}</saml2:NameID>
-			<saml2:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
-				<saml2:SubjectConfirmationData InResponseTo="{{.ReqId}}" NotOnOrAfter="{{.NotOnOrAfter}}" Recipient="{{.DestinationUrl}}"/>
-			</saml2:SubjectConfirmation>
-		</saml2:Subject>
-		<saml2:Conditions NotBefore="{{.CurTime}}" NotOnOrAfter="{{.NotOnOrAfter}}"/>
-		<saml2:AuthnStatement AuthnInstant="{{.CurTime}}" SessionIndex="{{.SessionIndexId}}">
-			<saml2:AuthnContext>
-				<saml2:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml2:AuthnContextClassRef>
-			</saml2:AuthnContext>
-		</saml2:AuthnStatement>
-		<saml2:AttributeStatement>
+const respXml = `<samlp:Response Destination="{{.DestinationUrl}}" ID="{{.RespId}}" InResponseTo="{{.ReqId}}" IssueInstant="{{.CurTime}}" Version="2.0" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
+	<saml:Issuer>{{.IdpIssuer}}</saml:Issuer>
+	<samlp:Status>
+		<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+	</samlp:Status>
+	<saml:Assertion ID="{{.AssertionId}}" IssueInstant="{{.CurTime}}" Version="2.0" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<saml:Issuer>{{.IdpIssuer}}</saml:Issuer>
+		<saml:Subject>
+			<saml:NameID SPNameQualifier="{{.SpIssuer}}" Format="{{.NameIdFormat}}">{{.NameId}}</saml:NameID>
+			<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+				<saml:SubjectConfirmationData InResponseTo="{{.ReqId}}" NotOnOrAfter="{{.NotOnOrAfter}}" Recipient="{{.DestinationUrl}}"/>
+			</saml:SubjectConfirmation>
+		</saml:Subject>
+		<saml:Conditions NotBefore="{{.CurTime}}" NotOnOrAfter="{{.NotOnOrAfter}}">
+		  <saml:AudienceRestriction>
+			<saml:Audience>{{.SpIssuer}}</saml:Audience>
+		  </saml:AudienceRestriction>
+		</saml:Conditions>
+		<saml:AuthnStatement AuthnInstant="{{.CurTime}}" SessionIndex="{{.SessionIndexId}}" SessionNotOnOrAfter="{{.SessionNotOnOrAfter}}">
+			<saml:AuthnContext>
+				<saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:Password</saml:AuthnContextClassRef>
+			</saml:AuthnContext>
+		</saml:AuthnStatement>
+		{{if .Attributes}}
+		<saml:AttributeStatement>
 		{{range $_, $v := .Attributes}}
 			{{$v}}
 		{{end}}
-		</saml2:AttributeStatement>
-	</saml2:Assertion>
-</saml2p:Response>`
+		</saml:AttributeStatement>
+		{{end}}
+	</saml:Assertion>
+</samlp:Response>`
 
-const attributeXml = `<saml2:Attribute Name="{{.Name}}" NameFormat="{{.Format}}">
-  <saml2:AttributeValue>{{.Value}}</saml2:AttributeValue>
- </saml2:Attribute>`
+const attributeXml = `<saml:Attribute Name="{{.Name}}" NameFormat="{{.Format}}">
+  <saml:AttributeValue>{{.Value}}</saml:AttributeValue>
+ </saml:Attribute>`
 
 type samlResponse struct {
-	DestinationUrl string
-	RespId         string
-	ReqId          string
-	IssuerUrl      string
-	CurTime        string
-	AssertionId    string
-	NameId         string // only persistent format is supported
-	NotOnOrAfter   string
-	SessionIndexId string
-	Attributes     map[string]string
-	ResponseText   string
-	RelayStateVal  string
+	DestinationUrl      string
+	RespId              string
+	ReqId               string
+	IdpIssuer           string
+	SpIssuer            string
+	CurTime             string
+	AssertionId         string
+	NameId              string // only persistent format is supported
+	NotOnOrAfter        string
+	SessionIndexId      string
+	SessionNotOnOrAfter string
+	Attributes          map[string]string
+	ResponseText        string
+	RelayStateVal       string
+	NameIdFormat        string
 }
 
 var respTemplate *template.Template
@@ -160,6 +169,11 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 			return
 		}
 
+		if len(data) == 0 {
+			log.Debugf("No SAML request is present")
+			return
+		}
+
 		// remove the GLIB header if present
 		if data[0] == 0x78 && data[1] == 0x9C {
 			data = data[2:]
@@ -199,7 +213,7 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 	pr, _ := getPrFromParam(r)
 	var cl *oauth.Client
 	if pr != nil {
-		cl = pr.GetClient(samlAuthnReq.Issuer)
+		cl = pr.GetClientByIssuer(samlAuthnReq.Issuer)
 	}
 
 	if cl == nil {
@@ -229,11 +243,14 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 	sp.CurTime = curTime.Format(time.RFC3339)
 	sp.NotOnOrAfter = curTime.Add(time.Duration(cl.Saml.AssertionValidity) * time.Second).Format(time.RFC3339)
 	sp.DestinationUrl = cl.Saml.ACSUrl
-	sp.IssuerUrl = issuerUrl + "/saml/idp"
+	sp.IdpIssuer = cl.Saml.IdpIssuer
+	sp.SpIssuer = cl.Saml.SpIssuer
 	sp.NameId = session.Sub
+	sp.NameIdFormat = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent" // the default
 	sp.ReqId = authnReq.ID
 	sp.RespId = "_" + utils.GenUUID()
 	sp.SessionIndexId = "_" + utils.GenUUID()
+	sp.SessionNotOnOrAfter = curTime.Add(time.Duration(10) * time.Hour).Format(time.RFC3339)
 
 	sp.Attributes = make(map[string]string)
 	var buf bytes.Buffer
@@ -256,10 +273,19 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 		} else {
 			val := v.GetValueFrom(user)
 			if val != nil {
-				v.Value = val
-				attributeTemplate.Execute(&buf, v)
-				sp.Attributes[k] = buf.String()
-				buf.Reset()
+				if v.NormName == "nameid" {
+					// special handling for NameId
+					// this won't be added to the attribute statement
+					sp.NameId = fmt.Sprint(val)
+					if v.Format != "" {
+						sp.NameIdFormat = v.Format
+					}
+				} else {
+					v.Value = val
+					attributeTemplate.Execute(&buf, v)
+					sp.Attributes[k] = buf.String()
+					buf.Reset()
+				}
 			}
 		}
 	}
@@ -269,15 +295,63 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 	doc.ReadFromBytes(buf.Bytes())
 
 	ctx := dsig.NewDefaultSigningContext(cl)
-	root, _ := ctx.SignEnveloped(doc.Root())
-	doc.SetRoot(root)
+	ctx.SetSignatureMethod(dsig.RSASHA1SignatureMethod)
+	ctx.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("ds")
+
+	asrtn := doc.FindElement("//saml:Assertion")
+	asrtnDoc := etree.NewDocument()
+	asrtnDoc.SetRoot(asrtn)
+	signedAsrtn, _ := signEnveloped(ctx, asrtnDoc.Root())
+	asrtnDoc.SetRoot(signedAsrtn)
+
+	root := doc.Root()
+	root.RemoveChild(asrtn)
+	root.AddChild(asrtnDoc.Root())
+
+	//	c, _ := asrtnDoc.WriteToBytes()
+	//	serAsrtn := utils.B64Encode(c)
+
+	//root, _ := ctx.SignEnveloped(doc.Root())
+	//doc.SetRoot(root)
 	signedContent, _ := doc.WriteToBytes()
 	sp.RelayStateVal = r.Form.Get("RelayState")
 	sp.ResponseText = utils.B64Encode(signedContent)
 	log.Debugf("SAML response: %s", sp.ResponseText)
+	log.Debugf("RelayState: %s", sp.RelayStateVal)
+	//log.Debugf("assertion: %s", serAsrtn)
 	templates["saml_response.html"].Execute(w, sp)
 }
 
 func sendSamlError(w http.ResponseWriter, err error, status int) {
 	http.Error(w, err.Error(), status)
+}
+
+func signEnveloped(ctx *dsig.SigningContext, el *etree.Element) (*etree.Element, error) {
+	sig, err := ctx.ConstructSignature(el, true)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := el.Copy()
+	// place the signature exactly under <saml:Issuer> without which
+	// gsuite fails to parse the response
+	issuer := ret.FindElement("//saml:Issuer")
+	if issuer != nil {
+		pos := 1
+		tmp := make([]etree.Token, 0)
+		for i, c := range ret.Child {
+			tmp = append(tmp, c)
+			if c == issuer {
+				pos = i
+				break
+			}
+		}
+
+		tmp = append(tmp, sig)
+		ret.Child = append(tmp, ret.Child[pos+1:]...)
+	} else {
+		ret.Child = append(ret.Child, sig)
+	}
+
+	return ret, nil
 }
