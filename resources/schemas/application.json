@@ -226,6 +226,28 @@
             "uniqueness":"none"
         },
         {
+            "name":"spIssuer",
+            "type":"string",
+            "multiValued":false,
+            "description":"Value of the issuer present in SAMLRequest",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"server"
+        },
+        {
+            "name":"idpIssuer",
+            "type":"string",
+            "multiValued":false,
+            "description":"Value of the issuer present in SAMLResponse",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
             "name":"samlAttributes",
             "type":"complex",
             "multiValued":true,
@@ -297,6 +319,17 @@
             "type":"integer",
             "multiValued":false,
             "description":"Time in seconds each generated assertion is valid for. Must be greater than 0. Default is 120 seconds",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"groupIds",
+            "type":"string",
+            "multiValued":true,
+            "description":"IDs of groups whose members are allowed to access this application",
             "required":false,
             "caseExact":false,
             "mutability":"readWrite",

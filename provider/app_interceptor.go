@@ -16,12 +16,12 @@ func (ai *ApplicationInterceptor) PreCreate(crCtx *base.CreateContext) error {
 		return nil
 	}
 
-	err := crCtx.InRes.CheckMissingRequiredAts()
-	if err != nil {
-		return err
-	}
+	//	err := crCtx.InRes.CheckMissingRequiredAts()
+	//	if err != nil {
+	//		return err
+	//	}
 
-	err = validateClient(crCtx.InRes, crCtx.OpContext)
+	err := validateClient(crCtx.InRes, crCtx.OpContext)
 	if err != nil {
 		return err
 	}
@@ -41,8 +41,40 @@ func (ai *ApplicationInterceptor) PostPatch(patchedRs *base.Resource, patchCtx *
 }
 
 func validateClient(rs *base.Resource, opCtx *base.OpContext) error {
-	redirectUriAt := rs.GetAttr("redirecturi").GetSimpleAt()
+	redUriAtName := "redirecturi"
+	spIssuerName := "spissuer"
+	idpIssuerName := "idpissuer"
+	consentRequired := "consentrequired"
 
+	at := rs.GetAttr(redUriAtName)
+
+	// the redirectUri and issuer attributes are required but can be set to arbitrary
+	// values if not provided for the convenience of admin users
+	randStr := utils.NewRandShaStr()[:11]
+	if at == nil {
+		// add a default value
+		rs.AddSA(redUriAtName, "https://"+opCtx.Session.Domain+"/redirect")
+	}
+
+	at = rs.GetAttr(spIssuerName)
+	if at == nil {
+		// add a default value
+		rs.AddSA(spIssuerName, randStr)
+	}
+
+	at = rs.GetAttr(idpIssuerName)
+	if at == nil {
+		// add a default value
+		rs.AddSA(idpIssuerName, "https://"+opCtx.Session.Domain+"/saml/idp")
+	}
+
+	at = rs.GetAttr(consentRequired)
+	if at == nil {
+		// add a default value
+		rs.AddSA(consentRequired, false)
+	}
+
+	redirectUriAt := rs.GetAttr("redirecturi").GetSimpleAt()
 	redUrlStr := redirectUriAt.GetStringVal()
 	redUrl, err := url.Parse(strings.ToLower(redUrlStr))
 

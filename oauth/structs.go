@@ -51,6 +51,8 @@ type ClientSamlConf struct {
 	MetaData          samlTypes.SPSSODescriptor
 	Attributes        map[string]*base.SsoAttr `json:"attrs"`
 	AssertionValidity int
+	IdpIssuer         string
+	SpIssuer          string
 }
 
 type ClientOauthConf struct {

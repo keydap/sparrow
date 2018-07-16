@@ -6,6 +6,7 @@ import (
 
 type SsoAttr struct {
 	Name                string
+	NormName            string
 	Format              string // only applicable to SAML attributes
 	ScimExpr            string
 	atOrFilter          *scimAtOrFilter

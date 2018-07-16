@@ -8,15 +8,30 @@ import (
 	"encoding/hex"
 	"sparrow/base"
 	"sparrow/oauth"
+	"strings"
 )
 
-func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
+func (pr *Provider) GetClientById(id string) (cl *oauth.Client) {
 	rs, err := pr.sl.Get(id, pr.RsTypes["Application"])
 	if err != nil {
 		log.Debugf("Could not find the oauth client with id %s [%#v]", id, err)
 		return nil
 	}
 
+	return pr._toClient(rs)
+}
+
+func (pr *Provider) GetClientByIssuer(issuer string) (cl *oauth.Client) {
+	filter, _ := base.ParseFilter("spissuer EQ \"" + issuer + "\"")
+	results := pr.sl.FindResources(filter, pr.RsTypes["Application"])
+	if len(results) == 0 {
+		return nil
+	}
+
+	return pr._toClient(results[0])
+}
+
+func (pr *Provider) _toClient(rs *base.Resource) (cl *oauth.Client) {
 	cl = &oauth.Client{}
 	cl.Id = rs.GetId()
 	cl.Name = safeGetStrVal("name", rs)
@@ -41,6 +56,8 @@ func (pr *Provider) GetClient(id string) (cl *oauth.Client) {
 	samlConf.ACSUrl = safeGetStrVal("acsurl", rs)
 	samlConf.SLOUrl = safeGetStrVal("slourl", rs)
 	samlConf.MetaUrl = safeGetStrVal("metaurl", rs)
+	samlConf.IdpIssuer = safeGetStrVal("idpissuer", rs)
+	samlConf.SpIssuer = safeGetStrVal("spissuer", rs)
 
 	if len(samlConf.ACSUrl) > 0 || len(samlConf.MetaUrl) > 0 { // enable SAML only if ACS or Metadata URLs are not empty
 
@@ -80,6 +97,7 @@ func parseSsoAttributes(tmpResAt base.Attribute) map[string]*base.SsoAttr {
 				switch at.GetType().NormName {
 				case "name":
 					ssoAt.Name = at.GetStringVal()
+					ssoAt.NormName = strings.ToLower(ssoAt.Name)
 
 				case "scimexpr":
 					ssoAt.ScimExpr = at.GetStringVal()

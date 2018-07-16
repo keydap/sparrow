@@ -849,7 +849,7 @@ func serveUI(w http.ResponseWriter, r *http.Request) {
 func directLogin(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	ar := base.AuthRequest{}
-	err := json.NewDecoder(r.Body).Decode(ar)
+	err := json.NewDecoder(r.Body).Decode(&ar)
 	if err != nil {
 		e := base.NewBadRequestError("Invalid authentication request " + err.Error())
 		writeError(w, e)

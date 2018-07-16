@@ -159,7 +159,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 
 	pr, _ := getPrFromParam(r)
 	if pr != nil {
-		cl = pr.GetClient(atr.ClientId)
+		cl = pr.GetClientById(atr.ClientId)
 	}
 
 	if cl == nil {

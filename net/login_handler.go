@@ -214,7 +214,7 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 				pr, _ := getPrFromParam(r)
 				var cl *oauth.Client
 				if pr != nil {
-					cl = pr.GetClient(clientId)
+					cl = pr.GetClientById(clientId)
 				}
 				ep := &oauth.ErrorResp{}
 				ep.State = r.Form.Get("state")
@@ -256,7 +256,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	pr, _ := getPrFromParam(r)
 	var cl *oauth.Client
 	if pr != nil {
-		cl = pr.GetClient(areq.ClientId)
+		cl = pr.GetClientById(areq.ClientId)
 	}
 
 	if cl == nil {

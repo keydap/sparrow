@@ -118,6 +118,7 @@ func initHome(srvHome string) *conf.ServerConf {
 			log.Warningf("Failed to parse certificate from file %s %#v", absFilePath, err)
 		}
 		sc.CertFile = absFilePath
+		sc.PubKey = sc.CertChain[0].PublicKey
 	}
 
 	data, absFilePath, err = pemDecode(srvConfDir, sc.PrivKeyFile)
@@ -125,9 +126,9 @@ func initHome(srvHome string) *conf.ServerConf {
 		rsaPrivKey, err := x509.ParsePKCS1PrivateKey(data)
 		if err != nil {
 			log.Warningf("Failed to parse privatekey from file %s %#v", absFilePath, err)
+			panic(err)
 		}
 		sc.PrivKey = rsaPrivKey
-		sc.PubKey = rsaPrivKey.Public()
 		sc.PrivKeyFile = absFilePath
 		//TODO support other types of private keys
 	}
