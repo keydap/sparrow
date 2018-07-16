@@ -1440,6 +1440,9 @@ func (sl *Silo) replaceAtGroup(resName string, rid string, tx *bolt.Tx, prIdx *I
 //TODO add  cancel channel to stop processing when the http client is closed
 func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) error {
 	tx, err := sl.db.Begin(false)
+	if err != nil {
+		panic(err)
+	}
 
 	defer func() {
 		e := recover()
@@ -1454,10 +1457,6 @@ func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) erro
 		close(outPipe)
 		tx.Rollback()
 	}()
-
-	if err != nil {
-		panic(err)
-	}
 
 	candidates := make(map[string]*base.Resource)
 
@@ -1511,6 +1510,78 @@ func (sl *Silo) Search(sc *base.SearchContext, outPipe chan *base.Resource) erro
 	}
 
 	return nil
+}
+
+// intended for internal use only, must NOT be used for filters that return large number of resources
+func (sl *Silo) FindResources(filter *base.FilterNode, rt *schema.ResourceType) []*base.Resource {
+	tx, err := sl.db.Begin(false)
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+			if log.IsDebugEnabled() {
+				log.Debugf("Error while finding a resource %s", err.Error())
+				debug.PrintStack()
+			}
+		}
+		tx.Rollback()
+	}()
+
+	candidates := make(map[string]*base.Resource)
+	count := getOptimizedResults(filter, rt, tx, sl, candidates)
+	evaluator := base.BuildEvaluator(filter)
+
+	buc := tx.Bucket(sl.resources[rt.Name])
+
+	results := make([]*base.Resource, 0)
+
+	if count < math.MaxInt64 {
+		for k, _ := range candidates {
+			data := buc.Get([]byte(k))
+			reader := bytes.NewReader(data)
+			decoder := gob.NewDecoder(reader)
+
+			if data != nil {
+				var rs *base.Resource
+				err = decoder.Decode(&rs)
+				if err != nil {
+					panic(err)
+				}
+
+				rs.SetSchema(rt)
+				if evaluator.Evaluate(rs) {
+					results = append(results, rs)
+				}
+			}
+		}
+	} else {
+		log.Debugf("Scanning complete DB of %s to find resources by filter", rt.Name)
+		cursor := buc.Cursor()
+
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			reader := bytes.NewReader(v)
+			decoder := gob.NewDecoder(reader)
+
+			if v != nil {
+				var rs *base.Resource
+				err = decoder.Decode(&rs)
+				if err != nil {
+					panic(err)
+				}
+
+				rs.SetSchema(rt)
+				if evaluator.Evaluate(rs) {
+					results = append(results, rs)
+				}
+			}
+		}
+	}
+
+	return results
 }
 
 func (sl *Silo) LoadGroups() {
