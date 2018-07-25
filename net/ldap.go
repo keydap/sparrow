@@ -21,8 +21,9 @@ import (
 )
 
 type LdapSession struct {
-	Id  string
-	con net.Conn
+	Id       string
+	con      net.Conn
+	username string
 	*base.OpContext
 }
 
@@ -135,6 +136,7 @@ func serveClient(ls *LdapSession) {
 
 			bindReq := &ldap.SimpleBindRequest{}
 			bindReq.Username = string(appMessage.Children[1].ByteValue)
+			// password is sometimes coming as wrong or empty
 			bindReq.Password = string(appMessage.Children[2].Data.Bytes())
 
 			handleSimpleBind(bindReq, ls, messageId)
@@ -174,6 +176,9 @@ func serveClient(ls *LdapSession) {
 				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultOther, "Unsupported extended operation "+oid)
 				ls.con.Write(errResp.Bytes())
 			}
+
+		case ldap.ApplicationAbandonRequest:
+			log.Debugf("abandon request with id %d", messageId)
 
 		default:
 			log.Warningf("Unsupported operation application request tag %d", appMessage.Tag)
@@ -224,6 +229,8 @@ func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageI
 	}
 
 	ls.Session = pr.GenSessionForUser(user)
+	ls.username = user.GetAttr("username").GetSimpleAt().GetStringVal()
+	ls.username = strings.ToLower(ls.username)
 	successResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultSuccess, "")
 	ls.con.Write(successResp.Bytes())
 }
@@ -304,7 +311,7 @@ func toLdapSearchRequest(packet *ber.Packet) ldap.SearchRequest {
 }
 
 func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
-	log.Debugf("handling search request from %s", ls.Id)
+	log.Debugf("handling search request from %s", ls.username)
 	child := packet.Children[1]
 
 	ldapReq := toLdapSearchRequest(child)
@@ -328,10 +335,11 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 		return
 	}
 
+	objectScope := (ldapReq.Scope == 0)
 	isVirtual := false
 	isDc := strings.HasPrefix(ldapReq.BaseDN, "dc=")
 	isOu := strings.HasPrefix(ldapReq.BaseDN, "ou=")
-	if ((ldapReq.Scope < 2) && isDc) || ((ldapReq.Scope == 0) && isOu) {
+	if ((ldapReq.Scope < 2) && isDc) || (objectScope && isOu) {
 		isVirtual = true
 	}
 
@@ -358,6 +366,20 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 
 	attrByRtName := make(map[string]map[string]*base.AttributeParam)
 	domainBaseDn := domainNameToDn(pr.Name)
+
+	// special handling for reading selfentry
+	if objectScope && isSelfServe(ls, ldapReq) {
+		attrByRtName["User"] = attrLst
+		rs, _ := pr.GetUserById(ls.Session.Sub)
+		sendSearchResultEntry(rs, pr, messageId, ls, domainBaseDn, attrByRtName)
+
+		entryEnvelope := generateResultCode(messageId, ldap.ApplicationSearchResultDone, ldap.LDAPResultSuccess, "")
+		ls.con.Write(entryEnvelope.Bytes())
+
+		return
+	}
+
+	// more generic searching
 	for _, rt := range sc.ResTypes {
 		rp := ls.OpContext.Session.EffPerms[rt.Name]
 		if rp == nil {
@@ -464,6 +486,7 @@ func sendSearchResultEntry(rs *base.Resource, pr *provider.Provider, messageId i
 	}
 
 	dn := fmt.Sprintf(tmpl.DnPrefix, dnAtVal, domainBaseDn)
+	log.Debugf("dn>>>>>>>> %s", dn)
 
 	entryEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
 	entryEnvelope.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
@@ -476,6 +499,20 @@ func sendSearchResultEntry(rs *base.Resource, pr *provider.Provider, messageId i
 	addAttributeStringsPacket(ocLdapAt, attributes, tmpl.ObjectClasses...)
 
 	for _, ap := range attrLst {
+		//log.Debugf(">>>>>>>>.. %s", ap.Name)
+		//		switch ap.Name {
+		//		case "uidnumber":
+		//			val := strToInt(rs.GetId())
+		//			log.Debugf("calculated uidNumber %d for %s", val, dn)
+		//			uidNumber := &schema.LdapAttribute{LdapAttrName: "uidNumber"}
+		//			addAttributePacket(uidNumber, attributes, val)
+		//		case "gidnumber":
+		//			val := strToInt(rs.GetId())
+		//			log.Debugf("calculated gidNumber %d for %s", val, dn)
+		//			gidNumber := &schema.LdapAttribute{LdapAttrName: "gidNumber"}
+		//			addAttributePacket(gidNumber, attributes, val)
+		//		}
+
 		at := rs.GetAttr(ap.Name)
 		if at == nil {
 			continue
@@ -487,9 +524,23 @@ func sendSearchResultEntry(rs *base.Resource, pr *provider.Provider, messageId i
 		}
 
 		atType := at.GetType()
+		if strings.Contains(ap.Name, "uidnumber") {
+			fmt.Println("")
+		}
+
+		ldapAt := tmpl.AttrMap[ap.Name]
+		// if null check if removing schema URN results in a match
+		// LDAP templates are made easier by not requiring to prefix
+		// schema URN for extended attributes
+		if ldapAt == nil {
+			cpos := strings.LastIndex(ap.Name, ":")
+			if cpos > 0 && cpos < (len(ap.Name)-2) {
+				ap.Name = ap.Name[cpos+1:]
+				ldapAt = tmpl.AttrMap[ap.Name]
+			}
+		}
 
 		if atType.IsSimple() {
-			ldapAt := tmpl.AttrMap[ap.Name]
 			if ldapAt != nil {
 				sa := at.GetSimpleAt()
 				// the varargs is necessary otherwise caller will treat the entire array as one interface value
@@ -497,7 +548,6 @@ func sendSearchResultEntry(rs *base.Resource, pr *provider.Provider, messageId i
 			}
 		} else {
 			ca := at.GetComplexAt()
-			ldapAt := tmpl.AttrMap[ap.Name]
 			if ldapAt != nil {
 				// fill in the format
 				allValues := make([]string, 0)
@@ -540,10 +590,9 @@ func sendSearchResultEntry(rs *base.Resource, pr *provider.Provider, messageId i
 					addAttributeStringsPacket(ldapAt, attributes, allValues...)
 				}
 			}
-			// FIXME schema URI prefixed attributes won't work in the below scheme
 			// check if any attribute starts with ca.name + "."
 			for _, subAt := range atType.SubAttributes {
-				ldapAt := tmpl.AttrMap[ap.Name+"."+subAt.NormName]
+				ldapAt = tmpl.AttrMap[ap.Name+"."+subAt.NormName]
 				if ldapAt != nil {
 					subAtVal := ca.GetValue(subAt.NormName)
 					if subAtVal != nil {
@@ -564,8 +613,14 @@ func addAttributePacket(ldapAt *schema.LdapAttribute, attributes *ber.Packet, sc
 	atPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, ldapAt.LdapAttrName, ldapAt.LdapAttrName))
 	atValuesPacket := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSet, nil, ldapAt.LdapAttrName+" Attribute Values")
 	for _, v := range scimValues {
-		strVal := fmt.Sprintf("%s", v)
-		atValuesPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, strVal, strVal))
+		switch v.(type) {
+		//case int, uint, int8, uint8, int16, uint16, int64, uint64, int32, uint32 :
+		//log.Debugf("%T %#v", t, v)
+		//atValuesPacket.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, v, ""))
+		default:
+			strVal := fmt.Sprintf("%v", v)
+			atValuesPacket.AppendChild(ber.NewString(ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString, strVal, strVal))
+		}
 	}
 	atPacket.AppendChild(atValuesPacket)
 	attributes.AppendChild(atPacket)
@@ -839,7 +894,12 @@ func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base
 
 		if !foundScimAt {
 			log.Debugf("No equivalent SCIM attribute found for the requested LDAP attribute %s", name)
-			continue
+			if name == "dn" {
+				log.Debugf("including uid instead of dn so that dn gets sent")
+				name = "uid"
+			} else {
+				continue
+			}
 		}
 
 		reqAttrs += (name + ",")
@@ -1195,6 +1255,7 @@ func ldap_authenticate(ar base.AuthRequest, pr *provider.Provider) (user *base.R
 		ar.Password = ar.Password[:plen]
 	}
 
+	log.Debugf("<<<<< username %s password %s", ar.Username, ar.Password)
 	lr := pr.Authenticate(ar)
 	pr.Al.LogAuth(lr.Id, ar.Username, ar.ClientIP, lr.Status)
 
@@ -1208,4 +1269,17 @@ func ldap_authenticate(ar base.AuthRequest, pr *provider.Provider) (user *base.R
 	}
 
 	return nil
+}
+
+func strToInt(id string) uint32 {
+	var number uint32
+	for _, r := range id {
+		number += uint32(r)
+	}
+	return number
+}
+
+func isSelfServe(ls *LdapSession, ldapReq ldap.SearchRequest) bool {
+	dn := strings.ToLower(ldapReq.BaseDN)
+	return strings.HasPrefix(dn, "uid="+ls.username+",ou=users,")
 }
