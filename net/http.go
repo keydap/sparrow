@@ -799,6 +799,21 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 		attrs := parseAttrParam("*", getCtx.Rt)
 		jsonMap := user.ToJsonObject(attrs)
 		jsonMap["perms"] = ses.EffPerms
+		jsonMap["domain"] = ses.Domain
+
+		apps := make(map[string]string) // a map of application name and home page URL that are allowed for this user
+		jsonMap["apps"] = apps
+
+		clients := pr.GetAllClients()
+		for _, cl := range clients {
+			for role, _ := range cl.GroupIds {
+				if _, ok := ses.Roles[role]; ok {
+					apps[cl.Name] = cl.HomeUrl
+					break
+				}
+			}
+		}
+
 		data, _ := json.Marshal(jsonMap)
 
 		writeCommonHeaders(w)
