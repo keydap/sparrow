@@ -31,12 +31,36 @@ func (pr *Provider) GetClientByIssuer(issuer string) (cl *oauth.Client) {
 	return pr._toClient(results[0])
 }
 
+func (pr *Provider) GetAllClients() (clients []*oauth.Client) {
+	filter, _ := base.ParseFilter("name PR")
+	results := pr.sl.FindResources(filter, pr.RsTypes["Application"])
+
+	clients = make([]*oauth.Client, len(results))
+
+	for i, rs := range results {
+		c := pr._toClient(rs)
+		clients[i] = c
+	}
+
+	return clients
+}
+
 func (pr *Provider) _toClient(rs *base.Resource) (cl *oauth.Client) {
 	cl = &oauth.Client{}
 	cl.Id = rs.GetId()
 	cl.Name = safeGetStrVal("name", rs)
 	cl.Desc = safeGetStrVal("descritpion", rs)
 	cl.Time = rs.GetMeta().GetValue("created").(int64)
+	cl.HomeUrl = safeGetStrVal("homeurl", rs)
+
+	groupIdsAt := rs.GetAttr("groupids")
+	if groupIdsAt != nil {
+		cl.GroupIds = make(map[string]int)
+		gropIds := groupIdsAt.GetSimpleAt().Values
+		for _, v := range gropIds {
+			cl.GroupIds[v.(string)] = 1
+		}
+	}
 
 	oauthConf := &oauth.ClientOauthConf{}
 	redUri := safeGetStrVal("redirecturi", rs)
@@ -53,28 +77,22 @@ func (pr *Provider) _toClient(rs *base.Resource) (cl *oauth.Client) {
 	}
 
 	samlConf := &oauth.ClientSamlConf{}
-	samlConf.ACSUrl = safeGetStrVal("acsurl", rs)
 	samlConf.SLOUrl = safeGetStrVal("slourl", rs)
 	samlConf.MetaUrl = safeGetStrVal("metaurl", rs)
 	samlConf.IdpIssuer = safeGetStrVal("idpissuer", rs)
 	samlConf.SpIssuer = safeGetStrVal("spissuer", rs)
 
-	if len(samlConf.ACSUrl) > 0 || len(samlConf.MetaUrl) > 0 { // enable SAML only if ACS or Metadata URLs are not empty
+	samlAt := rs.GetAttr("samlattributes")
+	samlConf.Attributes = parseSsoAttributes(samlAt)
 
-		samlAt := rs.GetAttr("samlattributes")
-		samlConf.Attributes = parseSsoAttributes(samlAt)
-
-		validityAt := rs.GetAttr("assertionvalidity")
-		if validityAt != nil {
-			val := validityAt.GetSimpleAt().Values[0].(int64)
-			samlConf.AssertionValidity = int(val)
-		}
-
-		cl.Saml = samlConf
+	validityAt := rs.GetAttr("assertionvalidity")
+	if validityAt != nil {
+		val := validityAt.GetSimpleAt().Values[0].(int64)
+		samlConf.AssertionValidity = int(val)
 	}
 
-	cl.Cert = pr.Cert
-	cl.PrivKey = pr.PrivKey
+	cl.Saml = samlConf
+
 	return cl
 }
 

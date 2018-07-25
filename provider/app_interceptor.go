@@ -95,7 +95,5 @@ func validateClient(rs *base.Resource, opCtx *base.OpContext) error {
 	hasQuery := (len(redUrl.RawQuery) != 0)
 	rs.AddSA("hasqueryinuri", hasQuery)
 
-	rs.AddSA("regfromipaddress", opCtx.ClientIP)
-
 	return nil
 }

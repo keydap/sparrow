@@ -6,6 +6,7 @@ package provider
 import (
 	"bytes"
 	"crypto"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -575,4 +576,12 @@ func (prv *Provider) firePreInterceptors(ctx interface{}) (err error) {
 	}
 
 	return nil
+}
+
+// make provider a dsig.X509KeyStore
+func (prv *Provider) GetKeyPair() (privateKey *rsa.PrivateKey, cert []byte, err error) {
+	// TODO this is a dangerous cast and must be eliminated
+	// when other privatekey types are supported
+	rsaKey := prv.PrivKey.(*rsa.PrivateKey)
+	return rsaKey, prv.Cert.Raw, nil
 }

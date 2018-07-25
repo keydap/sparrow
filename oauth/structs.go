@@ -5,8 +5,6 @@ package oauth
 
 import (
 	"crypto"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
@@ -33,21 +31,20 @@ const (
 )
 
 type Client struct {
-	Id           string `json:"id"`
-	Name         string `json:"name"`
-	Time         int64  `json:"time"`
-	Desc         string `json:"desc"`
-	Oauth        *ClientOauthConf
-	Saml         *ClientSamlConf
-	Cert         *x509.Certificate
-	PrivKey      crypto.PrivateKey
-	TrustedCerts []*x509.Certificate
+	Id       string `json:"id"`
+	Name     string `json:"name"`
+	Time     int64  `json:"time"`
+	Desc     string `json:"desc"`
+	HomeUrl  string `json:"homeurl"`
+	GroupIds map[string]int
+	Oauth    *ClientOauthConf
+	Saml     *ClientSamlConf
 }
 
 type ClientSamlConf struct {
-	ACSUrl            string // Assertion Consumer Service URL
 	SLOUrl            string // Single LOgout URL
 	MetaUrl           string // URL serving SP's metadata
+	HomeUrl           string // URL of the home page
 	MetaData          samlTypes.SPSSODescriptor
 	Attributes        map[string]*base.SsoAttr `json:"attrs"`
 	AssertionValidity int
@@ -161,12 +158,4 @@ func ToJwt(claims jwt.MapClaims, key crypto.PrivateKey) string {
 	}
 
 	return str
-}
-
-// make client a X509KeyStore
-func (cl *Client) GetKeyPair() (privateKey *rsa.PrivateKey, cert []byte, err error) {
-	// TODO this is a dangerous cast and must be eliminated
-	// when other privatekey types are supported
-	rsaKey := cl.PrivKey.(*rsa.PrivateKey)
-	return rsaKey, cl.Cert.Raw, nil
 }
