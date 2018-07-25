@@ -80,6 +80,18 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 	}
 
 	if mh.modified {
+		// remove any empty extension containers
+		updateSchemas := false
+		for k, atg := range res.Ext {
+			if len(atg.ComplexAts) == 0 && len(atg.SimpleAts) == 0 {
+				delete(res.Ext, k)
+				updateSchemas = true
+			}
+		}
+
+		if updateSchemas {
+			res.UpdateSchemas()
+		}
 		res.UpdateLastModTime(sl.cg.NewCsn())
 		sl.storeResource(tx, res)
 	}
@@ -418,11 +430,11 @@ func (sl *Silo) handleRemove(po *base.PatchOp, res *base.Resource, rid string, m
 			}
 
 			if len(ca.SubAts) == 0 {
-				res.DeleteAttr(ca.Name)
+				res.DeleteAttr(pp.FQAName())
 			}
 			mh.markDirty()
 		} else {
-			at := res.DeleteAttr(pp.AtType.NormName)
+			at := res.DeleteAttr(pp.FQAName())
 			if at != nil {
 				if at.IsSimple() {
 					sa := at.GetSimpleAt()
@@ -965,7 +977,7 @@ func deleteAtFromSubAtMap(sl *Silo, pp *base.ParsedPath, tSaMap map[string]*base
 		sl.dropSAtFromIndex(sa, ca.Name+"."+sa.Name, prIdx, rt.Name, rid, tx)
 		if len(tSaMap) == 0 {
 			if numSubObj == 1 {
-				res.DeleteAttr(ca.Name)
+				res.DeleteAttr(pp.FQAName())
 			} else {
 				delete(ca.SubAts, key)
 			}

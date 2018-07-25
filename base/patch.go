@@ -250,3 +250,11 @@ func ParsePath(path string, rt *schema.ResourceType) (pp *ParsedPath, err error)
 
 	return pp, nil
 }
+
+func (pp *ParsedPath) FQAName() string {
+	if pp.Schema == "" {
+		return pp.AtType.NormName
+	}
+
+	return pp.Schema + ":" + pp.AtType.NormName
+}

@@ -136,6 +136,40 @@ func TestPatchRemoveReadOnly(t *testing.T) {
 	checkRemoveFailure(t, rid, `{"Operations":[{"op":"remove", "path": "macId"}]}`, rs)        // immutable field
 }
 
+func TestPatchRemoveExtensionAts(t *testing.T) {
+	initSilo()
+
+	rs := insertRs(patchUser)
+	pr := getPr(`{"Operations":[{"op":"add", "value":
+	               {"urn:keydap:params:scim:schemas:extension:authentication:2.0:User": {"twofactortype": "totp"}}}]}`, userType, rs.GetVersion())
+
+	updatedRs, err := sl.Patch(rs.GetId(), pr, userType)
+	if err != nil {
+		t.Errorf("Failed to apply patch req with extended object")
+	}
+	assertEquals(t, "twofactortype", updatedRs, "totp")
+
+	// patch user with a new extension's data while using the URN as path
+	pr = getPr(`{"Operations":[{"op":"remove","path":"urn:keydap:params:scim:schemas:extension:authentication:2.0:User:twofactortype"}]}`, userType, updatedRs.GetVersion())
+
+	updatedRs, err = sl.Patch(rs.GetId(), pr, userType)
+	if err != nil {
+		t.Errorf("Failed to apply patch req with extended object")
+	}
+
+	twofactortypeAt := updatedRs.GetAttr("twofactortype")
+	if twofactortypeAt != nil {
+		t.Errorf("Failed to delete the twofactortype attribute from an extension schema")
+	}
+
+	scIds := updatedRs.GetAttr("schemas").GetSimpleAt()
+	t.Log(scIds.Values)
+	if len(scIds.Values) != 1 {
+		t.Errorf("Failed to exclude the extension schema's URN in the schemas array of updated resource")
+	}
+
+}
+
 func checkRemoveFailure(t *testing.T, rid string, patchJson string, rs *base.Resource) {
 	pr := getPr(patchJson, deviceType, rs.GetVersion())
 	_, err := sl.Patch(rid, pr, deviceType)

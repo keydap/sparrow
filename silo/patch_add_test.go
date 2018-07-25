@@ -336,6 +336,15 @@ func TestPatchAddExtensionAts(t *testing.T) {
 		t.Errorf("Failed to apply patch req with extended object")
 	}
 
+	// add one more attribute to the container, this time individually instead of as an object
+	pr = getPr(`{"Operations":[{"op":"add", "path": "urn:keydap:params:scim:schemas:extension:authentication:2.0:User:changepassword", "value":true}]}`, userType, updatedRs.GetVersion())
+
+	updatedRs, err = sl.Patch(rs.GetId(), pr, userType)
+	if err != nil {
+		t.Errorf("Failed to apply patch req with new attribute in container")
+	}
+	assertEquals(t, "changepassword", updatedRs, true)
+
 	scIds := updatedRs.GetAttr("schemas").GetSimpleAt()
 	t.Log(scIds.Values)
 	if len(scIds.Values) != 3 {
