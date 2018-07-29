@@ -95,7 +95,7 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
 
-	dataFilePath := filepath.Join(layout.DataDir, layout.name)
+	dataFilePath := filepath.Join(layout.DataDir, layout.name+".db")
 
 	prv.sl, err = silo.Open(dataFilePath, prv.ServerId, prv.Config, prv.RsTypes, prv.Schemas)
 
@@ -119,8 +119,7 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 
 	err = prv.createDefaultResources()
 
-	auditDataFilePath := filepath.Join(layout.DataDir, "audit-"+layout.name)
-	prv.Al = NewLocalAuditLogger(auditDataFilePath, prv.ServerId, prv.Config, prv.RsTypes, prv.Schemas)
+	prv.Al = NewLocalAuditLogger(prv)
 
 	return prv, err
 }

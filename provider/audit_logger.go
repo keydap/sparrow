@@ -5,45 +5,82 @@ package provider
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sparrow/base"
-	"sparrow/conf"
 	"sparrow/schema"
 	"sparrow/silo"
+	"time"
 )
 
 type AuditLogger struct {
-	queue chan base.AuditEvent
-	rt    *schema.ResourceType
-	sl    *silo.Silo
+	queue        chan base.AuditEvent
+	roller       chan time.Time
+	rt           *schema.ResourceType
+	sl           *silo.Silo
+	dataFilePath string
+	prv          *Provider // it is necessary to hold the reference to provider instance for rolling audit logs
 }
 
-func NewLocalAuditLogger(path string, serverId uint16, config *conf.DomainConfig, rtypes map[string]*schema.ResourceType, sm map[string]*schema.Schema) *AuditLogger {
+func NewLocalAuditLogger(prv *Provider) *AuditLogger {
 	al := &AuditLogger{}
-	al.rt = rtypes["AuditEvent"]
+	al.rt = prv.RsTypes["AuditEvent"]
+	al.prv = prv
 
 	var err error
-	al.sl, err = silo.Open(path, serverId, config, rtypes, sm)
+	al.dataFilePath = filepath.Join(prv.layout.DataDir, "audit-"+prv.layout.name+".db")
+	al.sl, err = openAuditLog(al.dataFilePath, prv)
 	if err != nil {
 		panic(err)
 	}
 
 	al.queue = make(chan base.AuditEvent, 1000)
+	al.roller = make(chan time.Time) // unbuffered channel
+
 	go start(al)
+	go startRoller(al.roller)
+
 	return al
+}
+
+func openAuditLog(path string, prv *Provider) (sl *silo.Silo, err error) {
+	return silo.Open(path, prv.ServerId, prv.Config, prv.RsTypes, prv.Schemas)
 }
 
 func start(al *AuditLogger) {
 	log.Debugf("initialized local audit logger")
+
+	al.roller <- time.Now()
+
+loop:
 	for {
-		ae := <-al.queue
+		select {
+		case ae := <-al.queue:
 
-		if ae.Id == "" {
-			break
+			if ae.Id == "" {
+				break loop
+			}
+
+			log.Debugf("%s", ae.Id)
+			res := al.eventToRes(ae)
+			al.sl.InsertInternal(res)
+
+		case now := <-al.roller:
+			log.Infof("rolling up the audit log")
+			oldLog := "audit-" + al.prv.layout.name + "-" + now.Format(time.RFC3339) + ".db"
+			oldLog = filepath.Join(al.prv.layout.DataDir, oldLog)
+			al.sl.Close() // TODO how to prevent active searches on audit log from failing? it is not critical for now
+			os.Rename(al.dataFilePath, oldLog)
+			var err error
+			// open a new audit log
+			al.sl, err = openAuditLog(al.dataFilePath, al.prv)
+			if err != nil {
+				panic(err)
+			}
+
+			go al.rollLog(oldLog)
+			al.roller <- time.Now()
 		}
-
-		log.Debugf("%s", ae.Id)
-		res := al.eventToRes(ae)
-		al.sl.InsertInternal(res)
 	}
 }
 
@@ -71,6 +108,7 @@ func (al *AuditLogger) Close() {
 	ae.Id = ""
 	al.queue <- ae
 	//FIXME wait for the channel to be empty
+	// also close the channel
 	al.sl.Close()
 }
 
