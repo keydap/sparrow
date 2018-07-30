@@ -72,7 +72,7 @@ func startHttp() {
 
 	router := mux.NewRouter()
 	router.StrictSlash(true)
-	router.HandleFunc("/", serveVersionInfo).Methods("GET")
+	router.HandleFunc("/about", serveVersionInfo).Methods("GET")
 
 	// for serving the admin dashboard UI assets
 	fs := http.FileServer(http.Dir(homeDir + "/ui"))
