@@ -12,7 +12,7 @@
             "caseExact":false,
             "mutability":"readWrite",
             "returned":"default",
-            "uniqueness":"none"
+            "uniqueness":"server"
         },
         {
             "name":"description",
@@ -92,11 +92,11 @@
             "uniqueness":"none"
         },
         {
-            "name":"regFromIPAddress",
+            "name":"homeUrl",
             "type":"string",
             "multiValued":false,
-            "description":"IP Address from where this application was registered",
-            "required":false,
+            "description":"URL of the home page",
+            "required":true,
             "caseExact":false,
             "mutability":"writeOnly",
             "returned":"default",
@@ -188,17 +188,6 @@
                     "uniqueness":"none"
                 }
             ],
-            "mutability":"readWrite",
-            "returned":"default",
-            "uniqueness":"none"
-        },
-        {
-            "name":"acsUrl",
-            "type":"string",
-            "multiValued":false,
-            "description":"Assertion Consumer URL",
-            "required":false,
-            "caseExact":false,
             "mutability":"readWrite",
             "returned":"default",
             "uniqueness":"none"
@@ -330,39 +319,6 @@
             "type":"string",
             "multiValued":true,
             "description":"IDs of groups whose members are allowed to access this application",
-            "required":false,
-            "caseExact":false,
-            "mutability":"readWrite",
-            "returned":"default",
-            "uniqueness":"none"
-        },
-        {
-            "name":"x509Cert",
-            "type":"binary",
-            "multiValued":false,
-            "description":"X509 certificate used for signing the responses",
-            "required":false,
-            "caseExact":false,
-            "mutability":"readWrite",
-            "returned":"default",
-            "uniqueness":"none"
-        },
-        {
-            "name":"rsaPrivKey",
-            "type":"binary",
-            "multiValued":false,
-            "description":"The RSA private key associated with this application's certficiate",
-            "required":false,
-            "caseExact":false,
-            "mutability":"readWrite",
-            "returned":"never",
-            "uniqueness":"none"
-        },
-        {
-            "name":"trustedCerts",
-            "type":"binary",
-            "multiValued":true,
-            "description":"The certificates trusted by this application",
             "required":false,
             "caseExact":false,
             "mutability":"readWrite",
