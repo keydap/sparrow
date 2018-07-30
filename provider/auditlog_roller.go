@@ -67,6 +67,6 @@ func timeUntilMidnight(now time.Time) (sleepUntil time.Duration) {
 	nextDay, _ = time.Parse(time.RFC3339, startOfNextDay)
 	sleepUntil = nextDay.Sub(now)
 	// testing purpose
-	sleepUntil = 2 * time.Minute
+	//sleepUntil = 2 * time.Minute
 	return sleepUntil
 }

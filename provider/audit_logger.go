@@ -67,7 +67,8 @@ loop:
 
 		case now := <-al.roller:
 			log.Infof("rolling up the audit log")
-			oldLog := "audit-" + al.prv.layout.name + "-" + now.Format(time.RFC3339) + ".db"
+			timestamp := now.Format(time.RFC3339)[:19] // strip the +timezone detail
+			oldLog := "audit-" + al.prv.layout.name + "-" + timestamp + ".db"
 			oldLog = filepath.Join(al.prv.layout.DataDir, oldLog)
 			al.sl.Close() // TODO how to prevent active searches on audit log from failing? it is not critical for now
 			os.Rename(al.dataFilePath, oldLog)
