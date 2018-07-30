@@ -34,7 +34,7 @@ func TestCodeGeneration(t *testing.T) {
 	ac := decryptOauthCode(code, cl)
 
 	if ac.CreatedAt != ttl.Unix() {
-		t.Errorf("Decrypted time does not match encrypted one %s != %s", ac.CreatedAt, ttl.Unix())
+		t.Errorf("Decrypted time does not match encrypted one %d != %d", ac.CreatedAt, ttl.Unix())
 	}
 
 	if ac.UserId != id {

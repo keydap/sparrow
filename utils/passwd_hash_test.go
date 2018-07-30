@@ -15,7 +15,7 @@ func TestPasswordHashing(t *testing.T) {
 		t.Log(hash)
 		result := ComparePassword(plaintext, hash)
 		if !result {
-			t.Errorf("Failed to compare the password hashed with %s", v)
+			t.Errorf("Failed to compare the password hashed with %s", v.Name)
 		}
 
 		result = ComparePassword("", hash)
