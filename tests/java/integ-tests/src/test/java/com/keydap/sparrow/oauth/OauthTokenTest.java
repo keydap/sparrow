@@ -23,6 +23,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.zip.DeflaterOutputStream;
@@ -200,7 +201,7 @@ public class OauthTokenTest extends TestBase {
     
     private void registerClient() throws Exception {
         RegisteredApp req = new RegisteredApp();
-        req.setName("test");
+        req.setName("test" + UUID.randomUUID().toString());
         req.setRedirectUri(redirectUri);
         req.add(new OauthAttribute("displayName", "displayName"));
         req.add(new OauthAttribute("email", "emails.value co \"admin\""));
@@ -210,9 +211,10 @@ public class OauthTokenTest extends TestBase {
         SamlAttribute nameId = new SamlAttribute("nameId", "emails.value"); // special attribute
         nameId.setFormat("test-format");
         req.add(nameId);
-        req.setAcsUrl(redirectUri);
+        req.setHomeUrl(redirectUri);
         req.setSloUrl(redirectUri);
         req.setSpIssuer("junit-test-issuer" + UUID.randomUUID().toString());
+        req.setGroupIds(Collections.singletonList(adminGroupId));
 
         Response<RegisteredApp> appResp = client.registerApp(req);
         assertEquals(HttpStatus.SC_CREATED, appResp.getHttpCode());

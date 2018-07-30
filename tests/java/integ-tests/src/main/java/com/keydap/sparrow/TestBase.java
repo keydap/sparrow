@@ -54,6 +54,8 @@ public abstract class TestBase {
 
     static SparrowAuthenticator authenticator;
 
+    public static final String adminGroupId = "01000000-0000-4000-4000-000000000000";
+    
     @BeforeClass
     public static void createClient() throws Exception {
         authenticator = new SparrowAuthenticator("admin", "example.COM", "secret");
