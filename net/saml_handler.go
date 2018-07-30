@@ -223,6 +223,10 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 		return
 	}
 
+	//	for role, _ := range cl.GroupIds {
+	//
+	//	}
+
 	genSamlResponse(w, r, pr, session, cl, samlAuthnReq)
 }
 
@@ -242,7 +246,8 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 
 	sp.CurTime = curTime.Format(time.RFC3339)
 	sp.NotOnOrAfter = curTime.Add(time.Duration(cl.Saml.AssertionValidity) * time.Second).Format(time.RFC3339)
-	sp.DestinationUrl = cl.Saml.ACSUrl
+	sp.DestinationUrl = authnReq.AssertionConsumerServiceURL
+	log.Debugf("destination url %s", sp.DestinationUrl)
 	sp.IdpIssuer = cl.Saml.IdpIssuer
 	sp.SpIssuer = cl.Saml.SpIssuer
 	sp.NameId = session.Sub
@@ -294,7 +299,7 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 	doc := etree.NewDocument()
 	doc.ReadFromBytes(buf.Bytes())
 
-	ctx := dsig.NewDefaultSigningContext(cl)
+	ctx := dsig.NewDefaultSigningContext(pr)
 	ctx.SetSignatureMethod(dsig.RSASHA1SignatureMethod)
 	ctx.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("ds")
 
