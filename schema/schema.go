@@ -80,7 +80,7 @@ type Schema struct {
 var log logger.Logger
 
 func init() {
-	log = logger.GetLogger("scim.schema")
+	log = logger.GetLogger("sparrow.schema")
 }
 
 // see section https://tools.ietf.org/html/rfc7643#section-2.2 for the defaults
