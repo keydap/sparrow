@@ -10,9 +10,9 @@ import (
 	"fmt"
 	logger "github.com/juju/loggo"
 	"math"
+	"net/http"
 	"os"
 	"time"
-	"net/http"
 )
 
 const DIR_PERM os.FileMode = 0744 //rwxr--r--
