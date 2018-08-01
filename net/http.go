@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
 	logger "github.com/juju/loggo"
 	"html/template"
 	"net/http"
@@ -45,10 +44,10 @@ var commaByte = []byte{','}
 var defaultDomain = "example.com"
 var srvConf *conf.ServerConf
 var templates map[string]*template.Template
-var cs *sessions.CookieStore
 var server *http.Server
 
-var cookieKey []byte
+// used for encrypting authflow cookies
+var ckc *utils.CookieKeyCache
 
 var issuerUrl = ""
 
@@ -56,7 +55,7 @@ var uiHandler http.Handler
 
 func init() {
 	log = logger.GetLogger("sparrow.net")
-	cookieKey = utils.RandBytes(16)
+	ckc = utils.NewCookieKeyCache()
 }
 
 type httpContext struct {

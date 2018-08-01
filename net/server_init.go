@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/gorilla/securecookie"
-	"github.com/gorilla/sessions"
 	"html/template"
 	"io/ioutil"
 	"os"
@@ -150,8 +148,6 @@ func initHome(srvHome string) *conf.ServerConf {
 	log.Debugf("Checking server UI directory %s", uiDir)
 	utils.CheckAndCreate(uiDir)
 	writeDefaultUiStyle(uiDir)
-
-	cs = sessions.NewCookieStore(securecookie.GenerateRandomKey(32))
 
 	return sc
 }
@@ -382,8 +378,14 @@ func writeSchemas(schemaDir string) {
 	group := filepath.Join(schemaDir, "group.json")
 	writeFile(group, group_schema)
 
+	posixGroup := filepath.Join(schemaDir, "posix-group.json")
+	writeFile(posixGroup, posix_group_schema)
+
 	user := filepath.Join(schemaDir, "user.json")
 	writeFile(user, user_schema)
+
+	posixUser := filepath.Join(schemaDir, "posix-user.json")
+	writeFile(posixUser, posix_user_schema)
 
 	application := filepath.Join(schemaDir, "application.json")
 	writeFile(application, application_schema)

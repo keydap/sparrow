@@ -280,8 +280,8 @@ func getAuthFlow(r *http.Request) *authFlow {
 		return nil
 	}
 
-	data, err := utils.B64UrlDecode(ck.Value)
-	if err != nil {
+	data := ckc.Decrypt(ck.Value)
+	if data == nil {
 		return nil
 	}
 
@@ -338,10 +338,11 @@ func setAuthFlow(af *authFlow, w http.ResponseWriter) {
 		enc := gob.NewEncoder(&buf)
 		enc.Encode(af)
 
-		sessionToken := utils.B64UrlEncode(buf.Bytes())
+		data := ckc.Encrypt(buf.Bytes())
+		sessionToken := utils.B64UrlEncode(data)
 
 		ck.Value = sessionToken
-		ck.Expires = time.Now().Add(2 * time.Minute)
+		ck.Expires = time.Now().Add(5 * time.Minute)
 	} else {
 		ck.MaxAge = -1
 	}

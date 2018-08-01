@@ -7,3 +7,4 @@ net/static_resourcetypes.go
 net/static_schemas.go
 net/version.go
 dist
+.idea
