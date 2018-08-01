@@ -57,7 +57,7 @@ func registerTotp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pr := dcPrvMap[af.DomainCode]
-	err := pr.StoreTotpSecret(af.UserId, af.TotpSecret, r.RemoteAddr)
+	err := pr.StoreTotpSecret(af.UserId, af.TotpSecret, utils.GetRemoteAddr(r))
 	if err != nil {
 		log.Warningf("Failed to store totp secret %s", err)
 	}

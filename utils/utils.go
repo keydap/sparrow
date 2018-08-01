@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"time"
+	"net/http"
 )
 
 const DIR_PERM os.FileMode = 0744 //rwxr--r--
@@ -187,4 +188,13 @@ func B64Encode(data []byte) string {
 
 func B64Decode(val string) ([]byte, error) {
 	return stdEncoder.DecodeString(val)
+}
+
+func GetRemoteAddr(r *http.Request) string {
+	proxy := r.Header.Get("X-Forwarded-For")
+	if proxy == "" {
+		proxy = r.RemoteAddr
+	}
+
+	return proxy
 }

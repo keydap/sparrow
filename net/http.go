@@ -871,7 +871,7 @@ func directLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ar.ClientIP = r.RemoteAddr
+	ar.ClientIP = utils.GetRemoteAddr(r)
 	normDomain := strings.ToLower(ar.Domain)
 	if len(normDomain) == 0 {
 		normDomain = defaultDomain
@@ -985,7 +985,7 @@ func createOpCtx(r *http.Request) (opCtx *base.OpContext, err error) {
 	}
 
 	opCtx.Session = session
-	opCtx.ClientIP = r.RemoteAddr
+	opCtx.ClientIP = utils.GetRemoteAddr(r)
 	opCtx.Endpoint = getEndpoint(r)
 
 	return opCtx, nil

@@ -113,7 +113,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		delete(paramMap, "username")
 		delete(paramMap, "password")
 
-		ar := base.AuthRequest{Username: username, Password: password, ClientIP: r.RemoteAddr}
+		ar := base.AuthRequest{Username: username, Password: password, ClientIP: utils.GetRemoteAddr(r)}
 		lr := prv.Authenticate(ar)
 		if lr.Status == base.LOGIN_FAILED {
 			login := templates["login.html"]
@@ -164,7 +164,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		user, err := prv.ChangePassword(af.UserId, newPassword, r.RemoteAddr)
+		user, err := prv.ChangePassword(af.UserId, newPassword, utils.GetRemoteAddr(r))
 		if err != nil {
 			showChangePasswordPage(w, paramMap)
 			return
@@ -184,7 +184,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		lr := prv.VerifyOtp(af.UserId, otp, r.RemoteAddr)
+		lr := prv.VerifyOtp(af.UserId, otp, utils.GetRemoteAddr(r))
 		if lr.Status == base.LOGIN_FAILED {
 			showOtpPage(w, paramMap)
 			return
@@ -447,7 +447,8 @@ func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider,
 
 	cookie := &http.Cookie{}
 	cookie.Path = "/"
-	cookie.Expires = time.Now().Add(time.Duration(prv.Config.Oauth.SsoSessionIdleTime) * time.Second)
+	cookie.MaxAge = prv.Config.Oauth.SsoSessionIdleTime
+	cookie.Expires = time.Now().Add(time.Duration(cookie.MaxAge) * time.Second)
 	cookie.HttpOnly = true
 	cookie.Name = SSO_COOKIE
 	cookie.Value = session.Jti
