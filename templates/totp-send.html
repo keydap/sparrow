@@ -12,7 +12,7 @@
                     <label>OTP:</label>
                 </div>
                 <div class="input-group" style="margin-left: 40px;">
-                    <input type="text" id="otp" name="otp" />
+                    <input type="text" id="otp" name="otp" tabindex="1" autofocus />
                 </div>
             </div>
             <div class="input-group" style="margin-left: 40px;">
@@ -20,7 +20,7 @@
                 </td>
             </div>
             <table style="display: none;">
-                {{range $k, $v := .paramMap}}
+                {{range $k, $v := .}}
                 <tr>
                     <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
                 </tr>

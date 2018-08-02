@@ -8,13 +8,13 @@
     <div class="wrapper">
         <form method="post" action="/verifyPassword" class="form-signin">
             <div class="input-group">
-                <input class="form-control" type="text" placeholder="john@example.com" name="username" id="username">
+                <input class="form-control" type="text" placeholder="john@example.com" name="username" id="username" tabindex="1" autofocus>
             </div>
             <div class="input-group">
-                <input class="form-control" type="password" placeholder="password" name="password" id="password">
+                <input class="form-control" type="password" placeholder="password" name="password" id="password" tabindex="2">
             </div>
             <div class="input-group">
-                <input class="btn" type="submit" id="login" value="Login">
+                <input class="btn" type="submit" id="login" value="Login" tabindex="3">
             </div>
             <table style="display: none;">
                 {{range $k, $v := .}}
