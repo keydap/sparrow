@@ -13,8 +13,8 @@ func TestCookieKeyCache(t *testing.T) {
 
 	for _, s := range strArr {
 		encStr := B64Encode(ckc.Encrypt([]byte(s)))
-		decStr := string(ckc.Decrypt(encStr))
-		if s != decStr {
+		decData, _ := ckc.Decrypt(encStr)
+		if s != string(decData) {
 			t.Errorf("failed to encrypt and decrypt the value %s", s)
 		}
 	}

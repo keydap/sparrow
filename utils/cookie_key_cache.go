@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"fmt"
 	"math/rand"
 	"time"
 )
@@ -67,17 +68,17 @@ func (ckc *CookieKeyCache) Encrypt(value []byte) []byte {
 	return value
 }
 
-func (ckc *CookieKeyCache) Decrypt(b64value string) []byte {
-	data, err := B64Decode(b64value)
+func (ckc *CookieKeyCache) Decrypt(b64value string) (data []byte, err error) {
+	data, err = B64Decode(b64value)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	id := DecodeUint32(data[:4])
 	key := ckc.keysById[id]
 
 	if key == nil {
-		return nil
+		return nil, fmt.Errorf("No key with id %d found to decrypt", id)
 	}
 
 	block, _ := aes.NewCipher(key.key)
@@ -86,7 +87,7 @@ func (ckc *CookieKeyCache) Decrypt(b64value string) []byte {
 	cbc.CryptBlocks(data, data)
 
 	padLen := uint8(data[0])
-	return data[padLen+1:]
+	return data[padLen+1:], nil
 }
 
 func (ckc *CookieKeyCache) newCookieKey() *cookieKey {
