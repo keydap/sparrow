@@ -18,7 +18,7 @@ func init() {
 }
 
 func main() {
-	logger.ConfigureLoggers("<root>=debug; sparrow.base=warning; sparrow.schema=warning; sparrow.provider=warning; sparrow.silo=warning")
+	logger.ConfigureLoggers("<root>=debug; sparrow.base=warning; sparrow.net=info; sparrow.schema=warning; sparrow.provider=warning; sparrow.silo=warning")
 	go net.Start("/tmp/sparrow")
 	//	net.Start("/Volumes/EVOSSD/sparrow-bench")
 
