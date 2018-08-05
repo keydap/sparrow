@@ -35,6 +35,7 @@ var JSON_TYPE = "application/json; charset=UTF-8"
 var FORM_URL_ENCODED_TYPE = "application/x-www-form-urlencoded"
 
 const SSO_COOKIE = "KSPAX" // Keydap Sparrow Auth X (X -> all the authenticated users)
+const PARAM_REDIRECT_TO = "redirectTo"
 
 var API_BASE = "/v2"       // NO slash at the end
 var OAUTH_BASE = "/oauth2" // NO slash at the end
@@ -142,6 +143,7 @@ func startHttp() {
 
 	router.HandleFunc("/login", showLogin).Methods("GET")
 	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
+	router.HandleFunc("/changePassword", handleChangePasswordReq).Methods("GET")
 	router.HandleFunc("/registerTotp", registerTotp).Methods("POST")
 
 	if srvConf.Https {
@@ -833,12 +835,14 @@ func serveUI(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie(SSO_COOKIE)
 	if err != nil {
+		addUiRedirectTo(r)
 		showLogin(w, r)
 		return
 	}
 
 	pr, err := getPrFromParam(r)
 	if pr == nil {
+		addUiRedirectTo(r)
 		showLogin(w, r)
 		return
 	}
@@ -847,17 +851,24 @@ func serveUI(w http.ResponseWriter, r *http.Request) {
 
 	if session == nil {
 		log.Debugf("no session is found with the cookie %v", cookie)
+		addUiRedirectTo(r)
 		showLogin(w, r)
 		return
 	}
 
 	if session.IsExpired() {
 		log.Debugf("Expired session %v", cookie)
+		addUiRedirectTo(r)
 		showLogin(w, r)
 		return
 	}
 
 	uiHandler.ServeHTTP(w, r)
+}
+
+func addUiRedirectTo(r *http.Request) {
+	r.ParseForm()
+	r.Form.Add(PARAM_REDIRECT_TO, "/ui")
 }
 
 func directLogin(w http.ResponseWriter, r *http.Request) {

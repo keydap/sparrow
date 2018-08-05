@@ -29,13 +29,16 @@ const (
 	from_saml
 	register_tfa
 	change_password
+	login_complete // flag when set indicates that login is verified including all factors
 )
 
 type authFlow struct {
-	BitFlag    uint16 // holds the state of login options in various bits
-	UserId     string
-	DomainCode uint32
-	TotpSecret string // the TOTP 2F secret
+	BitFlag         uint16 // holds the state of login options in various bits
+	UserId          string
+	DomainCode      uint32
+	TotpSecret      string // the TOTP 2F secret
+	PasswdFailCount uint8
+	OtpFailCount    uint8
 }
 
 func (af *authFlow) setBit(bit uint16, yes bool) {
@@ -107,6 +110,22 @@ func (af *authFlow) SetChangePassword(yes bool) {
 
 func (af *authFlow) ChangePassword() bool {
 	return af.isSet(change_password)
+}
+
+func (af *authFlow) markLoginSuccessful() {
+	af.setBit(login_complete, true)
+}
+
+func (af *authFlow) isLoginSuccessful() bool {
+	return af.isSet(login_complete)
+}
+
+func (af *authFlow) IncPasswdFailCount() {
+	af.PasswdFailCount++
+}
+
+func (af *authFlow) IncOtpFailCount() {
+	af.OtpFailCount++
 }
 
 func sendToken(w http.ResponseWriter, r *http.Request) {
@@ -280,8 +299,10 @@ func getAuthFlow(r *http.Request) *authFlow {
 		return nil
 	}
 
-	data := ckc.Decrypt(ck.Value)
-	if data == nil {
+	data, err := ckc.Decrypt(ck.Value)
+	if err != nil {
+		// todo audit
+		log.Debugf("failed to decrypt authflow cookie [%s]", err.Error())
 		return nil
 	}
 
@@ -324,7 +345,6 @@ func copyParams(r *http.Request) map[string]string {
 	return paramMap
 }
 
-//FIXME encrypt authflow cookie
 func setAuthFlow(af *authFlow, w http.ResponseWriter) {
 	ck := &http.Cookie{}
 	ck.HttpOnly = true
@@ -339,7 +359,7 @@ func setAuthFlow(af *authFlow, w http.ResponseWriter) {
 		enc.Encode(af)
 
 		data := ckc.Encrypt(buf.Bytes())
-		sessionToken := utils.B64UrlEncode(data)
+		sessionToken := utils.B64Encode(data)
 
 		ck.Value = sessionToken
 		ck.Expires = time.Now().Add(5 * time.Minute)

@@ -72,7 +72,7 @@ func showChangePasswordPage(w http.ResponseWriter, paramMap map[string]string) {
 func verifyPassword(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
-		log.Debugf("Failed to parse the oauth request %s", err)
+		log.Debugf("Failed to parse the login form %s", err)
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return
 	}
@@ -80,6 +80,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 	af := getAuthFlow(r)
 
 	if af == nil {
+		log.Debugf("authflow data is nil, initializing")
 		af = &authFlow{}
 	}
 
@@ -121,11 +122,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		} else if lr.Status == base.LOGIN_SUCCESS {
 			af.SetPasswordVerified(true)
-			af.UserId = lr.Id
-			af.DomainCode = prv.DomainCode()
-			setAuthFlow(af, w)
-			setSessionCookie(lr.User, af, prv, w, r, paramMap)
-			return
+			af.markLoginSuccessful()
 		} else if lr.Status == base.LOGIN_TFA_REGISTER { // check TFA settings and enable appropriate flags
 			af.SetTfaRegister(true)
 		} else if lr.Status == base.LOGIN_TFA_REQUIRED {
@@ -140,14 +137,13 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		af.UserId = lr.Id
 		af.DomainCode = prv.DomainCode()
 
-		setAuthFlow(af, w)
-
 		if af.RegisterTfa() {
 			showTotpRegistration(username, prv, af, w, paramMap)
 			return
 		}
 
 		if af.ChangePassword() {
+			setAuthFlow(af, w)
 			showChangePasswordPage(w, paramMap)
 			return
 		}
@@ -164,14 +160,13 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		user, err := prv.ChangePassword(af.UserId, newPassword, utils.GetRemoteAddr(r))
+		_, err := prv.ChangePassword(af.UserId, newPassword, utils.GetRemoteAddr(r))
 		if err != nil {
 			showChangePasswordPage(w, paramMap)
 			return
 		} else {
 			af.SetChangePassword(false)
-			setSessionCookie(user, af, prv, w, r, paramMap)
-			return
+			af.markLoginSuccessful()
 		}
 	}
 
@@ -180,23 +175,30 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		delete(paramMap, "otp")
 
 		if otp == "" {
+			setAuthFlow(af, w)
 			showOtpPage(w, paramMap)
 			return
 		}
 
+		log.Debugf("verifying otp")
 		lr := prv.VerifyOtp(af.UserId, otp, utils.GetRemoteAddr(r))
 		if lr.Status == base.LOGIN_FAILED {
 			showOtpPage(w, paramMap)
 			return
 		} else if lr.Status == base.LOGIN_SUCCESS {
-			setAuthFlow(nil, w)
-			setSessionCookie(lr.User, af, prv, w, r, paramMap)
+			af.SetTfaRequired(false)
+			setAuthFlow(af, w)
+			af.markLoginSuccessful()
 		} else if lr.Status == base.LOGIN_CHANGE_PASSWORD {
 			af.SetChangePassword(true)
+			af.SetTfaRequired(false) // otp has been validated earlier, so not required again
 			setAuthFlow(af, w)
 			showChangePasswordPage(w, paramMap)
+			return
 		}
 	}
+
+	redirectToUrl(af, prv, w, r, paramMap)
 }
 
 // STEP 3. Authorization Server obtains End-User Consent/Authorization.
@@ -441,6 +443,37 @@ func isValidAuthzReq(w http.ResponseWriter, r *http.Request, areq *oauth.Authori
 	return false
 }
 
+func redirectToUrl(af *authFlow, prv *provider.Provider, w http.ResponseWriter, r *http.Request, paramMap map[string]string) {
+	if !af.isLoginSuccessful() {
+		setAuthFlow(nil, w)
+		showLogin(w, r)
+		return
+	}
+
+	user, err := prv.GetUserById(af.UserId)
+	if err != nil {
+		setAuthFlow(nil, w)
+		showLogin(w, r)
+		return
+	}
+
+	if !af.FromOauth() && !af.FromSaml() {
+		rt := paramMap[PARAM_REDIRECT_TO]
+		if rt != "" {
+			log.Debugf("redirecting to %s after authentication", rt)
+			setSessionCookie(user, af, prv, w, r, paramMap)
+			return
+		}
+	}
+
+	setAuthFlow(nil, w)
+	// close the window
+	if paramMap["cl"] == "1" {
+		script := `<script type="text/javascript">window.close();</script>`
+		w.Write([]byte(script))
+	}
+}
+
 func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider, w http.ResponseWriter, r *http.Request, paramMap map[string]string) *base.RbacSession {
 	session := prv.GenSessionForUser(user)
 	prv.StoreSsoSession(session)
@@ -469,7 +502,27 @@ func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider,
 
 	setAuthFlow(nil, w)
 
-	http.Redirect(w, r, "/ui/", http.StatusFound)
+	rt := paramMap[PARAM_REDIRECT_TO]
+	http.Redirect(w, r, rt, http.StatusFound)
 
 	return session
+}
+
+func handleChangePasswordReq(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	paramMap := copyParams(r)
+	path := "/login"
+	query := "?"
+	for k, v := range paramMap {
+		k = url.QueryEscape(k) + "=" + url.QueryEscape(v)
+		query = query + k
+	}
+	if query != "?" {
+		path += query
+	}
+
+	af := &authFlow{}
+	af.SetChangePassword(true)
+	setAuthFlow(af, w)
+	http.Redirect(w, r, path, http.StatusFound)
 }
