@@ -92,24 +92,23 @@ func TestCreateResourcesPerf(t *testing.T) {
 			panic(fmt.Errorf("Unable to insert %d resource status is %s\n %s\n\n%s", count+1, resp.Status, msg, l))
 		}
 
-		if (count > 0) && ((count % 5000) == 0) {
+		if (count > 0) && ((count % 100) == 0) {
 			durSec := time.Now().Sub(start).Seconds()
 			fmt.Printf("Time took to insert %d entries %fsec\n", count, durSec)
+			break
 		}
-
-		break
 	}
 
 	fmt.Printf("Created %d resources in %fsec\n", count, time.Now().Sub(start).Seconds())
 }
 
-func TestSearchResourcesPerf(t *testing.T) {
+func BenchmarkTestSearchResourcesPerf(t *testing.B) {
 	if true {
 		fmt.Println("Not running search perf test")
 		return
 	}
 
-	scimReq := base.NewSearchRequest("username pr", "password", false)
+	scimReq := base.NewSearchRequest("username pr", "id", true)
 	data, err := json.Marshal(scimReq)
 	if err != nil {
 		t.Errorf(err.Error())
@@ -124,32 +123,41 @@ func TestSearchResourcesPerf(t *testing.T) {
 
 	reqUrl, _ := url.Parse(baseUrl + "/Users/.search")
 	client := &http.Client{}
-	req := &http.Request{Method: "POST", URL: reqUrl}
-	req.Header = make(map[string][]string)
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("Content-Type", scimContentType)
-	req.Body = ioutil.NopCloser(strings.NewReader(string(data)))
 
-	start := time.Now()
+	//start := time.Now()
+	//fmt.Println(t.N)
+	for i:=0; i < t.N; i++ {
+		req := &http.Request{Method: "POST", URL: reqUrl}
+		req.Header = make(map[string][]string)
+		req.Header.Add("Authorization", "Bearer "+token)
+		req.Header.Add("Content-Type", scimContentType)
+		req.Body = ioutil.NopCloser(strings.NewReader(string(data)))
 
-	resp, se := client.Do(req)
-	if se != nil {
-		fmt.Printf("Error while searching User resource %#v\n", se)
-		return
+
+		resp, se := client.Do(req)
+		if se != nil {
+			fmt.Printf("Error while searching User resource %#v\n", se)
+			t.Fail()
+		}
+
+
+		if resp.StatusCode == http.StatusOK {
+			var lr base.ListResponse
+			decoder := json.NewDecoder(resp.Body)
+			decoder.Decode(&lr)
+			//durSec := time.Now().Sub(start).Seconds()
+			//fmt.Printf("%d resources fetched in %fsec\n", lr.TotalResults, durSec)
+		} else {
+			fmt.Println(resp.Status)
+			data, _ := ioutil.ReadAll(resp.Body)
+			fmt.Printf("%s", string(data))
+		}
+
+		resp.Body.Close()
 	}
 
-	var lr base.ListResponse
-	decoder := json.NewDecoder(resp.Body)
-	decoder.Decode(&lr)
-
-	resp.Body.Close()
-
-	fmt.Println(resp.Status)
-
-	if resp.StatusCode == http.StatusOK {
-		durSec := time.Now().Sub(start).Seconds()
-		fmt.Printf("%d resources fetched in %fsec\n", lr.TotalResults, durSec)
-	}
+	//durSec := time.Now().Sub(start).Seconds()
+	//fmt.Printf("total number of seconds for %d search iterations %f", t.N, durSec)
 }
 
 func login() (token string, err error) {
