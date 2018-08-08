@@ -206,10 +206,12 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 	af := getAuthFlow(r)
 
 	if af != nil {
-		if af.VerifiedPassword() {
+		log.Debugf("verifying consent...")
+		if af.isLoginSuccessful() {
 			r.ParseForm()
 			consent := r.Form.Get("consent")
 			if consent == "authorize" {
+				log.Debugf("sending final response in oauth flow")
 				sendFinalResponse(w, r, nil, af)
 			} else {
 				clientId := r.Form.Get("client_id")
@@ -227,10 +229,12 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 					ep.Desc = "User did not authorize the request"
 					ep.Err = oauth.ERR_ACCESS_DENIED
 				}
+				log.Debugf("%s", ep.Desc)
 				sendOauthError(w, r, cl.Oauth.RedUri, ep)
 			}
 		}
 	} else {
+		log.Debugf("received request for verifying consent but authflow cookie is missing")
 		setAuthFlow(nil, w)
 	}
 }
@@ -445,6 +449,7 @@ func isValidAuthzReq(w http.ResponseWriter, r *http.Request, areq *oauth.Authori
 
 func redirectToUrl(af *authFlow, prv *provider.Provider, w http.ResponseWriter, r *http.Request, paramMap map[string]string) {
 	if !af.isLoginSuccessful() {
+		log.Debugf("login is not marked as successful returning to login page")
 		setAuthFlow(nil, w)
 		showLogin(w, r)
 		return
@@ -452,12 +457,17 @@ func redirectToUrl(af *authFlow, prv *provider.Provider, w http.ResponseWriter, 
 
 	user, err := prv.GetUserById(af.UserId)
 	if err != nil {
+		log.Debugf("could not find the authenticated user. [%v]", err)
 		setAuthFlow(nil, w)
 		showLogin(w, r)
 		return
 	}
 
-	if !af.FromOauth() && !af.FromSaml() {
+	if af.FromOauth() || af.FromSaml() {
+		log.Debugf("oauth/saml workflow")
+		setSessionCookie(user, af, prv, w, r, paramMap)
+		return
+	} else {
 		rt := paramMap[PARAM_REDIRECT_TO]
 		if rt != "" {
 			log.Debugf("redirecting to %s after authentication", rt)
@@ -466,6 +476,7 @@ func redirectToUrl(af *authFlow, prv *provider.Provider, w http.ResponseWriter, 
 		}
 	}
 
+	log.Debugf("successfully authenticated, there is no redirect parameter, not creating session")
 	setAuthFlow(nil, w)
 	// close the window
 	if paramMap["cl"] == "1" {
@@ -489,9 +500,11 @@ func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider,
 	http.SetCookie(w, cookie)
 
 	if af.FromOauth() {
+		log.Debugf("sending oauth request for consent")
 		// FIXME show consent only if application/client config enforces it
-		login := templates["consent.html"]
-		login.Execute(w, paramMap)
+		setAuthFlow(af, w)
+		consentTmpl := templates["consent.html"]
+		consentTmpl.Execute(w, paramMap)
 		return session
 	} else if af.FromSaml() {
 		log.Debugf("resuming SAML flow")
