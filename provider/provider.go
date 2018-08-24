@@ -44,8 +44,9 @@ type Provider struct {
 	Al            *AuditLogger
 }
 
-const adminGroupId = "01000000-0000-4000-4000-000000000000"
-const adminUserId = "00000000-0000-4000-4000-000000000000"
+const AdminGroupId = "01000000-0000-4000-4000-000000000000"
+const SystemGroupId = "01100000-0000-4000-4000-000000000000"
+const AdminUserId = "00000000-0000-4000-4000-000000000000"
 
 var log logger.Logger
 
@@ -107,8 +108,9 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 	prv.Name = layout.name
 	prv.sl.Engine.Domain = layout.name
 	prv.immResIds = make(map[string]int)
-	prv.immResIds[adminGroupId] = 1
-	prv.immResIds[adminUserId] = 1
+	prv.immResIds[AdminGroupId] = 1
+	prv.immResIds[SystemGroupId] = 1
+	prv.immResIds[AdminUserId] = 1
 
 	odbFilePath := filepath.Join(layout.DataDir, layout.name+"-tokens.db")
 	prv.osl, err = oauth.Open(odbFilePath, prv.Config.Oauth.TokenPurgeInterval)
@@ -132,7 +134,7 @@ func (pr *Provider) Close() {
 }
 
 func (prv *Provider) createDefaultResources() error {
-	_, err := prv.sl.Get(adminUserId, prv.RsTypes["User"])
+	_, err := prv.sl.Get(AdminUserId, prv.RsTypes["User"])
 
 	if err != nil {
 		adminUser := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -149,7 +151,7 @@ func (prv *Provider) createDefaultResources() error {
                      ]
                    }`
 
-		adminUser = fmt.Sprintf(adminUser, adminUserId, prv.Name) // fill in the placeholders
+		adminUser = fmt.Sprintf(adminUser, AdminUserId, prv.Name) // fill in the placeholders
 		buf := bytes.NewBufferString(adminUser)
 		userRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
 		if err != nil {
@@ -163,11 +165,11 @@ func (prv *Provider) createDefaultResources() error {
 			return err
 		}
 
-		log.Infof("Successfully inserted default administrator user %s", adminUserId)
+		log.Infof("Successfully inserted default administrator user %s", AdminUserId)
 	}
 
 	groupName := "Administrator"
-	_, err = prv.sl.Get(adminGroupId, prv.RsTypes["Group"])
+	_, err = prv.sl.Get(AdminGroupId, prv.RsTypes["Group"])
 	if err != nil {
 		adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
 	                "id": "%s",
@@ -180,7 +182,7 @@ func (prv *Provider) createDefaultResources() error {
                      ]
 				   }`
 
-		adminGroup = fmt.Sprintf(adminGroup, adminGroupId, groupName, adminUserId)
+		adminGroup = fmt.Sprintf(adminGroup, AdminGroupId, groupName, AdminUserId)
 
 		buf := bytes.NewBufferString(adminGroup)
 
@@ -194,7 +196,37 @@ func (prv *Provider) createDefaultResources() error {
 			return err
 		}
 
-		log.Infof("Successfully inserted default admin group %s", adminGroupId)
+		log.Infof("Successfully inserted default admin group %s", AdminGroupId)
+	}
+
+	groupName = "System"
+	_, err = prv.sl.Get(SystemGroupId, prv.RsTypes["Group"])
+	if err != nil {
+		systemGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+	                "id": "%s",
+				    "displayName": "%s",
+                    "members": [
+                       {
+                          "value": "%s"
+                       }
+                     ]
+				   }`
+
+		systemGroup = fmt.Sprintf(systemGroup, SystemGroupId, groupName, AdminUserId)
+
+		buf := bytes.NewBufferString(systemGroup)
+
+		grpRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
+		if err != nil {
+			return err
+		}
+
+		_, err = prv.sl.InsertInternal(grpRes)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("Successfully inserted default system group %s", SystemGroupId)
 	}
 
 	return nil
@@ -583,4 +615,11 @@ func (prv *Provider) GetKeyPair() (privateKey *rsa.PrivateKey, cert []byte, err 
 	// when other privatekey types are supported
 	rsaKey := prv.PrivKey.(*rsa.PrivateKey)
 	return rsaKey, prv.Cert.Raw, nil
+}
+
+func (prv *Provider) SaveConf() error {
+	data, _ := json.MarshalIndent(prv.Config, "", "    ")
+	dConfPath := filepath.Join(prv.layout.ConfDir, "domain.json")
+	err := ioutil.WriteFile(dConfPath, data, utils.FILE_PERM)
+	return err
 }
