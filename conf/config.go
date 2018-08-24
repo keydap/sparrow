@@ -14,12 +14,13 @@ import (
 )
 
 type ServerConf struct {
-	ServerId        uint16              `json:"serverId"` // used while generating CSNs
-	Https           bool                `json:"enableHttps"`
-	HttpPort        int                 `json:"httpPort"`
+	ServerId        uint16              `json:"serverId" valid:"required~Server ID is required"` // used while generating CSNs
+	Https           bool                `json:"enableHttps" valid:"checkTLSSettings"`
+	HttpPort        int                 `json:"httpPort" valid:"required"`
 	LdapPort        int                 `json:"ldapPort"`
+	LdapEnabled     bool                `json:"ldapEnabled"`
 	LdapOverTlsOnly bool                `json:"ldapOverTlsOnly"`
-	IpAddress       string              `json:"ipAddress"`
+	IpAddress       string              `json:"ipAddress" valid:"ip"`
 	CertFile        string              `json:"certificateFile"`
 	PrivKeyFile     string              `json:"privatekeyFile"`
 	TmplDir         string              `json:"-"` // template directory
@@ -80,7 +81,7 @@ type DomainConfig struct {
 }
 
 type Ppolicy struct {
-	PasswdHashAlgo string `json:"passwordHashAlgo"`
+	PasswdHashAlgo string `json:"passwordHashAlgo" valid:"checkHashAlgo"`
 }
 
 type OauthConfig struct {

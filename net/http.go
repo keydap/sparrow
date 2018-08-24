@@ -92,6 +92,7 @@ func startHttp() {
 
 	// generic service provider methods
 	scimRouter.HandleFunc("/ServiceProviderConfigs", getSrvProvConf).Methods("GET")
+	scimRouter.HandleFunc("/DomainConfig", handleDomainConf).Methods("GET", "PATCH") // Sparrow specific endpoint
 	scimRouter.HandleFunc("/ResourceTypes", getResTypes).Methods("GET")
 	scimRouter.HandleFunc("/Schemas", getSchemas).Methods("GET")
 	scimRouter.HandleFunc("/Bulk", bulkUpdate).Methods("POST")
