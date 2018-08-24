@@ -16,8 +16,9 @@ type SsoAttr struct {
 }
 
 type scimAtOrFilter struct {
-	atName string
-	filter *FilterNode
+	atName    string
+	subAtName string
+	filter    *FilterNode
 }
 
 func (ssoAt *SsoAttr) GetValueInto(res *Resource, container map[string]interface{}) {
@@ -34,6 +35,7 @@ func (ssoAt *SsoAttr) GetValueFrom(res *Resource) interface{} {
 
 	ssoAt.parseAtExpr()
 	atName := ssoAt.Name
+	subAtName := ""
 	if ssoAt.atOrFilter != nil {
 		if ssoAt.atOrFilter.filter != nil {
 			fltr := ssoAt.atOrFilter.filter
@@ -46,6 +48,7 @@ func (ssoAt *SsoAttr) GetValueFrom(res *Resource) interface{} {
 		} else {
 			atName = ssoAt.atOrFilter.atName
 		}
+		subAtName = ssoAt.atOrFilter.subAtName
 	}
 
 	at := res.GetAttr(atName)
@@ -54,9 +57,22 @@ func (ssoAt *SsoAttr) GetValueFrom(res *Resource) interface{} {
 			sa := at.GetSimpleAt()
 			return sa.Values[0]
 		} else {
-			//ca := at.GetComplexAt()
-			//subAt := ca.GetFirstSubAt()
-			log.Warningf("oauth attribute %s evaluated to a complex attribute, ignoring", atName)
+			log.Warningf("oauth attribute %s evaluated to a complex attribute", atName)
+			ca := at.GetComplexAt()
+			vals := make([]interface{}, 0)
+			if subAtName == "" {
+				subAtName = "value"
+			}
+
+			for _, atMap := range ca.SubAts {
+				if v, ok := atMap[subAtName]; ok {
+					vals = append(vals, v.Values[0])
+				}
+			}
+
+			if len(vals) > 0 {
+				return vals
+			}
 		}
 	}
 
@@ -74,7 +90,15 @@ func (ssoAt *SsoAttr) parseAtExpr() {
 
 	saf := &scimAtOrFilter{}
 	if !strings.ContainsRune(ssoAt.ScimExpr, ' ') {
-		saf.atName = ssoAt.ScimExpr
+		if strings.ContainsRune(ssoAt.ScimExpr, '.') {
+			tokens := strings.SplitN(ssoAt.ScimExpr, ".", 2) // the expression can only contain one '.'
+			saf.atName = tokens[0]
+			if len(tokens) == 2 {
+				saf.subAtName = strings.ToLower(tokens[1])
+			}
+		} else {
+			saf.atName = ssoAt.ScimExpr
+		}
 		ssoAt.atOrFilter = saf
 	} else {
 		filter, err := ParseFilter(ssoAt.ScimExpr)
