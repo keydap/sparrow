@@ -97,6 +97,7 @@ type AccessTokenReq struct {
 
 type AccessTokenResp struct {
 	AcToken   string `json:"access_token"`
+	IdToken   string `json:"id_token,omitempty"`
 	TokenType string `json:"token_type"`
 	ExpiresIn int    `json:"expires_in,omitempty"`
 }
