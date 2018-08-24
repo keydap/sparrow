@@ -24,6 +24,7 @@ var DEFAULT_SRV_CONF string = `{
     "enableHttps" : false,
     "httpPort" : 7090,
     "ldapPort" : 7092,
+	"ldapEnabled" : true,
     "ldapOverTlsOnly" : true,
     "ipAddress" : "0.0.0.0",
     "certificateFile": "default.cer",
@@ -47,16 +48,20 @@ func Start(srvHome string) {
 		}
 	}
 
-	err := startLdap()
-	if err != nil {
-		panic(err)
+	if srvConf.LdapEnabled {
+		err := startLdap()
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	startHttp()
 }
 
 func Stop() {
-	stopLdap()
+	if srvConf.LdapEnabled {
+		stopLdap()
+	}
 	stopHttp()
 }
 
@@ -83,7 +88,7 @@ func initHome(srvHome string) *conf.ServerConf {
 	sc := &conf.ServerConf{}
 	sc.TmplDir = tmplDir
 
-	if err != nil {
+	if os.IsNotExist(err) {
 		err = ioutil.WriteFile(srvConfPath, []byte(DEFAULT_SRV_CONF), utils.FILE_PERM)
 		if err != nil {
 			log.Criticalf("Couldn't write the default server configuration file %s %#v", srvConfPath, err)
