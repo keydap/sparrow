@@ -24,7 +24,7 @@ type hashMech struct {
 var nameHashMechMap map[string]*hashMech
 
 func init() {
-	arr := make([]*hashMech, 7)
+	var arr [7]*hashMech
 	arr[0] = &hashMech{Name: "md5", AlgoName: "md5", Salted: false}
 	arr[1] = &hashMech{Name: "sha", AlgoName: "sha", Salted: false}
 	arr[2] = &hashMech{Name: "ssha", AlgoName: "sha", Salted: true}
