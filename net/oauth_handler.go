@@ -232,7 +232,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := prv.GenSessionForUserId(ac.UserId)
+	session, err := prv.GenSessionForUserId(ac.UserId)
 	if err != nil {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Failed to generate token - " + err.Error()
@@ -241,14 +241,23 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prv.StoreOauthSession(token)
+	prv.StoreOauthSession(session)
 
 	tresp := &oauth.AccessTokenResp{}
-	tresp.AcToken = token.Jti
-	//tresp.ExpiresIn = // will be same as the Exp value present in token
-	tresp.TokenType = "bearer"
+	tresp.AcToken = session.Jti
+	//tresp.ExpiresIn = session.Exp // will be same as the Exp value present in token
+	tresp.TokenType = "Bearer"
 
-	w.Header().Add("Content-Type", JSON_TYPE)
+	if ac.CType == OIDC {
+		idt := createIdToken(session, cl, pr)
+		strIdt := oauth.ToJwt(idt, srvConf.PrivKey)
+		tresp.IdToken = strIdt
+	}
+
+	headers := w.Header()
+	headers.Add("Cache-Control", "no-store")
+	headers.Add("Pragma", "no-cache")
+	headers.Add("Content-Type", JSON_TYPE)
 	w.Write(tresp.Serialize())
 }
 

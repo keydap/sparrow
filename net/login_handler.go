@@ -360,6 +360,9 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 
 	// delete the authflow cookie
 	setAuthFlow(nil, w)
+	headers := w.Header()
+	headers.Add("Cache-Control", "no-store")
+	headers.Add("Pragma", "no-cache")
 	http.Redirect(w, r, tmpUri, http.StatusFound)
 
 	// ignore the received redirect URI
@@ -395,7 +398,11 @@ func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Pro
 	idt["exp"] = iat + 600 // TODO config
 	idt["iss"] = issuerUrl
 	idt["jti"] = utils.NewRandShaStr()
-	idt["sub"] = session.Sub
+	// if sub is not already filled with custom attribute config
+	// fill it with the default value
+	if _, ok := idt["sub"]; !ok {
+		idt["sub"] = session.Sub
+	}
 
 	return idt
 }
