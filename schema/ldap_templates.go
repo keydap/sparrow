@@ -36,7 +36,7 @@ description: This is the description for Aaren Atp.`
 
 const LDAP_User_Entry = `{
 	"type": "User",
-	"objectClasses": ["top", "person", "organizationalPerson", "inetOrgPerson", "extensibleObject"],
+	"objectClasses": ["top", "person", "organizationalPerson", "inetOrgPerson", "posixAccount", "extensibleObject"],
 	"dnPrefix": "uid={userName},ou=Users",
 	"attributes": [
 		{
@@ -74,12 +74,28 @@ const LDAP_User_Entry = `{
 		{
 			"scimAttrPath": "password",
 			"ldapAttrName": "userPassword"
+		},
+		{
+			"scimAttrPath": "uidNumber",
+			"ldapAttrName": "uidNumber"
+		},
+		{
+			"scimAttrPath": "gidNumber",
+			"ldapAttrName": "gidNumber"
+		},
+		{
+			"scimAttrPath": "homeDirectory",
+			"ldapAttrName": "homeDirectory"
+		},
+		{
+			"scimAttrPath": "loginShell",
+			"ldapAttrName": "loginShell"
 		}]
 }`
 
 const LDAP_Group_Entry = `{
 	"type": "Group",
-	"objectClasses": ["top", "groupOfUniqueNames"],
+	"objectClasses": ["top", "groupOfUniqueNames", "posixGroup"],
 	"dnPrefix": "cn={displayName},ou=Groups",
 	"attributes": [
 		{
@@ -94,6 +110,10 @@ const LDAP_Group_Entry = `{
 			"scimAttrPath": "members",
 			"ldapAttrName": "uniqueMember",
 			"format": "uid={value},ou=Users,{dn}"
+		},
+		{
+			"scimAttrPath": "gidNumber",
+			"ldapAttrName": "gidNumber"
 		}
 	]
 }`
