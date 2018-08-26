@@ -86,31 +86,19 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 		return nil, err
 	}
 
-	cf := prv.Config
-	cf.Ppolicy.PasswdHashAlgo = strings.ToLower(cf.Ppolicy.PasswdHashAlgo)
-
-	prv.interceptors = make([]base.Interceptor, 3)
-	prv.interceptors[0] = &ApplicationInterceptor{}
-	prv.interceptors[1] = &RemoveNeverAttrInterceptor{}
-	prv.interceptors[2] = &PpolicyInterceptor{Config: cf.Ppolicy}
-
-	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
-
-	dataFilePath := filepath.Join(layout.DataDir, layout.name+".db")
-
-	prv.sl, err = silo.Open(dataFilePath, prv.ServerId, prv.Config, prv.RsTypes, prv.Schemas)
-
-	if err != nil {
-		return nil, err
-	}
-
 	prv.layout = layout
 	prv.Name = layout.name
-	prv.sl.Engine.Domain = layout.name
 	prv.immResIds = make(map[string]int)
 	prv.immResIds[AdminGroupId] = 1
 	prv.immResIds[SystemGroupId] = 1
 	prv.immResIds[AdminUserId] = 1
+
+	dataFilePath := filepath.Join(layout.DataDir, layout.name+".db")
+	prv.sl, err = silo.Open(dataFilePath, prv.ServerId, prv.Config, prv.RsTypes, prv.Schemas)
+	if err != nil {
+		return nil, err
+	}
+	prv.sl.Engine.Domain = layout.name
 
 	odbFilePath := filepath.Join(layout.DataDir, layout.name+"-tokens.db")
 	prv.osl, err = oauth.Open(odbFilePath, prv.Config.Oauth.TokenPurgeInterval)
@@ -119,7 +107,32 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 		return nil, err
 	}
 
-	err = prv.createDefaultResources()
+	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
+
+	cf := prv.Config
+	cf.Ppolicy.PasswdHashAlgo = strings.ToLower(cf.Ppolicy.PasswdHashAlgo)
+
+	prv.interceptors = make([]base.Interceptor, 3)
+	prv.interceptors[0] = &ApplicationInterceptor{}
+	prv.interceptors[1] = &RemoveNeverAttrInterceptor{}
+	prv.interceptors[2] = &PpolicyInterceptor{Config: cf.Ppolicy}
+
+	var rfc2307i *Rfc2307BisAttrInterceptor
+	if cf.Rfc2307bis.Enabled {
+		uidNumber, err := prv.sl.GetMaxIndexedValOfAt(prv.RsTypes["User"], "uidNumber")
+		if err != nil {
+			log.Debugf("failed get the highest uidNumber %s", err.Error())
+		}
+		gidNumber, err := prv.sl.GetMaxIndexedValOfAt(prv.RsTypes["Group"], "gidNumber")
+		if err != nil {
+			log.Debugf("failed get the highest gidNumber %s", err.Error())
+		}
+
+		rfc2307i = &Rfc2307BisAttrInterceptor{Conf: cf.Rfc2307bis, uidNumber: uidNumber, gidNumber: gidNumber}
+		prv.interceptors = append(prv.interceptors, rfc2307i)
+	}
+
+	err = prv.createDefaultResources(rfc2307i)
 
 	prv.Al = NewLocalAuditLogger(prv)
 
@@ -133,7 +146,7 @@ func (pr *Provider) Close() {
 	pr.Al.Close()
 }
 
-func (prv *Provider) createDefaultResources() error {
+func (prv *Provider) createDefaultResources(rfc2307i *Rfc2307BisAttrInterceptor) error {
 	_, err := prv.sl.Get(AdminUserId, prv.RsTypes["User"])
 
 	if err != nil {
@@ -160,6 +173,12 @@ func (prv *Provider) createDefaultResources() error {
 
 		password := utils.HashPassword("secret", prv.Config.Ppolicy.PasswdHashAlgo)
 		userRes.AddSA("password", password)
+		if rfc2307i != nil {
+			err = rfc2307i._preCreate(userRes)
+			if err != nil {
+				return err
+			}
+		}
 		_, err = prv.sl.InsertInternal(userRes)
 		if err != nil {
 			return err
@@ -191,6 +210,12 @@ func (prv *Provider) createDefaultResources() error {
 			return err
 		}
 
+		if rfc2307i != nil {
+			err = rfc2307i._preCreate(grpRes)
+			if err != nil {
+				return err
+			}
+		}
 		_, err = prv.sl.InsertInternal(grpRes)
 		if err != nil {
 			return err
@@ -219,6 +244,13 @@ func (prv *Provider) createDefaultResources() error {
 		grpRes, err := base.ParseResource(prv.RsTypes, prv.Schemas, buf)
 		if err != nil {
 			return err
+		}
+
+		if rfc2307i != nil {
+			err = rfc2307i._preCreate(grpRes)
+			if err != nil {
+				return err
+			}
 		}
 
 		_, err = prv.sl.InsertInternal(grpRes)

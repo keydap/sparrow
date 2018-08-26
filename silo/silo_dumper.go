@@ -9,6 +9,7 @@ import (
 	"os"
 	"sparrow/base"
 	"sparrow/schema"
+	"sparrow/utils"
 )
 
 // Dumps all the resources of a given type in JSON format
@@ -79,4 +80,40 @@ func (sl *Silo) DumpJSON(bkFilePath string, overwrite bool, rt *schema.ResourceT
 	}
 
 	return nil
+}
+
+func (sl *Silo) GetMaxIndexedValOfAt(rt *schema.ResourceType, atName string) (int64, error) {
+	at := rt.GetAtType(atName)
+	if at == nil {
+		return 0, fmt.Errorf("no attribute with the name %s found in resourcetype %s", atName, rt.Name)
+	}
+
+	if !at.IsUnique() {
+		return 0, fmt.Errorf("attribute %s of resourcetype %s is not unique", atName, rt.Name)
+	}
+
+	if at.Type != "integer" {
+		return 0, fmt.Errorf("attribute %s of resourcetype %s is not of integer type", atName, rt.Name)
+	}
+
+	idx := sl.indices[rt.Name][at.NormName]
+	if idx == nil {
+		return 0, fmt.Errorf("attribute %s of resourcetype %s has no idex", atName, rt.Name)
+	}
+
+	tx, err := sl.db.Begin(false)
+	if err != nil {
+		return 0, err
+	}
+
+	var highestVal int64
+	key, _ := idx.cursor(tx).Last()
+
+	if len(key) != 0 {
+		highestVal = utils.Btoi(key)
+	}
+
+	tx.Commit()
+
+	return highestVal, nil
 }

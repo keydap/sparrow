@@ -75,9 +75,17 @@ type ResourceConf struct {
 }
 
 type DomainConfig struct {
-	Scim    *ScimConfig  `json:"scim"`
-	Oauth   *OauthConfig `json:"oauth"`
-	Ppolicy *Ppolicy     `json:"ppolicy"`
+	Scim       *ScimConfig     `json:"scim"`
+	Oauth      *OauthConfig    `json:"oauth"`
+	Ppolicy    *Ppolicy        `json:"ppolicy"`
+	Resources  []*ResourceConf `json:"resources"`
+	Rfc2307bis *Rfc2307bis     `json:"rfc2307bis"`
+}
+
+type Rfc2307bis struct {
+	Enabled             bool   `json:"enabled"`
+	LoginShell          string `json:"loginShell"`
+	HomeDirectoryPrefix string `json:"homeDirectoryPrefix"`
 }
 
 type Ppolicy struct {
@@ -109,8 +117,6 @@ type ScimConfig struct {
 	Filter                Filter                 `json:"filter"`
 	Patch                 Patch                  `json:"patch"`
 	Sort                  Sort                   `json:"sort"`
-	Resources             []ResourceConf         `json:"resources"`
-	Notes                 string                 `json:"notes"`
 	Meta                  Meta                   `json:"meta"`
 }
 
@@ -137,10 +143,12 @@ func DefaultDomainConfig() *DomainConfig {
 	patch := Patch{Supported: true}
 	scim.Patch = patch
 
-	userRc := ResourceConf{Name: "User", IndexFields: []string{"userName", "name.givenName", "employeeNumber", "organization", "emails.value", "groups.value"}}
-	deviceRc := ResourceConf{Name: "Device", IndexFields: []string{"manufacturer", "serialNumber", "rating", "price", "location.latitude", "installedDate", "repairDates", "photos.value"}}
-	groupRc := ResourceConf{Name: "Group", IndexFields: []string{"members.value"}}
-	scim.Resources = []ResourceConf{userRc, deviceRc, groupRc}
+	cf := &DomainConfig{}
+
+	userRc := &ResourceConf{Name: "User", IndexFields: []string{"userName", "name.givenName", "employeeNumber", "organization", "emails.value", "groups.value"}}
+	deviceRc := &ResourceConf{Name: "Device", IndexFields: []string{"manufacturer", "serialNumber", "rating", "price", "location.latitude", "installedDate", "repairDates", "photos.value"}}
+	groupRc := &ResourceConf{Name: "Group", IndexFields: []string{"members.value"}}
+	cf.Resources = []*ResourceConf{userRc, deviceRc, groupRc}
 
 	sort := Sort{Supported: false}
 	scim.Sort = sort
@@ -164,7 +172,9 @@ func DefaultDomainConfig() *DomainConfig {
 	ppolicy := &Ppolicy{}
 	ppolicy.PasswdHashAlgo = "sha256"
 
-	cf := &DomainConfig{}
+	rfc2307bis := &Rfc2307bis{Enabled: true, LoginShell: "/bin/bash", HomeDirectoryPrefix: "/home/"}
+
+	cf.Rfc2307bis = rfc2307bis
 	cf.Scim = scim
 	cf.Oauth = oauthCf
 	cf.Ppolicy = ppolicy

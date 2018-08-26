@@ -1,0 +1,22 @@
+{
+    "id":"urn:keydap:params:scim:schemas:extension:posix:2.0:Group",
+    "name":"PosixGroup",
+    "description":"Posix Group",
+    "attributes": [ 
+        {
+            "name":"gidNumber",
+            "type":"integer",
+            "multiValued":false,
+            "description":"An integer uniquely identifying a group in an administrative domain",
+            "required":true,
+            "caseExact":false,
+            "mutability":"writeOnly",
+            "returned":"default",
+            "uniqueness":"server"
+        }
+    ],
+    "meta":{
+        "resourceType":"Schema",
+        "location":"/v2/Schemas/urn:keydap:params:scim:schemas:extension:posix:2.0:Group"
+    }
+}

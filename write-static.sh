@@ -27,7 +27,9 @@ writeSchemas() {
   writeConst "device_schema" "resources/schemas/device.json" $targetFile
   writeConst "enterprise_user_schema" "resources/schemas/enterprise-user.json" $targetFile
   writeConst "group_schema" "resources/schemas/group.json" $targetFile
+  writeConst "posix_group_schema" "resources/schemas/posix-group.json" $targetFile
   writeConst "user_schema" "resources/schemas/user.json" $targetFile
+  writeConst "posix_user_schema" "resources/schemas/posix-user.json" $targetFile
   writeConst "application_schema" "resources/schemas/application.json" $targetFile
   writeConst "authentication_schema" "resources/schemas/authentication.json" $targetFile
   writeConst "auditevent_schema" "resources/schemas/auditevent.json" $targetFile
