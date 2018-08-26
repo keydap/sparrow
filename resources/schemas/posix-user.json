@@ -1,0 +1,55 @@
+{
+    "id":"urn:keydap:params:scim:schemas:extension:posix:2.0:User",
+    "name":"PosixUser",
+    "description":"Posix User",
+    "attributes":[
+        {
+            "name":"gidNumber",
+            "type":"integer",
+            "multiValued":false,
+            "description":"An integer uniquely identifying a group in an administrative domain",
+            "required":true,
+            "caseExact":false,
+            "mutability":"writeOnly",
+            "returned":"default",
+            "uniqueness":"server"
+        },
+        {
+            "name":"uidNumber",
+            "type":"integer",
+            "multiValued":false,
+            "description":"An integer uniquely identifying a user in an administrative domain",
+            "required":true,
+            "caseExact":false,
+            "mutability":"writeOnly",
+            "returned":"default",
+            "uniqueness":"server"
+        },
+        {
+            "name":"homeDirectory",
+            "type":"string",
+            "multiValued":false,
+            "description":"The absolute path to the home directory",
+            "required":true,
+            "caseExact":false,
+            "mutability":"writeOnly",
+            "returned":"default",
+            "uniqueness":"server"
+        },
+        {
+            "name":"loginShell",
+            "type":"string",
+            "multiValued":false,
+            "description":"The path to the login shell",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        }
+    ],
+    "meta":{
+        "resourceType":"Schema",
+        "location":"/v2/Schemas/urn:keydap:params:scim:schemas:extension:posix:2.0:User"
+    }
+}

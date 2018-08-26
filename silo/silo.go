@@ -137,7 +137,7 @@ func (idx *Index) keyCount(key interface{}, tx *bolt.Tx) int64 {
 
 // Inserts the given <attribute value, resource ID> tuple in the index
 func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
-	log.Debugf("adding value %s of resource %s to index %s", val, rid, idx.Name)
+	log.Debugf("adding value %v of resource %s to index %s", val, rid, idx.Name)
 	vData := idx.convert(val)
 	buck := tx.Bucket(idx.BnameBytes)
 	ridBytes := []byte(rid)
@@ -429,9 +429,9 @@ func Open(path string, serverId uint16, config *conf.DomainConfig, rtypes map[st
 	for _, rt := range rtypes {
 
 		var rc *conf.ResourceConf
-		for _, v := range config.Scim.Resources {
+		for _, v := range config.Resources {
 			if v.Name == rt.Name {
-				rc = &v
+				rc = v
 				break
 			}
 		}
@@ -456,12 +456,20 @@ func Open(path string, serverId uint16, config *conf.DomainConfig, rtypes map[st
 			indexFields = append(indexFields, rc.IndexFields...)
 		}
 
+		// make sure not to create duplicate indices
+		createdIdxNameMap := make(map[string]int)
 		for _, idxName := range indexFields {
 			at := rt.GetAtType(idxName)
 			if at == nil {
 				log.Warningf("There is no attribute with the name %s, index is not created", idxName)
 				continue
 			}
+
+			key := strings.ToLower(idxName)
+			if _, ok := createdIdxNameMap[key]; ok {
+				continue
+			}
+			createdIdxNameMap[key] = 1
 
 			resIdxMap := sl.indices[rt.Name]
 			isNewIndex, idx, err := sl.createIndexBucket(rt.Name, idxName, at, false, resIdxMap)

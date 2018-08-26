@@ -18,9 +18,9 @@ func init() {
 }
 
 func main() {
-	logger.ConfigureLoggers("<root>=debug; sparrow.base=warning; sparrow.net=info; sparrow.schema=warning; sparrow.provider=warning; sparrow.silo=warning")
+	logger.ConfigureLoggers("<root>=debug")
+	//logger.ConfigureLoggers("<root>=debug; sparrow.base=warning; sparrow.net=info; sparrow.schema=warning; sparrow.provider=warning; sparrow.silo=warning")
 	go net.Start("/tmp/sparrow")
-	//	net.Start("/Volumes/EVOSSD/sparrow-bench")
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)

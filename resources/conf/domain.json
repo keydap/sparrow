@@ -49,49 +49,6 @@
             "supported": false,
             "notes": ""
         },
-
-        "resources": [
-            {
-                "name": "User",
-                "indexFields": [
-                    "userName",
-                    "name.givenName",
-                    "employeeNumber",
-                    "organization",
-                    "emails.value",
-                    "groups.value"
-                ],
-
-                "notes": ""
-            },
-
-            {
-                "name": "Device",
-                "indexFields": [
-                    "manufacturer",
-                    "serialNumber",
-                    "rating",
-                    "price",
-                    "location.latitude",
-                    "installedDate",
-                    "repairDates",
-                    "photos.value"
-                ],
-
-                "notes": ""
-            },
-
-            {
-                "name": "Group",
-                "indexFields": [
-                    "members.value"
-                ],
-
-                "notes": ""
-            }
-        ],
-
-        "notes": "",
         "meta": {
             "location": "/v2/ServiceProviderConfigs",
             "resourceType": "ServiceProviderConfig",
@@ -110,5 +67,52 @@
 
     "ppolicy": {
         "passwordHashAlgo": "ssha256"
-    }
+    },
+
+    "rfc2307bis": {
+        "enabled": false,
+        "loginShell": "/bin/bash",
+        "homeDirectoryPrefix": "/home/",
+        "uidNumberStart": 200,
+        "gidNumberStart": 200
+    },
+
+    "resources": [
+        {
+            "name": "User",
+            "indexFields": [
+                "userName",
+                "name.givenName",
+                "employeeNumber",
+                "organization",
+                "emails.value",
+                "groups.value"
+            ],
+
+            "notes": ""
+        },
+        {
+            "name": "Device",
+            "indexFields": [
+                "manufacturer",
+                "serialNumber",
+                "rating",
+                "price",
+                "location.latitude",
+                "installedDate",
+                "repairDates",
+                "photos.value"
+            ],
+
+            "notes": ""
+        },
+        {
+            "name": "Group",
+            "indexFields": [
+                "members.value"
+            ],
+
+            "notes": ""
+        }
+    ]
 }
