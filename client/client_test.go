@@ -126,20 +126,18 @@ func BenchmarkTestSearchResourcesPerf(t *testing.B) {
 
 	//start := time.Now()
 	//fmt.Println(t.N)
-	for i:=0; i < t.N; i++ {
+	for i := 0; i < t.N; i++ {
 		req := &http.Request{Method: "POST", URL: reqUrl}
 		req.Header = make(map[string][]string)
 		req.Header.Add("Authorization", "Bearer "+token)
 		req.Header.Add("Content-Type", scimContentType)
 		req.Body = ioutil.NopCloser(strings.NewReader(string(data)))
 
-
 		resp, se := client.Do(req)
 		if se != nil {
 			fmt.Printf("Error while searching User resource %#v\n", se)
 			t.Fail()
 		}
-
 
 		if resp.StatusCode == http.StatusOK {
 			var lr base.ListResponse
