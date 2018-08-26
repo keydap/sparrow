@@ -86,6 +86,8 @@ type Rfc2307bis struct {
 	Enabled             bool   `json:"enabled"`
 	LoginShell          string `json:"loginShell"`
 	HomeDirectoryPrefix string `json:"homeDirectoryPrefix"`
+	UidNumberStart      int64  `json:"uidNumberStart"`
+	GidNumberStart      int64  `json:"gidNumberStart"`
 }
 
 type Ppolicy struct {
@@ -172,7 +174,7 @@ func DefaultDomainConfig() *DomainConfig {
 	ppolicy := &Ppolicy{}
 	ppolicy.PasswdHashAlgo = "sha256"
 
-	rfc2307bis := &Rfc2307bis{Enabled: true, LoginShell: "/bin/bash", HomeDirectoryPrefix: "/home/"}
+	rfc2307bis := &Rfc2307bis{Enabled: true, LoginShell: "/bin/bash", HomeDirectoryPrefix: "/home/", UidNumberStart: 200, GidNumberStart: 200}
 
 	cf.Rfc2307bis = rfc2307bis
 	cf.Scim = scim

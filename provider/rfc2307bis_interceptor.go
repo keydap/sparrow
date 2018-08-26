@@ -59,7 +59,6 @@ func (ri *Rfc2307BisAttrInterceptor) PreCreate(crCtx *base.CreateContext) error 
 }
 
 func (ri *Rfc2307BisAttrInterceptor) _preCreate(rs *base.Resource) error {
-
 	name := rs.GetType().Name
 
 	if name == "User" {

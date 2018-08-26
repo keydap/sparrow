@@ -456,12 +456,20 @@ func Open(path string, serverId uint16, config *conf.DomainConfig, rtypes map[st
 			indexFields = append(indexFields, rc.IndexFields...)
 		}
 
+		// make sure not to create duplicate indices
+		createdIdxNameMap := make(map[string]int)
 		for _, idxName := range indexFields {
 			at := rt.GetAtType(idxName)
 			if at == nil {
 				log.Warningf("There is no attribute with the name %s, index is not created", idxName)
 				continue
 			}
+
+			key := strings.ToLower(idxName)
+			if _, ok := createdIdxNameMap[key]; ok {
+				continue
+			}
+			createdIdxNameMap[key] = 1
 
 			resIdxMap := sl.indices[rt.Name]
 			isNewIndex, idx, err := sl.createIndexBucket(rt.Name, idxName, at, false, resIdxMap)

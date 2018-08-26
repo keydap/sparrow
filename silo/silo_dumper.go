@@ -107,13 +107,14 @@ func (sl *Silo) GetMaxIndexedValOfAt(rt *schema.ResourceType, atName string) (in
 	}
 
 	var highestVal int64
-	key, _ := idx.cursor(tx).Last()
+	cursor := idx.cursor(tx)
+	key, _ := cursor.Last()
 
 	if len(key) != 0 {
 		highestVal = utils.Btoi(key)
 	}
 
-	tx.Commit()
+	tx.Rollback()
 
 	return highestVal, nil
 }

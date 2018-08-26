@@ -123,9 +123,16 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 		if err != nil {
 			log.Debugf("failed get the highest uidNumber %s", err.Error())
 		}
+		if cf.Rfc2307bis.UidNumberStart > uidNumber {
+			uidNumber = cf.Rfc2307bis.UidNumberStart - 1 // decrement by one so that it exactly starts at the configured number
+		}
+
 		gidNumber, err := prv.sl.GetMaxIndexedValOfAt(prv.RsTypes["Group"], "gidNumber")
 		if err != nil {
 			log.Debugf("failed get the highest gidNumber %s", err.Error())
+		}
+		if cf.Rfc2307bis.GidNumberStart > gidNumber {
+			gidNumber = cf.Rfc2307bis.GidNumberStart - 1 // decrement by one so that it exactly starts at the configured number
 		}
 
 		rfc2307i = &Rfc2307BisAttrInterceptor{Conf: cf.Rfc2307bis, uidNumber: uidNumber, gidNumber: gidNumber}

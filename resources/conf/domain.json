@@ -72,7 +72,9 @@
     "rfc2307bis": {
         "enabled": false,
         "loginShell": "/bin/bash",
-        "homeDirectoryPrefix": "/home/"
+        "homeDirectoryPrefix": "/home/",
+        "uidNumberStart": 200,
+        "gidNumberStart": 200
     },
 
     "resources": [
