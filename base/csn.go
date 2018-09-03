@@ -16,4 +16,7 @@ type Csn interface {
 	ModificationCount() uint32
 
 	String() string
+
+	// String value of date and time in RFC3339 format
+	DateTime() string
 }

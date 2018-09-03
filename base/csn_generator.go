@@ -1,18 +1,17 @@
 // Copyright 2017 Keydap. All rights reserved.
 // Licensed under the Apache License, Version 2.0, see LICENSE.
 
-package silo
+package base
 
 import (
 	"fmt"
-	"sparrow/base"
 	"sync"
 	"time"
 )
 
 const gtime_format = "20060102150405.000000Z" //"yyyyMMddHHmmss.000000Z" , the last 6 digits after . are microseconds
 
-type csnGenerator struct {
+type CsnGenerator struct {
 	lastTime    int64 // millis
 	changeCount uint32
 	replicaId   uint16
@@ -50,13 +49,17 @@ func (ci csnImpl) String() string {
 	return fmt.Sprintf("%s#%06x#%03x#%06x", t, ci.changeCount, ci.replicaId, ci.modCount)
 }
 
-func NewCsnGenerator(replicaId uint16) *csnGenerator {
-	cg := &csnGenerator{}
+func (ci csnImpl) DateTime() string {
+	return ci.now.Format(time.RFC3339)
+}
+
+func NewCsnGenerator(replicaId uint16) *CsnGenerator {
+	cg := &CsnGenerator{}
 	cg.replicaId = replicaId
 	return cg
 }
 
-func (cg *csnGenerator) NewCsn() base.Csn {
+func (cg *CsnGenerator) NewCsn() Csn {
 	cg.mutex.Lock()
 
 	now := time.Now().UTC()

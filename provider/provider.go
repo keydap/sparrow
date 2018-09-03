@@ -54,13 +54,14 @@ func init() {
 	log = logger.GetLogger("sparrow.provider")
 }
 
-func NewProvider(layout *Layout) (prv *Provider, err error) {
+func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 	schemas, err := base.LoadSchemas(layout.SchemaDir)
 	if err != nil {
 		return nil, err
 	}
 
 	prv = &Provider{}
+	prv.ServerId = serverId
 	prv.Schemas = schemas
 
 	prv.RsTypes, prv.RtPathMap, err = base.LoadResTypes(layout.ResTypesDir, prv.Schemas)
@@ -86,6 +87,7 @@ func NewProvider(layout *Layout) (prv *Provider, err error) {
 		return nil, err
 	}
 
+	prv.Config.CsnGen = base.NewCsnGenerator(prv.ServerId)
 	prv.layout = layout
 	prv.Name = layout.name
 	prv.immResIds = make(map[string]int)
@@ -657,6 +659,9 @@ func (prv *Provider) GetKeyPair() (privateKey *rsa.PrivateKey, cert []byte, err 
 }
 
 func (prv *Provider) SaveConf() error {
+	csn := prv.Config.CsnGen.NewCsn()
+	prv.Config.Scim.Meta.LastModified = csn.DateTime()
+	prv.Config.Scim.Meta.Version = csn.String()
 	data, _ := json.MarshalIndent(prv.Config, "", "    ")
 	dConfPath := filepath.Join(prv.layout.ConfDir, "domain.json")
 	err := ioutil.WriteFile(dConfPath, data, utils.FILE_PERM)

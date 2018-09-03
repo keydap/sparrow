@@ -205,7 +205,7 @@ func loadProviders(domainsDir string, sc *conf.ServerConf) {
 					continue
 				}
 
-				prv, err := provider.NewProvider(layout)
+				prv, err := provider.NewProvider(layout, sc.ServerId)
 				if err != nil {
 					log.Infof("Could not create a provider for the domain %s [%s]", layout.Name(), err.Error())
 				} else {
@@ -245,14 +245,13 @@ func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 	ldapGroupTmpl := filepath.Join(layout.LdapTmplDir, "ldap-group.json")
 	writeFile(ldapGroupTmpl, schema.LDAP_Group_Entry)
 
-	prv, err := provider.NewProvider(layout)
+	prv, err := provider.NewProvider(layout, sc.ServerId)
 	if err != nil {
 		panic(err)
 	}
 
 	prv.Cert = sc.CertChain[0]
 	prv.PrivKey = sc.PrivKey
-	prv.ServerId = sc.ServerId
 	providers[layout.Name()] = prv
 	dcPrvMap[prv.DomainCode()] = prv
 }

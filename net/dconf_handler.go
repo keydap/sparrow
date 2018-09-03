@@ -3,11 +3,15 @@ package net
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"sparrow/base"
+	"sparrow/conf"
 	"sparrow/provider"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 // a struct for deserializing incoming config JSON patchset
@@ -16,6 +20,9 @@ type confPatch struct {
 	Path  string
 	Value interface{}
 }
+
+// Mutex to serialize updates to the domain configuration
+var dconfUpdateMutex sync.Mutex
 
 func handleDomainConf(w http.ResponseWriter, r *http.Request) {
 	opCtx, err := createOpCtx(r)
@@ -64,16 +71,29 @@ func updateDomainConf(pr *provider.Provider, hc httpContext) {
 		return
 	}
 
+	dconfUpdateMutex.Lock()
 	log.Infof("%v", cpatches)
+
+	defer func() {
+		e := recover()
+		if _, ok := e.(error); ok {
+			log.Errorf("failed to updated domain config %v", e)
+			writeError(hc.w, e.(error))
+		}
+		dconfUpdateMutex.Unlock()
+	}()
+
+	ifMatch := hc.r.Header.Get("If-Match")
+	if ifMatch != pr.Config.Scim.Meta.Version {
+		err := base.NewConflictError("configuration was modified since last accessed")
+		writeError(hc.w, err)
+		return
+	}
 
 	updated := false
 
 outer:
 	for _, v := range cpatches {
-		if v.Op != "replace" {
-			continue
-		}
-
 		dc := reflect.ValueOf(pr.Config).Elem()
 
 		pathParts := strings.Split(v.Path, "/")
@@ -85,12 +105,31 @@ outer:
 			continue
 		}
 
-		sf, found := findFieldWithTag(pathParts[0], dc.Type())
+		firstFieldName := pathParts[0]
+		sf, found := findFieldWithTag(firstFieldName, dc.Type())
 		if !found {
-			log.Warningf("invalid path, no field with the name %s found", pathParts[0])
+			log.Warningf("invalid path, no field with the name %s found", firstFieldName)
 			continue
 		}
 
+		// resources is an array type
+		if firstFieldName == "resources" {
+			err := updateResources(pr.Config, v, pathParts[1:])
+			if err == nil {
+				updated = true
+			}
+
+			log.Debugf("%v", err)
+			continue
+		}
+
+		// replacing values of existing fields allowed
+		// except in the case of resources where add and remove are permitted
+		if v.Op != "replace" {
+			continue
+		}
+
+		// remaining are fields in internal structs
 		dc = dc.FieldByName(sf.Name).Elem()
 		for _, fieldName := range pathParts[1:] {
 			log.Debugf("finding field %s", fieldName)
@@ -150,4 +189,183 @@ func findFieldWithTag(tag string, t reflect.Type) (sf reflect.StructField, found
 	}
 
 	return sf, found
+}
+
+/* some scenarios
+{"op":"replace","path":"/resources/0/indexFields/3","value":"active"}
+{"op":"replace","path":"/resources/0/indexFields/4","value":"addresses.country"}
+{"op":"remove","path":"/resources/0/indexFields/5"}
+{"op":"add","path":"/resources/0/indexFields/-","value":"addresses.country"}
+{"op":"add","path":"/resources/-","value":{"name":"Application","indexFields":[]}}
+{"op":"remove","path":"/resources/2"}
+{"op":"replace","path":"/resources/2/name","value":"Application"}
+{"op":"replace","path":"/resources/2/indexFields/0","value":"assertionvalidity"}
+*/
+func updateResources(cf *conf.DomainConfig, v confPatch, pathParts []string) error {
+	plen := len(pathParts)
+
+	switch v.Op {
+	case "remove":
+		rIndex, err := strconv.Atoi(pathParts[0])
+		if err != nil {
+			return err
+		}
+		rlen := len(cf.Resources)
+		if rIndex >= rlen {
+			return fmt.Errorf("invalid index %d in the remove operation on resources array", rIndex)
+		}
+		rlen--
+
+		if plen == 1 { // remove it from resources array
+			if rIndex == 0 {
+				cf.Resources = cf.Resources[1:]
+			} else if rIndex == rlen {
+				cf.Resources = cf.Resources[:rIndex]
+			} else {
+				cf.Resources = append(cf.Resources[:rIndex], cf.Resources[rIndex+1:]...)
+			}
+		} else { // remove from indexFields alone
+			if pathParts[1] != "indexFields" {
+				return fmt.Errorf("cannot remove anything other than from indexFields")
+			}
+
+			fIndex, err := strconv.Atoi(pathParts[2])
+			if err != nil {
+				return err
+			}
+
+			indexFields := cf.Resources[rIndex].IndexFields
+			flen := len(indexFields)
+			if fIndex >= flen {
+				return fmt.Errorf("invalid index %d in the operation to remove from indexFields", fIndex)
+			}
+			flen--
+
+			if fIndex == 0 {
+				indexFields = indexFields[1:]
+			} else if fIndex == flen {
+				indexFields = indexFields[:fIndex]
+			} else {
+				indexFields = append(indexFields[:fIndex], indexFields[fIndex+1:]...)
+			}
+			cf.Resources[rIndex].IndexFields = indexFields
+			log.Debugf("%v", cf.Resources[rIndex].IndexFields)
+		}
+
+	case "replace":
+		rIndex, err := strconv.Atoi(pathParts[0])
+		if err != nil {
+			return err
+		}
+		rlen := len(cf.Resources)
+		if rIndex >= rlen {
+			return fmt.Errorf("invalid index %d in the replace operation on resources array", rIndex)
+		}
+		rlen--
+
+		if plen == 1 { // replace a value in resources array
+			rc, err := parseResourceConf(v.Value)
+			if err != nil {
+				return err
+			}
+			cf.Resources[rIndex] = rc
+		} else {
+			rc := cf.Resources[rIndex]
+			name := pathParts[1]
+			switch name {
+			case "name":
+				rc.Name = strings.TrimSpace(fmt.Sprint(v.Value))
+				if rc.Name == "" {
+					return fmt.Errorf("invalid operation, resource name cannot be blank")
+				}
+			case "notes":
+				rc.Notes = strings.TrimSpace(fmt.Sprint(v.Value))
+			case "indexFields":
+				fIndex, err := strconv.Atoi(pathParts[2])
+				if err != nil {
+					return err
+				}
+
+				indexFields := cf.Resources[rIndex].IndexFields
+				flen := len(indexFields)
+				if fIndex >= flen {
+					return fmt.Errorf("invalid index %d in the operation to replace from indexFields", fIndex)
+				}
+				atName := strings.TrimSpace(fmt.Sprint(v.Value))
+				if atName == "" {
+					return fmt.Errorf("index attribute name cannot be empty")
+				}
+				indexFields[fIndex] = atName
+				cf.Resources[rIndex].IndexFields = indexFields
+			}
+		}
+	case "add":
+		if pathParts[0] == "-" { // add resource
+			rc, err := parseResourceConf(v.Value)
+			if err != nil {
+				return err
+			}
+
+			cf.Resources = append(cf.Resources, rc)
+		} else {
+			rIndex, err := strconv.Atoi(pathParts[0])
+			if err != nil {
+				return err
+			}
+
+			name := pathParts[1]
+			if name != "indexFields" {
+				return fmt.Errorf("cannot allow adding %s under resources, only adding indexFields of a resource is allowed", name)
+			}
+
+			if atNameArr, ok := v.Value.([]interface{}); ok {
+				cf.Resources[rIndex].IndexFields = toStringArray(atNameArr)
+			} else if atName, ok := v.Value.(interface{}); ok {
+				idxFields := cf.Resources[rIndex].IndexFields
+				idxFields = append(idxFields, fmt.Sprint(atName))
+				cf.Resources[rIndex].IndexFields = idxFields
+			}
+		}
+	}
+
+	return nil
+}
+
+func parseResourceConf(val interface{}) (*conf.ResourceConf, error) {
+	rc := &conf.ResourceConf{}
+	m, ok := val.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid ResourceConf data")
+	}
+	name := m["name"]
+	if name == nil {
+		return nil, fmt.Errorf("invalid ResourceConf data, resource name is required")
+	}
+	rc.Name = strings.TrimSpace(fmt.Sprint(name))
+	if rc.Name == "" {
+		return nil, fmt.Errorf("invalid ResourceConf data, resource name cannot be blank")
+	}
+	notes := m["notes"]
+	if notes != nil {
+		rc.Notes = strings.TrimSpace(fmt.Sprint(notes))
+	}
+
+	ixFields := m["indexFields"]
+	if ixFields == nil {
+		rc.IndexFields = make([]string, 0)
+	} else {
+		iArr := ixFields.([]interface{})
+		rc.IndexFields = toStringArray(iArr)
+	}
+
+	return rc, nil
+}
+
+func toStringArray(iArr []interface{}) []string {
+	tmp := make([]string, len(iArr))
+	for i, atName := range iArr {
+		tmp[i] = fmt.Sprint(atName)
+	}
+
+	return tmp
 }

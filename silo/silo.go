@@ -55,7 +55,7 @@ type Silo struct {
 	schemas    map[string]*schema.Schema
 	resTypes   map[string]*schema.ResourceType
 	Engine     *rbac.RbacEngine
-	cg         *csnGenerator
+	cg         *base.CsnGenerator
 	mutex      sync.Mutex
 }
 
@@ -533,7 +533,7 @@ func Open(path string, serverId uint16, config *conf.DomainConfig, rtypes map[st
 
 	sl.Engine = rbac.NewEngine()
 
-	sl.cg = NewCsnGenerator(serverId)
+	sl.cg = base.NewCsnGenerator(serverId)
 	// load the roles
 	sl.LoadGroups()
 

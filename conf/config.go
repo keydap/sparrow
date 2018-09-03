@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"sparrow/base"
 	"sparrow/utils"
 	"time"
 )
@@ -75,11 +76,12 @@ type ResourceConf struct {
 }
 
 type DomainConfig struct {
-	Scim       *ScimConfig     `json:"scim"`
-	Oauth      *OauthConfig    `json:"oauth"`
-	Ppolicy    *Ppolicy        `json:"ppolicy"`
-	Resources  []*ResourceConf `json:"resources"`
-	Rfc2307bis *Rfc2307bis     `json:"rfc2307bis"`
+	CsnGen     *base.CsnGenerator `json:"-"`
+	Scim       *ScimConfig        `json:"scim"`
+	Oauth      *OauthConfig       `json:"oauth"`
+	Ppolicy    *Ppolicy           `json:"ppolicy"`
+	Resources  []*ResourceConf    `json:"resources"`
+	Rfc2307bis *Rfc2307bis        `json:"rfc2307bis"`
 }
 
 type Rfc2307bis struct {
