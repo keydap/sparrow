@@ -82,9 +82,6 @@
             "name": "User",
             "indexFields": [
                 "userName",
-                "name.givenName",
-                "employeeNumber",
-                "organization",
                 "emails.value",
                 "groups.value"
             ],

@@ -149,7 +149,7 @@ func DefaultDomainConfig() *DomainConfig {
 
 	cf := &DomainConfig{}
 
-	userRc := &ResourceConf{Name: "User", IndexFields: []string{"userName", "name.givenName", "employeeNumber", "organization", "emails.value", "groups.value"}}
+	userRc := &ResourceConf{Name: "User", IndexFields: []string{"userName", "emails.value", "groups.value"}}
 	deviceRc := &ResourceConf{Name: "Device", IndexFields: []string{"manufacturer", "serialNumber", "rating", "price", "location.latitude", "installedDate", "repairDates", "photos.value"}}
 	groupRc := &ResourceConf{Name: "Group", IndexFields: []string{"members.value"}}
 	cf.Resources = []*ResourceConf{userRc, deviceRc, groupRc}
@@ -176,7 +176,7 @@ func DefaultDomainConfig() *DomainConfig {
 	ppolicy := &Ppolicy{}
 	ppolicy.PasswdHashAlgo = "sha256"
 
-	rfc2307bis := &Rfc2307bis{Enabled: true, LoginShell: "/bin/bash", HomeDirectoryPrefix: "/home/", UidNumberStart: 200, GidNumberStart: 200}
+	rfc2307bis := &Rfc2307bis{Enabled: false, LoginShell: "/bin/bash", HomeDirectoryPrefix: "/home/", UidNumberStart: 200, GidNumberStart: 200}
 
 	cf.Rfc2307bis = rfc2307bis
 	cf.Scim = scim
