@@ -10,7 +10,6 @@ import (
 	"math"
 	"sparrow/base"
 	"sparrow/schema"
-	"strings"
 )
 
 func getOptimizedResults(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo, candidates map[string]*base.Resource) int64 {
@@ -191,11 +190,6 @@ func containsStringCandidates(node *base.FilterNode, rt *schema.ResourceType, tx
 		nval := node.NvBytes
 
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			if idx.AllowDupKey {
-				if strings.HasSuffix(string(k), "_count") {
-					continue
-				}
-			}
 			switch node.Op {
 			case "CO":
 				if bytes.Contains(k, nval) {
@@ -266,21 +260,22 @@ func compareCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.
 		switch node.Op {
 		case "GE", "LE":
 			if bytes.Compare(node.NvBytes, k) == 0 {
-				count++
-				candidates[string(v)] = nil
+				if idx.AllowDupKey {
+					rids := idx.GetRids(k, tx)
+					for _, id := range rids {
+						candidates[id] = nil
+					}
+					count += int64(len(rids))
+				} else {
+					count++
+					candidates[string(v)] = nil
+				}
 			}
 		}
 
 		switch node.Op {
 		case "GT", "GE":
 			for k, v := cursor.Next(); k != nil; k, v = cursor.Next() {
-
-				if idx.AllowDupKey {
-					if strings.HasSuffix(string(k), "_count") {
-						continue
-					}
-				}
-
 				if idx.AllowDupKey {
 					rids := idx.GetRids(k, tx)
 					for _, id := range rids {
@@ -294,12 +289,6 @@ func compareCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.
 			}
 		case "LT", "LE":
 			for k, v := cursor.Prev(); k != nil; k, v = cursor.Prev() {
-				if idx.AllowDupKey {
-					if strings.HasSuffix(string(k), "_count") {
-						continue
-					}
-				}
-
 				if idx.AllowDupKey {
 					rids := idx.GetRids(k, tx)
 					for _, id := range rids {
@@ -393,6 +382,7 @@ func containsStringScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt
 	idx := sl.indices[rt.Name][node.Name]
 	if idx != nil {
 		cursor := idx.cursor(tx)
+		buck := cursor.Bucket()
 
 		var count, countLimit int64
 
@@ -400,20 +390,13 @@ func containsStringScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt
 
 		countLimit = 100
 
-		countKeySuffix := []byte("_count")
-
 		for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
-			if idx.AllowDupKey {
-				if bytes.HasSuffix(k, countKeySuffix) {
-					continue
-				}
-			}
-
 			switch node.Op {
 			case "CO":
 				if bytes.Contains(k, nval) {
 					if idx.AllowDupKey {
-						count += idx.keyCount(string(k), tx)
+						dupBuck := buck.Bucket(k)
+						count += int64(dupBuck.Stats().KeyN)
 					} else {
 						count++
 					}
@@ -422,7 +405,8 @@ func containsStringScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt
 			case "SW":
 				if bytes.HasPrefix(k, nval) {
 					if idx.AllowDupKey {
-						count += idx.keyCount(string(k), tx)
+						dupBuck := buck.Bucket(k)
+						count += int64(dupBuck.Stats().KeyN)
 					} else {
 						count++
 					}
@@ -431,7 +415,8 @@ func containsStringScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt
 			case "EW":
 				if bytes.HasSuffix(k, nval) {
 					if idx.AllowDupKey {
-						count += idx.keyCount(string(k), tx)
+						dupBuck := buck.Bucket(k)
+						count += int64(dupBuck.Stats().KeyN)
 					} else {
 						count++
 					}
@@ -440,7 +425,7 @@ func containsStringScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt
 
 			// gather a limited number of them
 			// cause this cursor will be scanned completely during candidate gathering
-			if count == countLimit {
+			if count >= countLimit {
 				break
 			}
 		}
@@ -468,6 +453,7 @@ func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl
 		countLimit = 100
 
 		cursor := idx.cursor(tx)
+		buck := cursor.Bucket()
 		k, _ := cursor.Seek(node.NvBytes)
 
 		switch node.Op {
@@ -480,12 +466,10 @@ func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl
 		switch node.Op {
 		case "GT", "GE":
 			for k, _ := cursor.Next(); k != nil; k, _ = cursor.Next() {
-
 				if idx.AllowDupKey {
-					kStr := string(k)
-					if strings.HasSuffix(kStr, "_count") {
-						pos := strings.LastIndex(kStr, "_count")
-						count += idx.keyCount(kStr[0:pos], tx)
+					dupBuck := buck.Bucket(k)
+					if dupBuck != nil {
+						count += int64(dupBuck.Stats().KeyN)
 					}
 				} else {
 					count++
@@ -493,17 +477,16 @@ func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl
 
 				// gather a limited number of them
 				// cause this cursor will be scanned completely during candidate gathering
-				if count == countLimit {
+				if count >= countLimit {
 					break
 				}
 			}
 		case "LT", "LE":
 			for k, _ := cursor.Prev(); k != nil; k, _ = cursor.Prev() {
 				if idx.AllowDupKey {
-					kStr := string(k)
-					if strings.HasSuffix(kStr, "_count") {
-						pos := strings.LastIndex(kStr, "_count")
-						count += idx.keyCount(kStr[0:pos], tx)
+					dupBuck := buck.Bucket(k)
+					if dupBuck != nil {
+						count += int64(dupBuck.Stats().KeyN)
 					}
 				} else {
 					count++
@@ -511,7 +494,7 @@ func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl
 
 				// gather a limited number of them
 				// cause this cursor will be scanned completely during candidate gathering
-				if count == countLimit {
+				if count >= countLimit {
 					break
 				}
 			}

@@ -30,13 +30,11 @@ var (
 	// a bucket that holds the names of the resource buckets e.g users, groups etc.
 	BUC_INDICES = []byte("indices")
 
-	// a bucket that holds the total number of each of the resources present and the the tuple count in each of their indices
-	BUC_COUNTS = []byte("counts")
-
 	// the delimiter that separates resource and index name
 	RES_INDEX_DELIM = ":"
 
 	DUP_KEY_VAL = []byte{0}
+	//DUP_INDEX_KEY_COUNT = []byte("__dup_index_key_count_e6bd4cdd-ab03-4c6b-6fbd-a64946e56942")
 )
 
 var log logger.Logger
@@ -95,13 +93,17 @@ func (sl *Silo) getSysIndex(resName string, name string) *Index {
 
 // Returns total number of tuples present in the index, excluding the count keys, if any.
 func (idx *Index) getCount(tx *bolt.Tx) int64 {
-	buck := tx.Bucket(BUC_COUNTS)
-	cb := buck.Get(idx.BnameBytes)
-	if cb == nil {
-		return 0
-	}
-
-	return utils.Btoi(cb)
+	buck := tx.Bucket(idx.BnameBytes)
+	/*	if idx.AllowDupKey {
+			count := buck.Get(DUP_INDEX_KEY_COUNT)
+			if count == nil {
+				return 0
+			} else {
+				return utils.Btoi(count)
+			}
+		}
+	*/
+	return int64(buck.Stats().KeyN)
 }
 
 func (idx *Index) cursor(tx *bolt.Tx) *bolt.Cursor {
@@ -117,15 +119,15 @@ func (idx *Index) keyCount(key interface{}, tx *bolt.Tx) int64 {
 	var count int64
 	count = 0
 
+	vData := idx.convert(key)
+
 	if idx.AllowDupKey {
-		str := fmt.Sprint(key)
-		countKey := []byte(strings.ToLower(str) + "_count")
-		cb := buck.Get(countKey)
-		if cb != nil {
-			count = utils.Btoi(cb)
+		dupBuck := buck.Bucket(vData)
+		if dupBuck != nil {
+			count = int64(dupBuck.Stats().KeyN)
+			//log.Warningf("count for dup key %v is %d", key, count)
 		}
 	} else {
-		vData := idx.convert(key)
 		val := buck.Get(vData)
 		if val != nil {
 			count = 1
@@ -146,27 +148,16 @@ func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 	if idx.AllowDupKey {
 		dupBuck := buck.Bucket(vData)
 
-		countKey := []byte(strings.ToLower(fmt.Sprint(val)) + "_count")
-		var count int64
-		firstCount := false
-
+		firstInsert := false
 		if dupBuck == nil {
 			dupBuck, err = buck.CreateBucket(vData)
 			if err != nil {
 				return err
 			}
-
-			err = buck.Put(countKey, utils.Itob(1))
-			if err != nil {
-				return err
-			}
-			firstCount = true
-		} else {
-			cb := buck.Get(countKey)
-			count = utils.Btoi(cb)
+			firstInsert = true
 		}
 
-		if !firstCount {
+		if !firstInsert {
 			valData := dupBuck.Get(ridBytes)
 			if valData != nil {
 				// key already exists, return
@@ -177,11 +168,14 @@ func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 		err = dupBuck.Put(ridBytes, DUP_KEY_VAL)
 		if err != nil {
 			return err
-		}
-
-		if !firstCount {
+		} else {
+			// update count of index, this is only needed for indices supporting duplicate keys
+			/*count := idx.getCount(tx)
 			count++
-			err = buck.Put(countKey, utils.Itob(count))
+			err = buck.Put(DUP_INDEX_KEY_COUNT, utils.Itob(count))
+			if err != nil {
+				return err
+			}*/
 		}
 	} else {
 		existingRid := buck.Get(vData)
@@ -194,17 +188,6 @@ func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 			// key already exists, or old key was replaced, no need to update count
 			return nil
 		}
-	}
-
-	// update count of index
-	countsBuck := tx.Bucket(BUC_COUNTS)
-
-	// TODO guard against multiple threads
-	count := idx.getCount(tx)
-	count++
-	err = countsBuck.Put(idx.BnameBytes, utils.Itob(count))
-	if err != nil {
-		return err
 	}
 
 	return err
@@ -227,31 +210,22 @@ func (idx *Index) remove(val interface{}, rid string, tx *bolt.Tx) error {
 				return nil
 			}
 
-			countKey := []byte(strings.ToLower(fmt.Sprint(val)) + "_count")
+			err = dupBuck.Delete(ridBytes)
+			if err != nil {
+				return err
+			}
 
-			cb := buck.Get(countKey)
-			count := utils.Btoi(cb)
+			/*			cb := buck.Get(DUP_INDEX_KEY_COUNT)
+						count := utils.Btoi(cb)
+						count--
+						err = buck.Put(DUP_INDEX_KEY_COUNT, utils.Itob(count))*/
 
-			if count > 1 {
-				err = dupBuck.Delete(ridBytes)
-				if err != nil {
-					return err
-				}
-
-				count--
-				err = buck.Put(countKey, utils.Itob(count))
-				if err != nil {
-					return err
-				}
-			} else {
+			if dupBuck.Stats().KeyN == 1 { // the count becomes zero *after* the tx gets committed
 				err = buck.DeleteBucket(vData)
 				log.Debugf("Deleting the bucket associated with %s %s", val, err)
 				if err != nil {
 					return err
 				}
-
-				log.Debugf("Deleting the bucket counter associated with %s", val)
-				err = buck.Delete(countKey)
 			}
 		}
 	} else {
@@ -268,14 +242,14 @@ func (idx *Index) remove(val interface{}, rid string, tx *bolt.Tx) error {
 	}
 
 	// update count of index
-	countsBuck := tx.Bucket(BUC_COUNTS)
+	/*countsBuck := tx.Bucket(BUC_COUNTS)
 
 	count := idx.getCount(tx)
 	count--
 	err = countsBuck.Put(idx.BnameBytes, utils.Itob(count))
 	if err != nil {
 		return err
-	}
+	}*/
 
 	return err
 }
@@ -407,11 +381,6 @@ func Open(path string, serverId uint16, config *conf.DomainConfig, rtypes map[st
 		}
 
 		_, err = tx.CreateBucketIfNotExists(BUC_INDICES)
-		if err != nil {
-			return err
-		}
-
-		_, err = tx.CreateBucketIfNotExists(BUC_COUNTS)
 		if err != nil {
 			return err
 		}
@@ -589,10 +558,14 @@ func (sl *Silo) createIndexBucket(resourceName, attrName string, at *schema.Attr
 	idx.CaseSensitive = at.CaseExact
 	idx.ValType = at.Type
 	// parent's singularity applies for complex attributes
-	if at.Parent() != nil {
-		idx.AllowDupKey = at.Parent().MultiValued
-	} else {
-		idx.AllowDupKey = at.MultiValued
+	// fixme only unique natured attribute's indices are not multi-valued rest all should allow dupkey
+	//if at.Parent() != nil {
+	//	idx.AllowDupKey = at.Parent().MultiValued
+	//} else {
+	//	idx.AllowDupKey = at.MultiValued
+	//}
+	if !at.IsUnique() {
+		idx.AllowDupKey = true
 	}
 	idx.db = sl.db
 
@@ -724,26 +697,14 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 
 	//log.Debugf("checking unique attributes %s", rt.UniqueAts)
 	//log.Debugf("indices map %#v", sl.indices[rtName])
-	for _, name := range rt.UniqueAts {
+	/*for _, name := range rt.UniqueAts {
 		// check if the value has already been used
 		attr := inRes.GetAttr(name)
 		if attr == nil {
 			continue
 		}
 		idx := sl.indices[rt.Name][name]
-		if attr.IsSimple() {
-			sa := attr.GetSimpleAt()
-			for _, val := range sa.Values {
-				log.Tracef("checking unique attribute %#v", idx)
-				if idx.HasVal(val, tx) {
-					detail := fmt.Sprintf("Uniqueness violation, value %s of attribute %s already exists", val, sa.Name)
-					err := base.NewConflictError(detail)
-					err.ScimType = base.ST_UNIQUENESS
-					panic(err)
-				}
-			}
-		}
-	}
+	}*/
 
 	prIdx := sl.getSysIndex(rt.Name, "presence")
 
@@ -754,8 +715,31 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 		}
 
 		atType := attr.GetType()
+		if attr.IsSimple() && atType.IsUnique() {
+			sa := attr.GetSimpleAt()
+			for _, val := range sa.Values {
+				log.Tracef("checking unique attribute %#v", idx)
+				if idx.HasVal(val, tx) {
+					detail := fmt.Sprintf("Uniqueness violation, value %s of attribute %s already exists", val, sa.Name)
+					err := base.NewConflictError(detail)
+					err.ScimType = base.ST_UNIQUENESS
+					panic(err)
+				} else {
+					err := idx.add(val, rid, tx)
+					if err != nil {
+						panic(err)
+					}
+				}
+			}
+			err := prIdx.add(name, rid, tx) // do not add sa.Name that will lose the attribute path
+			if err != nil {
+				panic(err)
+			}
+			continue
+		}
+
 		parentType := atType.Parent()
-		if parentType != nil && parentType.MultiValued {
+		if parentType != nil { //&& parentType.MultiValued
 			parentAt := inRes.GetAttr(strings.ToLower(parentType.Name))
 			ca := parentAt.GetComplexAt()
 			atName := strings.ToLower(atType.Name) // the sub-attribute's name

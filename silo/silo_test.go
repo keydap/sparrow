@@ -28,6 +28,7 @@ var restypes map[string]*schema.ResourceType
 var deviceType *schema.ResourceType
 var userType *schema.ResourceType
 var groupType *schema.ResourceType
+var givenName = "Given-Name-fixed-intentionally-to-test-dup-keys"
 
 func TestMain(m *testing.M) {
 	logger.ConfigureLoggers("<root>=warn;scim.main=debug")
@@ -72,7 +73,7 @@ func createTestUser() *base.Resource {
 	nameMap := make(map[string]interface{})
 	nameMap["formatted"] = "Formatted " + username
 	nameMap["familyname"] = "Family " + username
-	nameMap["givenName"] = "Given " + username
+	nameMap["givenName"] = givenName
 	nameMap["middleName"] = "Middle " + username
 	nameMap["honorificPrefix"] = "Mr."
 	nameMap["honorificSuffix"] = "Jr"
@@ -101,6 +102,11 @@ func initSilo() {
 	os.Remove(dbFilePath)
 
 	var err error
+	// add an index on name.givenName of User resource
+	addIndexField("User", "name.givenName")
+	addIndexField("User", "organization")
+	addIndexField("User", "employeeNumber")
+
 	sl, err = Open(dbFilePath, 0, config, restypes, schemas)
 
 	if err != nil {
@@ -182,12 +188,16 @@ func TestInsert(t *testing.T) {
 	}
 
 	idx.remove(unameVal, rid, tx)
+	tx.Commit() // committing is mandatory to get accurate count
+	tx, _ = sl.db.Begin(true)
 	cnt = idx.getCount(tx)
 	if cnt != 0 {
 		t.Errorf("Invalid key count after deleting the username from index, expected %d found %d", 0, cnt)
 	}
 
 	idx.remove(unameVal, rid, tx)
+	tx.Commit() // committing is mandatory to get accurate count
+	tx, _ = sl.db.Begin(true)
 	cnt = idx.getCount(tx)
 	if cnt != 0 {
 		t.Errorf("Invalid key count after attempting to delete the same username again from index, expected %d found %d", 0, cnt)
@@ -228,20 +238,28 @@ func TestIndexOps(t *testing.T) {
 	initSilo()
 	email := "bjensen@example.com"
 	emailBytes := []byte(email)
+	//nameBytes := []byte(givenName)
 
-	idx := sl.indices[userResName]["emails.value"]
+	emailIdx := sl.indices[userResName]["emails.value"]
+	givenNameIdx := sl.indices[userResName]["name.givenname"]
 
 	readTx, err := sl.db.Begin(false)
 	if err != nil {
 		panic(err)
 	}
 
-	exists := idx.HasVal(email, readTx)
-	count := idx.keyCount(email, readTx)
+	emailExists := emailIdx.HasVal(email, readTx)
+	emailCount := emailIdx.keyCount(email, readTx)
+	nameExists := givenNameIdx.HasVal(givenName, readTx)
+	nameCount := givenNameIdx.keyCount(givenName, readTx)
 	readTx.Rollback()
 
-	if exists || (count != 0) {
-		t.Errorf("Email %s should not exist", email)
+	if emailExists || (emailCount != 0) {
+		t.Errorf("email %s should not exist", email)
+	}
+
+	if nameExists || (nameCount != 0) {
+		t.Errorf("givenname %s should not exist", givenName)
 	}
 
 	// first user
@@ -250,9 +268,14 @@ func TestIndexOps(t *testing.T) {
 	rid1 := rs.GetId()
 
 	readTx, _ = sl.db.Begin(false)
-	count = idx.keyCount(email, readTx)
-	if count != 1 {
+	emailCount = emailIdx.keyCount(email, readTx)
+	if emailCount != 1 {
 		t.Errorf("Email %s count mismatch", email)
+	}
+
+	nameCount = givenNameIdx.keyCount(givenName, readTx)
+	if nameCount != 1 {
+		t.Errorf("givenname %s count mismatch", givenName)
 	}
 
 	assertPrCount(rs, readTx, 1, t)
@@ -268,8 +291,14 @@ func TestIndexOps(t *testing.T) {
 	rid2 := rs.GetId()
 
 	readTx, _ = sl.db.Begin(false)
-	rids := idx.GetRids(emailBytes, readTx)
+	rids := emailIdx.GetRids(emailBytes, readTx)
 	assertPrCount(rs, readTx, 2, t)
+
+	nameCount = givenNameIdx.keyCount(givenName, readTx)
+	if nameCount != 2 {
+		t.Errorf("givenname %s count mismatch expected 2 found %d", givenName, nameCount)
+	}
+
 	readTx.Rollback()
 
 	var r1, r2 bool
@@ -292,7 +321,7 @@ func TestIndexOps(t *testing.T) {
 	sl.Delete(rid2, rs.GetType())
 
 	readTx, _ = sl.db.Begin(false)
-	rids = idx.GetRids(emailBytes, readTx)
+	rids = emailIdx.GetRids(emailBytes, readTx)
 	readTx.Rollback()
 
 	if len(rids) != 0 {
@@ -300,10 +329,10 @@ func TestIndexOps(t *testing.T) {
 	}
 
 	readTx, _ = sl.db.Begin(false)
-	bucket := readTx.Bucket(idx.BnameBytes)
+	bucket := readTx.Bucket(emailIdx.BnameBytes)
 	bucket = bucket.Bucket([]byte(email))
 	if bucket != nil {
-		t.Error("Bucket associated with indexed attribute still exists though no values are indexed")
+		t.Error("Bucket associated with indexed attribute emails.value still exists though no values are indexed")
 	}
 	readTx.Rollback()
 
@@ -326,7 +355,7 @@ func TestReloadSilo(t *testing.T) {
 
 func assertPrCount(rs *base.Resource, readTx *bolt.Tx, expected int64, t *testing.T) {
 	prIdx := sl.getSysIndex(userResName, "presence")
-	for _, atName := range config.Scim.Resources[0].IndexFields {
+	for _, atName := range config.Resources[0].IndexFields {
 		// skip if there is no value for the attribute
 		if rs.GetAttr(atName) == nil {
 			continue
@@ -398,4 +427,13 @@ func readResults(outPipe chan *base.Resource) map[string]*base.Resource {
 	}
 
 	return results
+}
+
+func addIndexField(resName string, atName string) {
+	for _, r := range config.Resources {
+		if r.Name == resName {
+			r.IndexFields = append(r.IndexFields, atName)
+			break
+		}
+	}
 }
