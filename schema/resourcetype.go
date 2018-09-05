@@ -156,6 +156,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	schemasAttr.SchemaId = mainSchema.Id
 	mainSchema.Attributes = append(mainSchema.Attributes, schemasAttr)
 	mainSchema.AttrMap[schemasAttr.Name] = schemasAttr
+	setAttrDefaults(schemasAttr)
 
 	// id
 	idAttr := newAttrType()
@@ -168,6 +169,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	idAttr.SchemaId = mainSchema.Id
 	mainSchema.Attributes = append(mainSchema.Attributes, idAttr)
 	mainSchema.AttrMap[idAttr.Name] = idAttr
+	setAttrDefaults(idAttr)
 
 	// externalId
 	externalIdAttr := newAttrType()
@@ -177,6 +179,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	externalIdAttr.SchemaId = mainSchema.Id
 	mainSchema.Attributes = append(mainSchema.Attributes, externalIdAttr)
 	mainSchema.AttrMap[strings.ToLower(externalIdAttr.Name)] = externalIdAttr
+	setAttrDefaults(externalIdAttr)
 
 	// meta
 	metaAttr := newAttrType()
@@ -241,6 +244,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaVerAttr.SchemaId = mainSchema.Id
 	metaVerAttr.parent = metaAttr
 	metaAttr.SubAttrMap[strings.ToLower(metaVerAttr.Name)] = metaVerAttr
+	setAttrDefaults(metaAttr)
 }
 
 // Returns the main schema of the given resourcetype

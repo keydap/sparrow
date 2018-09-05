@@ -53,6 +53,13 @@ type AttrType struct {
 	SchemaId        string    // schema's ID
 	NormName        string    // the lowercase name of the attribute
 	parent          *AttrType // parent Attribute, should be non-exportable, otherwise stackoverflow occurs during marshalling
+	isUnique        bool      // for performance reasons
+	isComplex       bool      // for performance reasons
+	isRef           bool      // for performance reasons
+	isSimple        bool      // for performance reasons
+	isReadOnly      bool      // for performance reasons
+	isImmutable     bool      // for performance reasons
+	isStringType    bool      // for performance reasons
 }
 
 // Definition of the schema
@@ -146,6 +153,14 @@ func setAttrDefaults(attr *AttrType) {
 		attr.Type = "string"
 	}
 
+	attr.isUnique = (attr.Uniqueness == "server") || (attr.Uniqueness == "global")
+	attr.isComplex = attr.Type == "complex"
+	attr.isRef = attr.Type == "reference"
+	attr.isSimple = !attr.isComplex && !attr.isRef
+	attr.isReadOnly = attr.Mutability == "readonly"
+	attr.isImmutable = attr.Mutability == "immutable"
+	attr.isStringType = (attr.Type == "string" || attr.isRef)
+
 	attrLen := len(attr.SubAttributes)
 
 	if attrLen != 0 {
@@ -172,31 +187,31 @@ func (ve *ValidationErrors) add(e string) {
 // TODO avoid the need for strings.ToLower() in all IsXXX methods by replacing with lowercase values or by storing
 // the result in boolean fields
 func (attr *AttrType) IsComplex() bool {
-	return attr.Type == "complex"
+	return attr.isComplex
 }
 
 func (attr *AttrType) IsRef() bool {
-	return attr.Type == "reference"
+	return attr.isRef
 }
 
 func (attr *AttrType) IsSimple() bool {
-	return !attr.IsComplex() && !attr.IsRef()
+	return attr.isSimple
 }
 
 func (attr *AttrType) IsReadOnly() bool {
-	return attr.Mutability == "readonly"
+	return attr.isReadOnly
 }
 
 func (attr *AttrType) IsUnique() bool {
-	return (attr.Uniqueness == "server") || (attr.Uniqueness == "global")
+	return attr.isUnique
 }
 
 func (attr *AttrType) IsImmutable() bool {
-	return attr.Mutability == "immutable"
+	return attr.isImmutable
 }
 
 func (attr *AttrType) IsStringType() bool {
-	return (attr.Type == "string" || attr.Type == "reference")
+	return attr.isStringType
 }
 
 func (attr *AttrType) Parent() *AttrType {
@@ -369,6 +384,7 @@ func validateAttrType(attr *AttrType, sc *Schema, ve *ValidationErrors) {
 		// add missing default sub-attributes https://tools.ietf.org/html/rfc7643#section-2.4
 		if attr.MultiValued {
 			addDefSubAttrs(attr)
+			setAttrDefaults(attr)
 		}
 	}
 }
