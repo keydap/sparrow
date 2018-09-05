@@ -201,7 +201,7 @@ func getAtTypeCount() int {
 	for _, rt := range rTypesMap {
 		collectAllAtNames(rt.GetMainSchema(), attrMap, false)
 		for _, se := range rt.SchemaExtensions {
-			collectAllAtNames(rt.GetSchema(se.Schema), attrMap, false)
+			collectAllAtNames(rt.GetSchema(se.Schema), attrMap, true)
 		}
 	}
 
