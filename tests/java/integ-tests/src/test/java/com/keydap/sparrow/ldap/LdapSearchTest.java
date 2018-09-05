@@ -12,6 +12,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.apache.directory.api.ldap.model.cursor.EntryCursor;
+import org.apache.directory.api.ldap.model.entry.Attribute;
 import org.apache.directory.api.ldap.model.entry.Entry;
 import org.apache.directory.api.ldap.model.message.SearchScope;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
@@ -51,17 +52,22 @@ public class LdapSearchTest {
     @Test
     public void testSearchObject() throws Exception {
         String userDn = "uid=admin,ou=Users,dc=example,dc=com";
-        String groupDn = "cn=Administrator,ou=Groups,dc=example,dc=com";
+        String adminGroupDn = "cn=Administrator,ou=Groups,dc=example,dc=com";
+        String systemGroupDn = "cn=System,ou=Groups,dc=example,dc=com";
 
         Entry user = searchOne(userDn, "(uid=*)");
-        assertEquals(groupDn.toLowerCase(), user.get("member").getString().toLowerCase());
+        Attribute member = user.get("member");
+        assertTrue(member.contains(adminGroupDn));
+        assertTrue(member.contains(systemGroupDn));
         assertNull(user.get("userPassword")); // password has a "never" return qualifier
         
         user = searchOne(userDn, "(objectClass=person)"); // test using objectClass filter
-        assertEquals(groupDn.toLowerCase(), user.get("member").getString().toLowerCase());
+        member = user.get("member");
+        assertTrue(member.contains(adminGroupDn));
+        assertTrue(member.contains(systemGroupDn));
         assertNull(user.get("userPassword")); // password has a "never" return qualifier
         
-        Entry group = searchOne(groupDn, "(cn=*)");
+        Entry group = searchOne(adminGroupDn, "(cn=*)");
         assertEquals(userDn.toLowerCase(), group.get("uniqueMember").getString().toLowerCase());
     }
     

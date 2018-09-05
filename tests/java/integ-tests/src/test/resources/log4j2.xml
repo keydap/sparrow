@@ -7,7 +7,7 @@
         </Console>
     </Appenders>
     <Loggers>
-        <Logger name="com.keydap" level="debug" additivity="false">
+        <Logger name="com.keydap" level="warn" additivity="false">
             <AppenderRef ref="Console" />
         </Logger>
         <Logger name="org.opensaml" level="warn" additivity="false">

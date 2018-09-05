@@ -396,7 +396,7 @@ public class SearchResourceTest extends TestBase {
         SearchResponse<Object> resp = client.searchAll(req);
         assertEquals(HttpStatus.SC_OK, resp.getHttpCode());
         List<Object> received = resp.getResources();
-        assertEquals(9, received.size());
+        assertEquals(10, received.size());
     }
 
     @Test

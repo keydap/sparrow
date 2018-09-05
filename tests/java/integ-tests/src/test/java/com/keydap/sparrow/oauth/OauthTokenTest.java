@@ -275,7 +275,7 @@ public class OauthTokenTest extends TestBase {
         assertEquals(HttpStatus.SC_OK, tokenResp.getStatusLine().getStatusCode());
         JsonObject token = parseJson(tokenResp);
         assertNotNull(token.get("access_token"));
-        assertEquals("bearer", token.get("token_type").getAsString());
+        assertEquals("Bearer", token.get("token_type").getAsString());
     }
     
     
