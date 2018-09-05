@@ -92,14 +92,15 @@ func TestCreateResourcesPerf(t *testing.T) {
 			panic(fmt.Errorf("Unable to insert %d resource status is %s\n %s\n\n%s", count+1, resp.Status, msg, l))
 		}
 
-		if (count > 0) && ((count % 100) == 0) {
+		if (count > 0) && ((count % 10000) == 0) {
 			durSec := time.Now().Sub(start).Seconds()
-			fmt.Printf("Time took to insert %d entries %fsec\n", count, durSec)
-			break
+			fmt.Printf("Time took to insert %d resources %fsec\n", count, durSec)
+			//break
 		}
 	}
 
-	fmt.Printf("Created %d resources in %fsec\n", count, time.Now().Sub(start).Seconds())
+	totalSec := time.Now().Sub(start).Seconds()
+	fmt.Printf("Created %d resources in %fsec at the rate of %f resources per sec\n", count, totalSec, (float64(count) / totalSec))
 }
 
 func BenchmarkTestSearchResourcesPerf(t *testing.B) {
