@@ -119,22 +119,22 @@ const LDAP_Group_Entry = `{
 }`
 
 type LdapAttribute struct {
-	ScimAttrPath string
+	ScimAttrPath string    `json:"scimAttrPath"`
 	Meta         bool      `json:"-"`
 	AtType       *AttrType `json:"-"`
-	LdapAttrName string
-	Format       string
-	FormatDelim  string   `json:"-"`
-	SubAtNames   []string `json:"-"`
+	LdapAttrName string    `json:"ldapAttrName"`
+	Format       string    `json:"format"`
+	FormatDelim  string    `json:"-"`
+	SubAtNames   []string  `json:"-"`
 }
 
 type LdapEntryTemplate struct {
-	Type            string
-	Endpoint        string `json:"-"`
-	DnPrefix        string
-	DnAtName        string
-	ObjectClasses   []string
-	Attributes      []*LdapAttribute
+	Type            string                    `json:"type"`
+	Endpoint        string                    `json:"-"`
+	DnPrefix        string                    `json:"dnPrefix"`
+	DnAtName        string                    `json:"-"`
+	ObjectClasses   []string                  `json:"objectClasses"`
+	Attributes      []*LdapAttribute          `json:"attributes"`
 	AttrMap         map[string]*LdapAttribute `json:"-"`
 	LdapToScimAtMap map[string]string         `json:"-"`
 }
