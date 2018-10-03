@@ -24,3 +24,6 @@ go get github.com/russellhaering/gosaml2
 go get github.com/pquerna/otp
 
 go get github.com/asaskevich/govalidator
+
+# Caddy web server
+go get github.com/mholt/caddy
