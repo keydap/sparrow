@@ -12,6 +12,7 @@ import (
 	"fmt"
 	_ "github.com/dgrijalva/jwt-go"
 	logger "github.com/juju/loggo"
+	"html/template"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -666,4 +667,79 @@ func (prv *Provider) SaveConf() error {
 	dConfPath := filepath.Join(prv.layout.ConfDir, "domain.json")
 	err := ioutil.WriteFile(dConfPath, data, utils.FILE_PERM)
 	return err
+}
+
+func (prv *Provider) ReadTemplate(name string) (data []byte, err error) {
+	html := strings.HasSuffix(name, ".html") // HTML templates have .html suffix
+	json := strings.HasSuffix(name, ".json") // LDAP templates have .json suffix
+
+	log.Debugf("requested template %s", name)
+	if !(html || json) {
+		return nil, base.NewBadRequestError("unknown template type")
+	}
+
+	if html {
+		f, err := os.Open(filepath.Join(prv.layout.TmplDir, name))
+		if os.IsNotExist(err) {
+			f, err = os.Open(filepath.Join(prv.layout.ConfDir, "..", "..", "..", "templates", name))
+		}
+		if err == nil {
+			data, err = ioutil.ReadAll(f)
+			f.Close()
+		}
+	} else if json {
+		f, err := os.Open(filepath.Join(prv.layout.LdapTmplDir, name))
+		if err == nil {
+			data, err = ioutil.ReadAll(f)
+			f.Close()
+		}
+	}
+
+	return data, err
+}
+
+func (prv *Provider) UpdateTemplate(name string, data []byte) (t *template.Template, err error) {
+	html := strings.HasSuffix(name, ".html") // HTML templates have .html suffix
+	json := strings.HasSuffix(name, ".json") // LDAP templates have .json suffix
+
+	if !(html || json) {
+		return nil, base.NewBadRequestError("unknown template type")
+	}
+
+	if html {
+		t = template.New(name)
+		t, err = t.Parse(string(data))
+		if err == nil {
+			fullPath := filepath.Join(prv.layout.TmplDir, name)
+			_, err := os.Stat(fullPath)
+			if os.IsNotExist(err) {
+				fullPath = filepath.Join(prv.layout.ConfDir, "..", "..", "..", "templates", name)
+				log.Warningf(fullPath)
+				_, err = os.Stat(fullPath)
+			}
+
+			if err == nil {
+				err = ioutil.WriteFile(fullPath, data, utils.FILE_PERM)
+			}
+		} else {
+			err = base.NewBadRequestError(err.Error())
+		}
+	} else if json {
+		var ldapTmpl *schema.LdapEntryTemplate
+		ldapTmpl, err = schema.NewLdapTemplate(data, prv.RsTypes)
+		if err == nil {
+			fullPath := filepath.Join(prv.layout.LdapTmplDir, name)
+			_, err = os.Stat(fullPath)
+			if err == nil {
+				err = ioutil.WriteFile(fullPath, data, utils.FILE_PERM)
+				if err == nil {
+					prv.LdapTemplates[ldapTmpl.Type] = ldapTmpl
+				}
+			}
+		} else {
+			err = base.NewBadRequestError(err.Error())
+		}
+	}
+
+	return t, err
 }
