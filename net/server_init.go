@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -16,12 +17,13 @@ import (
 	"sparrow/provider"
 	"sparrow/schema"
 	"sparrow/utils"
+	"strconv"
 	"strings"
 )
 
 var DEFAULT_SRV_CONF string = `{
 	"serverId": 0,
-    "enableHttps" : false,
+    "enableHttps" : true,
     "httpPort" : 7090,
     "ldapPort" : 7092,
 	"ldapEnabled" : true,
@@ -89,7 +91,41 @@ func initHome(srvHome string) *conf.ServerConf {
 	sc.TmplDir = tmplDir
 
 	if os.IsNotExist(err) {
-		err = ioutil.WriteFile(srvConfPath, []byte(DEFAULT_SRV_CONF), utils.FILE_PERM)
+		strConf := DEFAULT_SRV_CONF
+		addr := flag.Lookup("a").Value.(flag.Getter).Get().(string)
+		enableTls := flag.Lookup("tls").Value.(flag.Getter).Get().(bool)
+		addr = strings.TrimSpace(addr)
+		if addr != "" || enableTls {
+			var tmp conf.ServerConf
+			json.Unmarshal([]byte(strConf), &tmp)
+			parts := strings.Split(addr, ":")
+			if len(parts) > 0 {
+				tmp.IpAddress = parts[0]
+			}
+			if len(parts) == 2 {
+				port, err := strconv.Atoi(parts[1])
+				if err != nil {
+					panic(err)
+				}
+				tmp.HttpPort = port
+				if port == 443 {
+					tmp.Https = true
+				}
+			}
+
+			if enableTls {
+				tmp.Https = true
+			}
+
+			data, err := json.Marshal(tmp)
+			if err != nil {
+				panic(err)
+			}
+
+			strConf = string(data)
+		}
+
+		err = ioutil.WriteFile(srvConfPath, []byte(strConf), utils.FILE_PERM)
 		if err != nil {
 			log.Criticalf("Couldn't write the default server configuration file %s %#v", srvConfPath, err)
 			panic(err)
