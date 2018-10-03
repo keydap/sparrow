@@ -259,7 +259,8 @@ func compareCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.
 
 		switch node.Op {
 		case "GE", "LE":
-			if bytes.Compare(node.NvBytes, k) == 0 {
+			cmpResult := bytes.Compare(k, node.NvBytes)
+			if cmpResult >= 0 {
 				if idx.AllowDupKey {
 					rids := idx.GetRids(k, tx)
 					for _, id := range rids {
@@ -458,7 +459,7 @@ func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl
 
 		switch node.Op {
 		case "GE", "LE":
-			if bytes.Compare(node.NvBytes, k) == 0 {
+			if bytes.Compare(k, node.NvBytes) >= 0 {
 				count++
 			}
 		}
