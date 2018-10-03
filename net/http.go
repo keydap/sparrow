@@ -9,6 +9,8 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	logger "github.com/juju/loggo"
+	"github.com/mholt/caddy"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"html/template"
 	"net/http"
 	"sparrow/base"
@@ -45,7 +47,7 @@ var commaByte = []byte{','}
 var defaultDomain = "example.com"
 var srvConf *conf.ServerConf
 var templates map[string]*template.Template
-var server *http.Server
+var instance *caddy.Instance
 
 // used for encrypting authflow cookies
 var ckc *utils.CookieKeyCache
@@ -57,6 +59,12 @@ var uiHandler http.Handler
 func init() {
 	log = logger.GetLogger("sparrow.net")
 	ckc = utils.NewCookieKeyCache()
+	//fmt.Println("registering sparrow plugin")
+	httpserver.RegisterDevDirective("sparrow", "startup")
+	caddy.RegisterPlugin("sparrow", caddy.Plugin{
+		ServerType: "http",
+		Action:     setup,
+	})
 }
 
 type httpContext struct {
@@ -66,10 +74,43 @@ type httpContext struct {
 	*base.OpContext
 }
 
+type muxHandler struct {
+	router *mux.Router
+	next   httpserver.Handler
+}
+
+func (mh muxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
+	mh.router.ServeHTTP(w, r)
+	return 0, nil
+}
+
 func startHttp() {
 	hostAddr := srvConf.IpAddress + ":" + strconv.Itoa(srvConf.HttpPort)
 	log.Infof("Starting http server %s", hostAddr)
+	caddy.AppName = "Sparrow Identity Server"
+	caddy.AppVersion = SparrowVersion
 
+	tlsDirective := ""
+	if srvConf.Https {
+		tlsDirective = "tls " + srvConf.CertFile + " " + srvConf.PrivKeyFile
+	}
+	caddyFile := fmt.Sprintf("%s\n%s\n%s", hostAddr, "sparrow", tlsDirective)
+	input := caddy.CaddyfileInput{
+		Contents:       []byte(caddyFile),
+		Filepath:       "sparrow",
+		ServerTypeName: "http",
+	}
+
+	i, err := caddy.Start(input)
+	if err != nil {
+		panic(err)
+	}
+
+	instance = i
+	instance.Wait()
+}
+
+func setup(c *caddy.Controller) error {
 	router := mux.NewRouter()
 	router.StrictSlash(true)
 	router.HandleFunc("/about", serveVersionInfo).Methods("GET")
@@ -93,6 +134,7 @@ func startHttp() {
 	// generic service provider methods
 	scimRouter.HandleFunc("/ServiceProviderConfigs", getSrvProvConf).Methods("GET")
 	scimRouter.HandleFunc("/DomainConfig", handleDomainConf).Methods("GET", "PATCH") // Sparrow specific endpoint
+	scimRouter.HandleFunc("/Templates", handleTemplateConf).Methods("GET", "PUT")    // Sparrow specific endpoint
 	scimRouter.HandleFunc("/ResourceTypes", getResTypes).Methods("GET")
 	scimRouter.HandleFunc("/Schemas", getSchemas).Methods("GET")
 	scimRouter.HandleFunc("/Bulk", bulkUpdate).Methods("POST")
@@ -147,17 +189,22 @@ func startHttp() {
 	router.HandleFunc("/changePassword", handleChangePasswordReq).Methods("GET")
 	router.HandleFunc("/registerTotp", registerTotp).Methods("POST")
 
-	if srvConf.Https {
-		issuerUrl = "https://" + hostAddr
-		logUrls()
-		server = &http.Server{Addr: hostAddr, Handler: router}
-		server.ListenAndServeTLS(srvConf.CertFile, srvConf.PrivKeyFile)
-	} else {
-		issuerUrl = "http://" + hostAddr
-		logUrls()
-		server = &http.Server{Addr: hostAddr, Handler: router}
-		server.ListenAndServe()
-	}
+	httpserver.GetConfig(c).AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
+		return muxHandler{router: router, next: next}
+	})
+	//if srvConf.Https {
+	//	issuerUrl = "https://" + hostAddr
+	//	logUrls()
+	//	server = &http.Server{Addr: hostAddr, Handler: router}
+	//	server.ListenAndServeTLS(srvConf.CertFile, srvConf.PrivKeyFile)
+	//} else {
+	//	issuerUrl = "http://" + hostAddr
+	//	logUrls()
+	//	server = &http.Server{Addr: hostAddr, Handler: router}
+	//	server.ListenAndServe()
+	//}
+
+	return nil
 }
 
 func logUrls() {
@@ -167,7 +214,7 @@ func logUrls() {
 }
 
 func stopHttp() {
-	server.Close() // first stop the HTTP server to prevent incoming request processing
+	instance.Stop() // first stop the HTTP server to prevent incoming request processing
 	for _, pr := range providers {
 		pr.Close()
 	}
