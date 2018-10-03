@@ -6,7 +6,7 @@ package silo
 import (
 	"bytes"
 	"fmt"
-	"github.com/coreos/bbolt"
+	bolt "github.com/coreos/bbolt"
 	"math"
 	"sparrow/base"
 	"sparrow/schema"
