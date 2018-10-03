@@ -115,10 +115,11 @@ outer:
 		// resources is an array type
 		if firstFieldName == "resources" {
 			err := updateResources(pr.Config, v, pathParts[1:])
-			if err == nil {
-				updated = true
+			if err != nil {
+				panic(err)
 			}
 
+			updated = true
 			log.Debugf("%v", err)
 			continue
 		}
