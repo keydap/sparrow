@@ -96,14 +96,14 @@ func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 	prv.immResIds[SystemGroupId] = 1
 	prv.immResIds[AdminUserId] = 1
 
-	dataFilePath := filepath.Join(layout.DataDir, layout.name+".db")
+	dataFilePath := filepath.Join(layout.DataDir, "data.db")
 	prv.sl, err = silo.Open(dataFilePath, prv.ServerId, prv.Config, prv.RsTypes, prv.Schemas)
 	if err != nil {
 		return nil, err
 	}
 	prv.sl.Engine.Domain = layout.name
 
-	odbFilePath := filepath.Join(layout.DataDir, layout.name+"-tokens.db")
+	odbFilePath := filepath.Join(layout.DataDir, "tokens.db")
 	prv.osl, err = oauth.Open(odbFilePath, prv.Config.Oauth.TokenPurgeInterval)
 
 	if err != nil {

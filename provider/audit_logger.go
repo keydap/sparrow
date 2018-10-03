@@ -28,7 +28,7 @@ func NewLocalAuditLogger(prv *Provider) *AuditLogger {
 	al.prv = prv
 
 	var err error
-	al.dataFilePath = filepath.Join(prv.layout.DataDir, "audit-"+prv.layout.name+".db")
+	al.dataFilePath = filepath.Join(prv.layout.DataDir, "auditlog.db")
 	al.sl, err = openAuditLog(al.dataFilePath, prv)
 	if err != nil {
 		panic(err)
@@ -68,7 +68,7 @@ loop:
 		case now := <-al.roller:
 			log.Infof("rolling up the audit log")
 			timestamp := now.Format(time.RFC3339)[:19] // strip the +timezone detail
-			oldLog := "audit-" + al.prv.layout.name + "-" + timestamp + ".db"
+			oldLog := "auditlog-" + timestamp + ".db"
 			oldLog = filepath.Join(al.prv.layout.DataDir, oldLog)
 			al.sl.Close() // TODO how to prevent active searches on audit log from failing? it is not critical for now
 			os.Rename(al.dataFilePath, oldLog)
