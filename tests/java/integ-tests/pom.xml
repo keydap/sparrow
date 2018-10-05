@@ -98,8 +98,9 @@
                 </executions>
                 <configuration>
                     <generatePackage>com.keydap.sparrow.scim</generatePackage>
-                    <baseUrl>http://localhost:7090/v2</baseUrl>
+                    <baseUrl>https://localhost:7090/v2</baseUrl>
                     <skipGeneration>false</skipGeneration>
+                    <verifyCert>false</verifyCert>
                 </configuration>
             </plugin>
             <plugin>

@@ -19,6 +19,7 @@ import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.URLEncoder;
 import java.security.Security;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -28,6 +29,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.zip.DeflaterOutputStream;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.X509TrustManager;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -40,6 +43,7 @@ import org.apache.http.NameValuePair;
 import org.apache.http.StatusLine;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
@@ -106,6 +110,7 @@ public class OauthTokenTest extends TestBase {
     static String redirectUri = "http://" + LOCALHOST + ":" + PORT + CTX_PATH;
     
     static CloseableHttpClient httpClient;
+    static SSLContext ctx;
     
     static String spResponse = null;
     
@@ -135,6 +140,30 @@ public class OauthTokenTest extends TestBase {
             builderFactory = XMLObjectProviderRegistrySupport.getBuilderFactory();
             unmarshallerFactory = XMLObjectProviderRegistrySupport.getUnmarshallerFactory();
         } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        try {
+            ctx = SSLContext.getInstance("TLS");
+            X509TrustManager tm = new X509TrustManager() {
+                @Override
+                public X509Certificate[] getAcceptedIssuers() {
+                    return new X509Certificate[0];
+                }
+
+                @Override
+                public void checkServerTrusted(X509Certificate[] chain, String authtype)
+                        throws CertificateException {
+                }
+
+                @Override
+                public void checkClientTrusted(X509Certificate[] chain, String authtype)
+                        throws CertificateException {
+                }
+            };
+
+            ctx.init(null, new X509TrustManager[]{tm}, null);
+        }
+        catch(Exception e) {
             throw new RuntimeException(e);
         }
     }
@@ -178,7 +207,7 @@ public class OauthTokenTest extends TestBase {
     @BeforeClass
     public static void setup() throws Exception {
         deleteAll(RegisteredApp.class);
-        httpClient = HttpClientBuilder.create().build();
+        httpClient = HttpClientBuilder.create().setSSLContext(ctx).setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).build();
 
         InetSocketAddress isa = new InetSocketAddress(LOCALHOST, PORT);
         server = new Server(isa);
@@ -206,6 +235,7 @@ public class OauthTokenTest extends TestBase {
         req.add(new OauthAttribute("displayName", "displayName"));
         req.add(new OauthAttribute("email", "emails.value co \"admin\""));
         
+        // for formats see org.opensaml.saml.saml2.core.NameIDType
         req.add(new SamlAttribute("displayName", "displayName"));
         req.add(new SamlAttribute("email", "emails.value"));
         SamlAttribute nameId = new SamlAttribute("nameId", "emails.value"); // special attribute

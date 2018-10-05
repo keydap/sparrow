@@ -36,7 +36,7 @@ import static org.junit.Assert.*;
  */
 public abstract class TestBase {
     
-    private static String BASE = "http://localhost:7090";
+    private static String BASE = "https://localhost:7090";
 //    private static String BASE = "https://id.keydap.com";
     
     protected static String baseApiUrl = BASE + "/v2";
