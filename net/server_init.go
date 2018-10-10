@@ -4,6 +4,7 @@
 package net
 
 import (
+	"crypto"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -30,7 +31,8 @@ var DEFAULT_SRV_CONF string = `{
     "ldapOverTlsOnly" : true,
     "ipAddress" : "0.0.0.0",
     "certificateFile": "default.cer",
-    "privatekeyFile": "default.key"
+    "privatekeyFile": "default.key",
+	"controllerDomain": "example.com"
 }`
 
 var COOKIE_LOGIN_NAME string = "SPLCN"
@@ -149,10 +151,12 @@ func initHome(srvHome string) *conf.ServerConf {
 		panic(err)
 	}
 
+	sc.ControllerDomain = strings.ToLower(sc.ControllerDomain)
+
 	// parse the certificate and privatekey
-	data, absFilePath, err := pemDecode(srvConfDir, sc.CertFile)
+	pb, absFilePath, err := pemDecode(srvConfDir, sc.CertFile)
 	if err == nil {
-		sc.CertChain, err = x509.ParseCertificates(data)
+		sc.CertChain, err = x509.ParseCertificates(pb.Bytes)
 		if err != nil {
 			log.Warningf("Failed to parse certificate from file %s %#v", absFilePath, err)
 		}
@@ -160,14 +164,19 @@ func initHome(srvHome string) *conf.ServerConf {
 		sc.PubKey = sc.CertChain[0].PublicKey
 	}
 
-	data, absFilePath, err = pemDecode(srvConfDir, sc.PrivKeyFile)
+	pb, absFilePath, err = pemDecode(srvConfDir, sc.PrivKeyFile)
 	if err == nil {
-		rsaPrivKey, err := x509.ParsePKCS1PrivateKey(data)
+		var pKey crypto.PrivateKey
+		if pb.Type == "RSA PRIVATE KEY" {
+			pKey, err = x509.ParsePKCS1PrivateKey(pb.Bytes)
+		} else {
+			pKey, err = x509.ParsePKCS8PrivateKey(pb.Bytes)
+		}
 		if err != nil {
 			log.Warningf("Failed to parse privatekey from file %s %#v", absFilePath, err)
 			panic(err)
 		}
-		sc.PrivKey = rsaPrivKey
+		sc.PrivKey = pKey
 		sc.PrivKeyFile = absFilePath
 		//TODO support other types of private keys
 	}
@@ -193,24 +202,24 @@ func initHome(srvHome string) *conf.ServerConf {
 	return sc
 }
 
-func pemDecode(srvConfDir string, givenFilePath string) (data []byte, absFilePath string, err error) {
+func pemDecode(srvConfDir string, givenFilePath string) (pb *pem.Block, absFilePath string, err error) {
 	if !strings.ContainsRune(givenFilePath, os.PathSeparator) {
 		givenFilePath = srvConfDir + string(os.PathSeparator) + givenFilePath
 	}
 
-	data, err = ioutil.ReadFile(givenFilePath)
+	data, err := ioutil.ReadFile(givenFilePath)
 	if err != nil {
 		log.Debugf("Failed to read the PEM encoded file %s", givenFilePath)
 		return nil, "", err
 	}
 
-	pb, _ := pem.Decode(data)
+	pb, _ = pem.Decode(data)
 	if pb == nil {
 		log.Debugf("Failed to decode the PEM file %s", givenFilePath)
 		return nil, "", err
 	}
 
-	return pb.Bytes, givenFilePath, nil
+	return pb, givenFilePath, nil
 }
 
 func loadProviders(domainsDir string, sc *conf.ServerConf) {
