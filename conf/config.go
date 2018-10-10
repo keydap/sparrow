@@ -15,19 +15,20 @@ import (
 )
 
 type ServerConf struct {
-	ServerId        uint16              `json:"serverId" valid:"required~Server ID is required"` // used while generating CSNs
-	Https           bool                `json:"enableHttps" valid:"checkTLSSettings"`
-	HttpPort        int                 `json:"httpPort" valid:"required"`
-	LdapPort        int                 `json:"ldapPort"`
-	LdapEnabled     bool                `json:"ldapEnabled"`
-	LdapOverTlsOnly bool                `json:"ldapOverTlsOnly"`
-	IpAddress       string              `json:"ipAddress" valid:"ip"`
-	CertFile        string              `json:"certificateFile"`
-	PrivKeyFile     string              `json:"privatekeyFile"`
-	TmplDir         string              `json:"-"` // template directory
-	CertChain       []*x509.Certificate `json:"-"`
-	PrivKey         crypto.PrivateKey   `json:"-"`
-	PubKey          crypto.PublicKey    `json:"-"`
+	ServerId         uint16              `json:"serverId" valid:"required~Server ID is required"` // used while generating CSNs
+	Https            bool                `json:"enableHttps" valid:"checkTLSSettings"`
+	HttpPort         int                 `json:"httpPort" valid:"required"`
+	LdapPort         int                 `json:"ldapPort"`
+	LdapEnabled      bool                `json:"ldapEnabled"`
+	LdapOverTlsOnly  bool                `json:"ldapOverTlsOnly"`
+	IpAddress        string              `json:"ipAddress" valid:"ip"`
+	CertFile         string              `json:"certificateFile"`
+	PrivKeyFile      string              `json:"privatekeyFile"`
+	ControllerDomain string              `json:"controllerDomain"` // the domain whose admin can manage other domains
+	TmplDir          string              `json:"-"`                // template directory
+	CertChain        []*x509.Certificate `json:"-"`
+	PrivKey          crypto.PrivateKey   `json:"-"`
+	PubKey           crypto.PublicKey    `json:"-"`
 }
 
 type AuthenticationScheme struct {
@@ -93,12 +94,16 @@ type Rfc2307bis struct {
 }
 
 type Ppolicy struct {
-	PasswdHashAlgo string `json:"passwordHashAlgo" valid:"checkHashAlgo"`
+	PasswdHashAlgo      string `json:"passwordHashAlgo" valid:"checkHashAlgo"`
+	PasswdMinLen        int    `json:"passwordMinLen"`
+	LockAccAfterNumFail int    `json:"lockAccAfterNumFail"`
+	UnlockAccAfterSec   int    `json:"unlockAccAfterSec"`
 }
 
 type OauthConfig struct {
 	TokenTTL           int    `json:"tokenTtl"`           // the life time of an OAuth token in seconds
 	SsoSessionIdleTime int    `json:"ssoSessionIdleTime"` // the idle time of a SSO session in seconds
+	SsoSessionMaxLife  int    `json:"ssoSessionMaxLife"`  // the max life time of a SSO session in seconds
 	TokenPurgeInterval int    `json:"tokenPurgeInterval"` // the number of seconds to wait between successive purges of expired tokens
 	Notes              string `json:"notes"`
 }
@@ -125,9 +130,9 @@ type ScimConfig struct {
 }
 
 func DefaultDomainConfig() *DomainConfig {
-	scim := &ScimConfig{DocumentationURI: "http://keydap.com/sparrow/scim"}
+	scim := &ScimConfig{DocumentationURI: "http://keydap.com/sparrow"}
 
-	oauth := AuthenticationScheme{Type: "oauthbearertoken", Primary: true, Name: "OAuth Bearer Token", Description: "Authentication scheme using the OAuth Bearer Token Standard", SpecURI: "http://www.rfc-editor.org/info/rfc6750", DocumentationURI: "http://keydap.com/sparrow/scim"}
+	oauth := AuthenticationScheme{Type: "oauthbearertoken", Primary: true, Name: "OAuth Bearer Token", Description: "Authentication scheme using the OAuth Bearer Token Standard", SpecURI: "http://www.rfc-editor.org/info/rfc6750", DocumentationURI: "http://keydap.com/sparrow"}
 	scim.AuthenticationSchemes = []AuthenticationScheme{oauth}
 
 	bulk := Bulk{Supported: false, MaxOperations: 1000, MaxPayloadSize: 1048576}
@@ -136,7 +141,7 @@ func DefaultDomainConfig() *DomainConfig {
 	chpw := ChangePassword{Supported: true}
 	scim.ChangePassword = chpw
 
-	scim.DocumentationURI = "http://keydap.com/sparrow/scim"
+	scim.DocumentationURI = "http://keydap.com/sparrow"
 
 	etag := Etag{Supported: true}
 	scim.Etag = etag
@@ -169,12 +174,15 @@ func DefaultDomainConfig() *DomainConfig {
 	scim.Meta = meta
 
 	oauthCf := &OauthConfig{}
-	oauthCf.TokenTTL = 8 * 3600           // 8 hours
+	oauthCf.TokenTTL = 15 * 24 * 3600     // 15 days
 	oauthCf.SsoSessionIdleTime = 1 * 3600 // 1 hour
-	oauthCf.TokenPurgeInterval = 2 * 60   // 2 minutes
+	oauthCf.SsoSessionMaxLife = 24 * 3600 // 24 hours
+	oauthCf.TokenPurgeInterval = 1 * 3600 // 1 hour
 
 	ppolicy := &Ppolicy{}
 	ppolicy.PasswdHashAlgo = "sha256"
+	ppolicy.LockAccAfterNumFail = 10
+	ppolicy.UnlockAccAfterSec = 600 // 10 minutes
 
 	rfc2307bis := &Rfc2307bis{Enabled: false, LoginShell: "/bin/bash", HomeDirectoryPrefix: "/home/", UidNumberStart: 200, GidNumberStart: 200}
 
