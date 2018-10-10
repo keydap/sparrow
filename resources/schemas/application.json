@@ -103,6 +103,17 @@
             "uniqueness":"none"
         },
         {
+            "name":"icon",
+            "type":"string",
+            "multiValued":false,
+            "description":"Icon of the application stored in the format compatible with HTML image's src format e.g 'image/jpeg;base64,/9j...'",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
             "name":"scopes",
             "type":"complex",
             "multiValued":true,
@@ -230,6 +241,17 @@
             "type":"string",
             "multiValued":false,
             "description":"Value of the issuer present in SAMLResponse",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"needSamlReqSigning",
+            "type":"boolean",
+            "multiValued":false,
+            "description":"Flag to accept only signed SAML requests",
             "required":false,
             "caseExact":false,
             "mutability":"readWrite",

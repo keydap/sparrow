@@ -45,6 +45,7 @@ func validateClient(rs *base.Resource, opCtx *base.OpContext) error {
 	spIssuerName := "spissuer"
 	idpIssuerName := "idpissuer"
 	consentRequired := "consentrequired"
+	icon := "icon"
 
 	at := rs.GetAttr(redUriAtName)
 
@@ -65,13 +66,24 @@ func validateClient(rs *base.Resource, opCtx *base.OpContext) error {
 	at = rs.GetAttr(idpIssuerName)
 	if at == nil {
 		// add a default value
-		rs.AddSA(idpIssuerName, "https://"+opCtx.Session.Domain+"/saml/idp")
+		rs.AddSA(idpIssuerName, opCtx.Session.Domain)
+	} else {
+		at.GetSimpleAt().Values[0] = opCtx.Session.Domain // overwrite the value
 	}
 
 	at = rs.GetAttr(consentRequired)
 	if at == nil {
 		// add a default value
 		rs.AddSA(consentRequired, false)
+	}
+
+	at = rs.GetAttr(icon)
+	if at != nil {
+		val := at.GetSimpleAt().GetStringVal()
+		if !strings.HasPrefix(val, "data:image/") {
+			// send error
+			return base.NewBadRequestError("invalid image data given for icon attribute")
+		}
 	}
 
 	redirectUriAt := rs.GetAttr("redirecturi").GetSimpleAt()
