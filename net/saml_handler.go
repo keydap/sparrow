@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/beevik/etree"
 	saml "github.com/russellhaering/gosaml2"
+	"github.com/russellhaering/gosaml2/types"
 	"github.com/russellhaering/goxmldsig"
 	"io/ioutil"
 	"net/http"
@@ -57,6 +58,12 @@ const attributeXml = `<saml:Attribute Name="{{.Name}}" NameFormat="{{.Format}}">
   <saml:AttributeValue>{{.Value}}</saml:AttributeValue>
  </saml:Attribute>`
 
+const logoutReqXml = `<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns="urn:oasis:names:tc:SAML:2.0:assertion" ID="{{.ReqId}}" IssueInstant="{{.IssueInstant}}" Version="2.0">
+    <Issuer>{{.Issuer}}</Issuer>
+    <NameID Format="{{.NameIDFormat}}">{{.NameId}}</NameID>
+    <samlp:SessionIndex>{{.SessionIndex}}</samlp:SessionIndex>
+</samlp:LogoutRequest>`
+
 type samlResponse struct {
 	DestinationUrl      string
 	RespId              string
@@ -75,8 +82,36 @@ type samlResponse struct {
 	NameIdFormat        string
 }
 
+// this struct is used for sending out logout requests
+type logoutReqTmplData struct {
+	ID           string
+	IssueInstant string
+	Issuer       string
+	NameID       string
+	NameIDFormat string
+	SessionIndex string
+}
+
+// this struct is used for parsing recieved logout requests
+type LogoutRequest struct {
+	ID           string    `xml:",attr"`
+	Version      string    `xml:",attr"`
+	IssueInstant time.Time `xml:",attr"`
+	Issuer       string
+	NameID       LogoutNameID
+	SessionIndex string
+}
+
+type LogoutNameID struct {
+	XMLName xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:assertion NameID"`
+	Format  string   `xml:",attr"`
+	Value   string   `xml:",chardata"`
+}
+
 var respTemplate *template.Template
 var attributeTemplate *template.Template
+var metaTemplate *template.Template
+var logoutReqTemplate *template.Template
 
 const saml_received_via = "saml_received_via"
 
@@ -85,6 +120,68 @@ func init() {
 	attributeTemplate = &template.Template{}
 	template.Must(respTemplate.Parse(respXml))
 	template.Must(attributeTemplate.Parse(attributeXml))
+	logoutReqTemplate = &template.Template{}
+	template.Must(logoutReqTemplate.Parse(logoutReqXml))
+	// for some unknown reason if the metaTemplate is parsed in an init()
+	// inside idp_metadata_handler.go then it is failing with a nil pointer error
+	metaTemplate = &template.Template{}
+	template.Must(metaTemplate.Parse(idpMetadataXml))
+}
+
+func handleSamlLogout(w http.ResponseWriter, r *http.Request) {
+	log.Debugf("handling SAML logout")
+
+	err := r.ParseForm()
+	if err != nil {
+		err = fmt.Errorf("Failed to parse the request form %s", err.Error())
+		log.Debugf("%s", err.Error())
+		sendSamlError(w, err, http.StatusBadRequest)
+		return
+	}
+
+	relayState := strings.TrimSpace(r.Form.Get("RelayState"))
+	if relayState == "" {
+		relayState = "/ui"
+	}
+
+	samlReq := r.Form.Get("SAMLRequest")
+	var logoutReq LogoutRequest
+	if samlReq != "" {
+		data, err := readSamlReq(r)
+		if err == nil {
+			err = xml.Unmarshal(data, &logoutReq)
+			if err != nil {
+				log.Debugf("failed to parse logout request %v", err)
+			}
+		}
+	}
+
+	session := getSession(r)
+	if session == nil && (&logoutReq == nil) { // both session and logout requests are nil
+		log.Debugf("no session exists, redirecting to the relaystate %s", relayState)
+		http.Redirect(w, r, relayState, http.StatusFound)
+		return
+	} else if &logoutReq != nil { //
+		_handleSamlBackChannelLogoutReq(r, w, logoutReq)
+		return
+	}
+
+	pr := providers[session.Domain]
+
+	if pr == nil {
+		log.Debugf("invalid session, no provider found for %s", session.Domain)
+		return
+	}
+
+	opCtx := &base.OpContext{}
+	opCtx.Session = session
+	opCtx.Sso = true
+	opCtx.ClientIP = utils.GetRemoteAddr(r)
+	opCtx.Endpoint = getEndpoint(r)
+	pr.DeleteSsoSession(opCtx)
+
+	_logoutSessionApps(pr, opCtx)
+	http.Redirect(w, r, relayState, http.StatusFound)
 }
 
 // STEP 1 - check the presence of session otherwise redirect to login
@@ -150,51 +247,10 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 	}
 
 	var samlAuthnReq saml.AuthNRequest
-	var data []byte
-
-	samlReq := r.Form.Get("SAMLRequest")
-	receivedVia := r.Form.Get(saml_received_via)
-	log.Debugf("http method %s", r.Method)
-	if r.Method == http.MethodGet || receivedVia == http.MethodGet {
-		log.Debugf("Received SAMLRequest (raw): %s", samlReq)
-		if strings.Contains(samlReq, "%") {
-			log.Debugf("URL decoding the received SAMLRequest")
-			samlReq, _ = url.QueryUnescape(samlReq)
-		}
-		data, err = utils.B64Decode(samlReq)
-		if err != nil {
-			err = fmt.Errorf("Failed to base64 decode the SAML authentication request %s", err.Error())
-			log.Debugf("%s", err.Error())
-			sendSamlError(w, err, http.StatusBadRequest)
-			return
-		}
-
-		if len(data) == 0 {
-			log.Debugf("No SAML request is present")
-			return
-		}
-
-		// remove the GLIB header if present
-		if data[0] == 0x78 && data[1] == 0x9C {
-			data = data[2:]
-		}
-		r := flate.NewReader(bytes.NewReader(data))
-		data, err = ioutil.ReadAll(r)
-		r.Close()
-		if err != nil {
-			err = fmt.Errorf("Failed to inflate the SAML authentication request %s", err.Error())
-			log.Debugf("%s", err.Error())
-			sendSamlError(w, err, http.StatusBadRequest)
-			return
-		}
-	} else {
-		data, err = utils.B64Decode(samlReq)
-		if err != nil {
-			err = fmt.Errorf("Failed to base64 decode the SAML authentication request %s", err.Error())
-			log.Debugf("%s", err.Error())
-			sendSamlError(w, err, http.StatusBadRequest)
-			return
-		}
+	data, err := readSamlReq(r)
+	if err != nil {
+		sendSamlError(w, err, http.StatusBadRequest)
+		return
 	}
 
 	log.Debugf("Received SAMLRequest: %s", string(data))
@@ -223,9 +279,25 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 		return
 	}
 
-	//	for role, _ := range cl.GroupIds {
-	//
-	//	}
+	allowed := false
+	// if there are no groups then grant access to any user
+	if len(cl.GroupIds) == 0 {
+		allowed = true
+	} else {
+		for role, _ := range cl.GroupIds {
+			if _, ok := session.Roles[role]; ok {
+				allowed = true
+				break
+			}
+		}
+	}
+
+	if !allowed {
+		err = fmt.Errorf("User %s does not have privileges to access application with issuer ID %s", session.Sub, samlAuthnReq.Issuer)
+		log.Warningf("%s", err.Error())
+		sendSamlError(w, err, http.StatusForbidden)
+		return
+	}
 
 	genSamlResponse(w, r, pr, session, cl, samlAuthnReq)
 }
@@ -254,7 +326,7 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 	sp.NameIdFormat = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent" // the default
 	sp.ReqId = authnReq.ID
 	sp.RespId = "_" + utils.GenUUID()
-	sp.SessionIndexId = "_" + utils.GenUUID()
+	sp.SessionIndexId = "_" + pr.DomainCode() + session.Jti + "." + utils.GenUUID() // prefix the session ID so that session data can be retrieved in backchannel logout
 	sp.SessionNotOnOrAfter = curTime.Add(time.Duration(10) * time.Hour).Format(time.RFC3339)
 
 	sp.Attributes = make(map[string]string)
@@ -294,6 +366,9 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 			}
 		}
 	}
+
+	sas := base.SamlAppSession{NameID: sp.NameId, NameIDFormat: sp.NameIdFormat, SessionIndex: sp.SessionIndexId}
+	go pr.AddAppToSsoSession(session.Jti, cl.Saml.SpIssuer, sas)
 
 	respTemplate.Execute(&buf, sp)
 	doc := etree.NewDocument()
@@ -359,4 +434,120 @@ func signEnveloped(ctx *dsig.SigningContext, el *etree.Element) (*etree.Element,
 	}
 
 	return ret, nil
+}
+
+func readSamlReq(r *http.Request) (data []byte, err error) {
+	samlReq := r.Form.Get("SAMLRequest")
+	receivedVia := r.Form.Get(saml_received_via)
+	log.Debugf("http method %s", r.Method)
+
+	if r.Method == http.MethodGet || receivedVia == http.MethodGet {
+		log.Debugf("Received SAMLRequest (raw): %s", samlReq)
+		if strings.Contains(samlReq, "%") {
+			log.Debugf("URL decoding the received SAMLRequest")
+			samlReq, _ = url.QueryUnescape(samlReq)
+		}
+		data, err = utils.B64Decode(samlReq)
+		if err != nil {
+			err = fmt.Errorf("Failed to base64 decode the SAML authentication request %s", err.Error())
+			log.Debugf("%s", err.Error())
+			return nil, err
+		}
+
+		if len(data) == 0 {
+			err = fmt.Errorf("No SAML request is present")
+			log.Debugf("%s", err.Error())
+			return nil, err
+		}
+
+		// remove the GLIB header if present
+		if data[0] == 0x78 && data[1] == 0x9C {
+			data = data[2:]
+		}
+		r := flate.NewReader(bytes.NewReader(data))
+		data, err = ioutil.ReadAll(r)
+		r.Close()
+		if err != nil {
+			err = fmt.Errorf("Failed to inflate the SAML authentication request %s", err.Error())
+			log.Debugf("%s", err.Error())
+			return nil, err
+		}
+	} else {
+		data, err = utils.B64Decode(samlReq)
+		if err != nil {
+			err = fmt.Errorf("Failed to base64 decode the SAML authentication request %s", err.Error())
+			log.Debugf("%s", err.Error())
+			return nil, err
+		}
+	}
+
+	return data, nil
+}
+
+func _handleSamlBackChannelLogoutReq(r *http.Request, w http.ResponseWriter, logoutReq LogoutRequest) {
+	samlSessId := logoutReq.SessionIndex
+	// extract SSO session ID
+	pos := strings.Index(samlSessId, ".")
+	ssoId := samlSessId[1:pos]
+	domainCode := ssoId[:8]
+	ssoId = ssoId[8:]
+
+	pr := dcPrvMap[domainCode]
+	if pr == nil {
+		log.Debugf("invalid session index %s", samlSessId)
+		return
+	}
+
+	session := pr.GetSsoSession(ssoId)
+	opCtx := &base.OpContext{}
+	opCtx.Session = session
+	opCtx.Sso = true
+	opCtx.ClientIP = utils.GetRemoteAddr(r)
+	opCtx.Endpoint = getEndpoint(r)
+	pr.DeleteSsoSession(opCtx)
+
+	_logoutSessionApps(pr, opCtx)
+}
+
+func _logoutSessionApps(pr *provider.Provider, opCtx *base.OpContext) {
+	lrtd := logoutReqTmplData{}
+	lrtd.ID = "_" + utils.GenUUID()
+	lrtd.IssueInstant = time.Now().UTC().Format(time.RFC3339)
+
+	for iss, sas := range opCtx.Session.Apps {
+		md := pr.SamlMdCache[iss]
+		if md != nil {
+			sloServices := md.SingleLogoutServices
+			if len(sloServices) > 0 {
+				log.Debugf("sending logout request to %s", iss)
+				fmt.Println(sas)
+				sendLogoutReq(sloServices[0], lrtd, sas)
+			}
+		} else {
+			log.Debugf("there is no metadata for the issuer %s", iss)
+		}
+	}
+}
+
+func sendLogoutReq(endpoint types.Endpoint, lrtd logoutReqTmplData, sas base.SamlAppSession) {
+	lrtd.SessionIndex = sas.SessionIndex
+	lrtd.NameIDFormat = sas.NameIDFormat
+	lrtd.NameID = sas.NameID
+
+	var buf bytes.Buffer
+	logoutReqTemplate.Execute(&buf, lrtd)
+	if endpoint.Binding == "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" {
+		form := url.Values{}
+		encodedSamlData := utils.B64Encode(buf.Bytes())
+		form.Add("SAMLRequest", encodedSamlData)
+		resp, err := http.PostForm(endpoint.Location, form)
+		if err != nil {
+			log.Debugf("failed to send the logout request to %s [%v]", endpoint.Location, err)
+		} else {
+			log.Debugf("received status %s", resp.Status)
+			resp.Body.Close()
+		}
+	} else {
+		log.Debugf("only HTTP-POST binding is supported by SingleLogout service, cannot send logout request to %s", endpoint.Location)
+	}
 }

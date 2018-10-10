@@ -36,6 +36,7 @@ type Client struct {
 	Time     int64  `json:"time"`
 	Desc     string `json:"desc"`
 	HomeUrl  string `json:"homeurl"`
+	Icon     string `json:"icon"`
 	GroupIds map[string]int
 	Oauth    *ClientOauthConf
 	Saml     *ClientSamlConf
@@ -45,7 +46,7 @@ type ClientSamlConf struct {
 	SLOUrl            string // Single LOgout URL
 	MetaUrl           string // URL serving SP's metadata
 	HomeUrl           string // URL of the home page
-	MetaData          samlTypes.SPSSODescriptor
+	MetaData          *samlTypes.SPSSODescriptor
 	Attributes        map[string]*base.SsoAttr `json:"attrs"`
 	AssertionValidity int
 	IdpIssuer         string

@@ -28,7 +28,7 @@ var providers = make(map[string]*provider.Provider)
 
 // a map of providers keyed using the hashcode of the domain name
 // this exists to keep the length of Oauth code fixed to N bytes
-var dcPrvMap = make(map[uint32]*provider.Provider)
+var dcPrvMap = make(map[string]*provider.Provider)
 
 var TENANT_HEADER = "X-Sparrow-Domain"
 var TENANT_COOKIE = "SD"
@@ -52,7 +52,7 @@ var instance *caddy.Instance
 // used for encrypting authflow cookies
 var ckc *utils.CookieKeyCache
 
-var issuerUrl = ""
+var homeUrl = ""
 
 var uiHandler http.Handler
 
@@ -93,7 +93,15 @@ func startHttp() {
 	tlsDirective := ""
 	if srvConf.Https {
 		tlsDirective = "tls " + srvConf.CertFile + " " + srvConf.PrivKeyFile
+		homeUrl = "https://" + srvConf.IpAddress
+	} else {
+		homeUrl = "http://" + srvConf.IpAddress
 	}
+
+	if srvConf.HttpPort != 80 && srvConf.HttpPort != 443 {
+		homeUrl += ":" + strconv.Itoa(srvConf.HttpPort)
+	}
+
 	caddyFile := fmt.Sprintf("%s\n%s\n%s", hostAddr, "sparrow", tlsDirective)
 	input := caddy.CaddyfileInput{
 		Contents:       []byte(caddyFile),
@@ -105,6 +113,8 @@ func startHttp() {
 	if err != nil {
 		panic(err)
 	}
+
+	logUrls()
 
 	instance = i
 	instance.Wait()
@@ -179,6 +189,8 @@ func setup(c *caddy.Controller) error {
 
 	// SAMLv2 requests
 	samlRouter := router.PathPrefix(SAML_BASE).Subrouter()
+	samlRouter.HandleFunc("/idp/meta/{domain}", serveIdpMetadata).Methods("GET")
+	samlRouter.HandleFunc("/idp/logout", handleSamlLogout).Methods("POST")
 	// match /saml with any number of query parameters
 	samlRouter.HandleFunc("/idp", handleSamlReq).Methods("GET", "POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
 		return true
@@ -193,12 +205,12 @@ func setup(c *caddy.Controller) error {
 		return muxHandler{router: router, next: next}
 	})
 	//if srvConf.Https {
-	//	issuerUrl = "https://" + hostAddr
+	//	homeUrl = "https://" + hostAddr
 	//	logUrls()
 	//	server = &http.Server{Addr: hostAddr, Handler: router}
 	//	server.ListenAndServeTLS(srvConf.CertFile, srvConf.PrivKeyFile)
 	//} else {
-	//	issuerUrl = "http://" + hostAddr
+	//	homeUrl = "http://" + hostAddr
 	//	logUrls()
 	//	server = &http.Server{Addr: hostAddr, Handler: router}
 	//	server.ListenAndServe()
@@ -208,9 +220,9 @@ func setup(c *caddy.Controller) error {
 }
 
 func logUrls() {
-	log.Infof("SCIM API is accessible at %s", issuerUrl+API_BASE)
-	log.Infof("OAuth2 and OpenIDConnect API is accessible at %s", issuerUrl+OAUTH_BASE)
-	log.Infof("SAML2 API is accessible at %s", issuerUrl+SAML_BASE)
+	log.Infof("SCIM API is accessible at %s", homeUrl+API_BASE)
+	log.Infof("OAuth2 and OpenIDConnect API is accessible at %s", homeUrl+OAUTH_BASE)
+	log.Infof("SAML2 API is accessible at %s", homeUrl+SAML_BASE)
 }
 
 func stopHttp() {
@@ -814,6 +826,9 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 
 	if deleted {
 		code = 200
+		if opCtx.Sso {
+			_logoutSessionApps(pr, opCtx)
+		}
 	}
 	w.WriteHeader(code)
 }
@@ -850,19 +865,23 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 		jsonMap["perms"] = ses.EffPerms
 		jsonMap["domain"] = ses.Domain
 
-		apps := make(map[string]string) // a map of application name and home page URL that are allowed for this user
-		jsonMap["apps"] = apps
+		apps := make([]map[string]string, 0) // an array of allowed apps for this user, each map holds application name, home page URL and icon
 
 		clients := pr.GetAllClients()
 		for _, cl := range clients {
 			for role, _ := range cl.GroupIds {
 				if _, ok := ses.Roles[role]; ok {
-					apps[cl.Name] = cl.HomeUrl
+					tmp := make(map[string]string)
+					tmp["name"] = cl.Name
+					tmp["url"] = cl.HomeUrl
+					tmp["icon"] = cl.Icon
+					apps = append(apps, tmp)
 					break
 				}
 			}
 		}
 
+		jsonMap["apps"] = apps
 		data, _ := json.Marshal(jsonMap)
 
 		writeCommonHeaders(w)

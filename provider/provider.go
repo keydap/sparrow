@@ -7,11 +7,13 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	_ "github.com/dgrijalva/jwt-go"
 	logger "github.com/juju/loggo"
+	samlTypes "github.com/russellhaering/gosaml2/types"
 	"html/template"
 	"io/ioutil"
 	"os"
@@ -39,10 +41,11 @@ type Provider struct {
 	Cert          *x509.Certificate
 	PrivKey       crypto.PrivateKey
 	immResIds     map[string]int // map of IDs of resources that cannot be deleted
-	domainCode    uint32
+	domainCode    string
 	osl           *oauth.OauthSilo
 	interceptors  []base.Interceptor
 	Al            *AuditLogger
+	SamlMdCache   map[string]*samlTypes.SPSSODescriptor
 }
 
 const AdminGroupId = "01000000-0000-4000-4000-000000000000"
@@ -145,6 +148,7 @@ func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 	err = prv.createDefaultResources(rfc2307i)
 
 	prv.Al = NewLocalAuditLogger(prv)
+	prv.SamlMdCache = make(map[string]*samlTypes.SPSSODescriptor)
 
 	return prv, err
 }
@@ -617,16 +621,16 @@ func (prv *Provider) ModifyGroupsOfUser(autg base.ModifyGroupsOfUserRequest) (us
 	return prv.sl.ModifyGroupsOfUser(autg)
 }
 
-func (prv *Provider) DomainCode() uint32 {
-	if prv.domainCode != 0 {
+func (prv *Provider) DomainCode() string {
+	if prv.domainCode != "" {
 		return prv.domainCode
 	}
 
-	prv.domainCode = 0
-	for _, r := range prv.Name {
-		prv.domainCode += uint32(r)
-	}
-
+	sh2 := sha256.New()
+	sh2.Write([]byte(prv.Name))
+	hash := sh2.Sum([]byte{})
+	hexVal := fmt.Sprintf("%x", hash[:])
+	prv.domainCode = hexVal[:8]
 	return prv.domainCode
 }
 
@@ -742,4 +746,8 @@ func (prv *Provider) UpdateTemplate(name string, data []byte) (t *template.Templ
 	}
 
 	return t, err
+}
+
+func (prv *Provider) AddAppToSsoSession(jti string, spIssuer string, sas base.SamlAppSession) {
+	prv.osl.AddAppToSsoSession(jti, spIssuer, sas)
 }

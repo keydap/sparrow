@@ -103,15 +103,6 @@ func (osl *OauthSilo) StoreSsoSession(session *base.RbacSession) {
 }
 
 func (osl *OauthSilo) _storeSession(bucketName []byte, idxBuckName []byte, session *base.RbacSession) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(session)
-
-	if err != nil {
-		log.Warningf("Failed to encode RBAC session %s", err)
-		panic(err)
-	}
-
 	tx, err := osl.db.Begin(true)
 	if err != nil {
 		log.Warningf("Failed to begin transaction in session silo %s", err)
@@ -129,6 +120,19 @@ func (osl *OauthSilo) _storeSession(bucketName []byte, idxBuckName []byte, sessi
 			tx.Commit()
 		}
 	}()
+
+	osl._storeSessionUsingTx(bucketName, idxBuckName, session, tx)
+}
+
+func (osl *OauthSilo) _storeSessionUsingTx(bucketName []byte, idxBuckName []byte, session *base.RbacSession, tx *bolt.Tx) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(session)
+
+	if err != nil {
+		log.Warningf("Failed to encode RBAC session %s", err)
+		panic(err)
+	}
 
 	clBucket := tx.Bucket(bucketName)
 	key := []byte(session.Jti)
@@ -205,10 +209,15 @@ func (osl *OauthSilo) _getSession(bucketName []byte, jti string) *base.RbacSessi
 		return nil
 	}
 
+	defer tx.Rollback()
+
+	return osl._getSessionUsingTx(bucketName, jti, tx)
+}
+
+func (osl *OauthSilo) _getSessionUsingTx(bucketName []byte, jti string, tx *bolt.Tx) *base.RbacSession {
 	tBucket := tx.Bucket(bucketName)
 
 	token := tBucket.Get([]byte(jti))
-	tx.Rollback()
 
 	if len(token) == 0 {
 		return nil
@@ -217,7 +226,7 @@ func (osl *OauthSilo) _getSession(bucketName []byte, jti string) *base.RbacSessi
 	var session *base.RbacSession
 	buf := bytes.NewBuffer(token)
 	dec := gob.NewDecoder(buf)
-	err = dec.Decode(&session)
+	err := dec.Decode(&session)
 
 	if err != nil {
 		panic(err)
@@ -256,6 +265,28 @@ func (osl *OauthSilo) _deleteSession(bucketName []byte, idxBuckName []byte, jti 
 	}
 
 	return true
+}
+
+func (osl *OauthSilo) AddAppToSsoSession(jti string, spIssuer string, sas base.SamlAppSession) {
+	tx, err := osl.db.Begin(true)
+	if err != nil {
+		log.Warningf("Failed to start readonly transaction for fetching token %s", err)
+	}
+
+	defer tx.Commit()
+
+	session := osl._getSessionUsingTx(BUC_SSO_SESSIONS, jti, tx)
+	if session == nil {
+		return
+	}
+
+	if session.Apps == nil {
+		session.Apps = make(map[string]base.SamlAppSession)
+	}
+	session.Apps[spIssuer] = sas
+	// not using any locking mechanism, optimistically it is *rare* (can be a myth for sure under certain edge cases)
+	// for a user to log into two apps using the same session at the exact time there is noticeable delay in performing user actions
+	osl._storeSessionUsingTx(BUC_SSO_SESSIONS, BUC_IDX_SSO_SESSION_BY_JTI, session, tx)
 }
 
 func (osl *OauthSilo) Close() {

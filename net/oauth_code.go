@@ -35,22 +35,22 @@ const (
 type oAuthCode struct {
 	IvAsId     string // the random IV in HEX form. It will be used as the unique ID for each oAuth code
 	UserId     string
-	DomainCode uint32
+	DomainCode string // first 8 chars of domain name's SHA256 hash
 	CreatedAt  int64
 	CType      CodeType // due to inclusion of this 1 byte there will be 15 padd bytes to fit the aes block size, can be used in future
 }
 
-func newOauthCode(cl *oauth.Client, createdAt time.Time, userId string, domainCode uint32, ctype CodeType) string {
+func newOauthCode(cl *oauth.Client, createdAt time.Time, userId string, domainCode string, ctype CodeType) string {
 	iv := utils.RandBytes(aes.BlockSize)
 
-	dataLen := macLen + aes.BlockSize + 36 + 4 + 8 + 1 + 15
+	dataLen := macLen + aes.BlockSize + 36 + 8 + 8 + 1 + 11 // the last 11 are filler bytes to satisfy the block size requirement
 
 	dst := make([]byte, dataLen)
 	copy(dst[macLen:], iv)
 	copy(dst[macLen+aes.BlockSize:], []byte(userId))
-	copy(dst[macLen+aes.BlockSize+36:], utils.EncodeUint32(domainCode))
-	copy(dst[macLen+aes.BlockSize+36+4:], utils.Itob(createdAt.Unix()))
-	dst[macLen+aes.BlockSize+36+4+8] = byte(ctype)
+	copy(dst[macLen+aes.BlockSize+36:], []byte(domainCode))
+	copy(dst[macLen+aes.BlockSize+36+8:], utils.Itob(createdAt.Unix()))
+	dst[macLen+aes.BlockSize+36+8+8] = byte(ctype)
 	// leave the rest of the data as 0s
 
 	block, _ := aes.NewCipher(cl.Oauth.ServerSecret)
@@ -126,9 +126,9 @@ func decryptOauthCode(code string, cl *oauth.Client) *oAuthCode {
 	ac := &oAuthCode{}
 	ac.IvAsId = fmt.Sprintf("%x", iv)
 	ac.UserId = string(dst[:36])
-	ac.DomainCode = utils.DecodeUint32(dst[36:40])
-	ac.CreatedAt = utils.Btoi(dst[40:48])
-	ac.CType = CodeType(dst[48])
+	ac.DomainCode = string(dst[36:44])
+	ac.CreatedAt = utils.Btoi(dst[44:52])
+	ac.CType = CodeType(dst[52])
 	// leave the remaining 15 bytes
 
 	return ac

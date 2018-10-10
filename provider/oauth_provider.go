@@ -6,6 +6,10 @@ package provider
 import (
 	//logger "github.com/juju/loggo"
 	"encoding/hex"
+	"encoding/xml"
+	samlTypes "github.com/russellhaering/gosaml2/types"
+	"io/ioutil"
+	"net/http"
 	"sparrow/base"
 	"sparrow/oauth"
 	"strings"
@@ -52,6 +56,7 @@ func (pr *Provider) _toClient(rs *base.Resource) (cl *oauth.Client) {
 	cl.Desc = safeGetStrVal("descritpion", rs)
 	cl.Time = rs.GetMeta().GetValue("created").(int64)
 	cl.HomeUrl = safeGetStrVal("homeurl", rs)
+	cl.Icon = safeGetStrVal("icon", rs)
 
 	groupIdsAt := rs.GetAttr("groupids")
 	if groupIdsAt != nil {
@@ -77,10 +82,23 @@ func (pr *Provider) _toClient(rs *base.Resource) (cl *oauth.Client) {
 	}
 
 	samlConf := &oauth.ClientSamlConf{}
-	samlConf.SLOUrl = safeGetStrVal("slourl", rs)
-	samlConf.MetaUrl = safeGetStrVal("metaurl", rs)
-	samlConf.IdpIssuer = safeGetStrVal("idpissuer", rs)
 	samlConf.SpIssuer = safeGetStrVal("spissuer", rs)
+	samlConf.MetaUrl = safeGetStrVal("metaurl", rs)
+	if len(samlConf.MetaUrl) > 0 {
+		spmd := pr.SamlMdCache[samlConf.SpIssuer]
+		if spmd == nil {
+			spmd, err := parseMetadata(samlConf.MetaUrl)
+			if err != nil {
+				log.Warningf("failed to parse the SAML metadata of app %s from location %s", cl.Name, samlConf.MetaUrl)
+			} else {
+				pr.SamlMdCache[samlConf.SpIssuer] = spmd
+			}
+		}
+		samlConf.MetaData = spmd
+	}
+
+	samlConf.SLOUrl = safeGetStrVal("slourl", rs)
+	samlConf.IdpIssuer = safeGetStrVal("idpissuer", rs)
 
 	samlAt := rs.GetAttr("samlattributes")
 	samlConf.Attributes = parseSsoAttributes(samlAt)
@@ -170,4 +188,26 @@ func (pr *Provider) DeleteSsoSession(opCtx *base.OpContext) bool {
 	deleted := pr.osl.DeleteSsoSession(opCtx.Session.Jti)
 	pr.Al.LogDelSession(opCtx, deleted)
 	return deleted
+}
+
+func parseMetadata(location string) (spmd *samlTypes.SPSSODescriptor, err error) {
+	// TODO add support for trusting self-signed certificates
+	resp, err := http.Get(location)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = xml.Unmarshal(data, spmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return spmd, err
 }

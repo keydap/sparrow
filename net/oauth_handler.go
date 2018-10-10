@@ -35,7 +35,7 @@ const (
 type authFlow struct {
 	BitFlag         uint16 // holds the state of login options in various bits
 	UserId          string
-	DomainCode      uint32
+	DomainCode      string
 	TotpSecret      string // the TOTP 2F secret
 	PasswdFailCount uint8
 	OtpFailCount    uint8
@@ -358,6 +358,7 @@ func setAuthFlow(af *authFlow, w http.ResponseWriter) {
 	ck := &http.Cookie{}
 	ck.HttpOnly = true
 	ck.Name = AUTHFLOW_COOKIE
+	ck.SameSite = http.SameSiteStrictMode
 	ck.Path = "/"
 	ck.Value = ""
 

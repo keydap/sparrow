@@ -4,6 +4,7 @@
 package net
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"sparrow/oauth"
@@ -17,10 +18,11 @@ func TestCodeGeneration(t *testing.T) {
 	id := utils.GenUUID()
 
 	domain := "example.com"
-	var domCode uint32
-	for _, r := range domain {
-		domCode += uint32(r)
-	}
+	sh2 := sha256.New()
+	sh2.Write([]byte(domain))
+	hash := sh2.Sum([]byte{})
+	hexVal := fmt.Sprintf("%x", hash[:])
+	domCode := hexVal[:8]
 
 	cl := &oauth.Client{}
 	cl.Id = id
@@ -42,7 +44,7 @@ func TestCodeGeneration(t *testing.T) {
 	}
 
 	if ac.DomainCode != domCode {
-		t.Errorf("Decrypted domain code does not match encrypted one %d != %d", domCode, ac.DomainCode)
+		t.Errorf("Decrypted domain code does not match encrypted one %s != %s", domCode, ac.DomainCode)
 	}
 
 	codeSlice := []byte(code)

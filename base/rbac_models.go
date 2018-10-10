@@ -53,6 +53,12 @@ type Permission struct {
 	evaluator     Evaluator                  `json:"-"`
 }
 
+type SamlAppSession struct {
+	SessionIndex string
+	NameID       string
+	NameIDFormat string
+}
+
 type RbacSession struct {
 	Roles    map[string]string              `json:"roles"`
 	EffPerms map[string]*ResourcePermission `json:"-"`
@@ -62,7 +68,7 @@ type RbacSession struct {
 	Iat      int64                          `json:"iat"`
 	Jti      string                         `json:"jti"`
 	Ito      string                         `json:"ito"` // The ID of the oAuth client to who this JWT was sent to
-	Apps     map[string]string              `json:"-"`   // a map of application IDs and their names
+	Apps     map[string]SamlAppSession      `json:"-"`   // a map of application SAML issuer IDs and their SessionIndexes
 	//Aud      string         `json:"aud"`
 	//Nbf	int64 `json:"nbf"`
 }

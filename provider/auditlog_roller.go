@@ -20,7 +20,7 @@ func (al *AuditLogger) rollLog(dbFilePath string) {
 	auditArchiveDir := filepath.Join(al.prv.layout.DataDir, "archived-auditlogs")
 	err = os.Mkdir(auditArchiveDir, utils.DIR_PERM)
 	if !os.IsExist(err) {
-		log.Warningf("could not create archive directory for audit logs %s", auditArchiveDir)
+		log.Warningf("could not create archive directory for audit logs %s %v", auditArchiveDir, err)
 		return
 	}
 

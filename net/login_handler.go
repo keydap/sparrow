@@ -305,7 +305,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	if areq.RespType == "code" || strings.HasPrefix(areq.RespType, "code ") {
 		ttl := time.Now()
 		var userId string
-		var domainCode uint32
+		var domainCode string
 
 		if af != nil {
 			userId = af.UserId
@@ -396,7 +396,7 @@ func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Pro
 	iat := time.Now().Unix()
 	idt["iat"] = iat
 	idt["exp"] = iat + 600 // TODO config
-	idt["iss"] = issuerUrl
+	idt["iss"] = homeUrl
 	idt["jti"] = utils.NewRandShaStr()
 	// if sub is not already filled with custom attribute config
 	// fill it with the default value
@@ -498,9 +498,10 @@ func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider,
 
 	cookie := &http.Cookie{}
 	cookie.Path = "/"
-	cookie.MaxAge = prv.Config.Oauth.SsoSessionIdleTime
+	cookie.MaxAge = prv.Config.Oauth.SsoSessionMaxLife
 	cookie.Expires = time.Now().Add(time.Duration(cookie.MaxAge) * time.Second)
 	cookie.HttpOnly = true
+	cookie.SameSite = http.SameSiteStrictMode
 	cookie.Name = SSO_COOKIE
 	cookie.Value = session.Jti
 	//cookie.Secure
