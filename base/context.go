@@ -84,11 +84,11 @@ type SearchRequest struct {
 }
 
 type AuthRequest struct {
-	Username string
-	Domain   string
-	Password string
-	ClientIP string
-	FromLdap bool
+	Username string `json:"username"`
+	Domain   string `json:"domain"`
+	Password string `json:"password"`
+	ClientIP string `json:"-"`
+	FromLdap bool   `json:"-"`
 }
 
 type VerifyOtpRequest struct {

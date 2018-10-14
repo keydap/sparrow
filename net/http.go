@@ -12,6 +12,7 @@ import (
 	"github.com/mholt/caddy"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"html/template"
+	"io/ioutil"
 	"net/http"
 	"sparrow/base"
 	"sparrow/conf"
@@ -938,7 +939,8 @@ func addUiRedirectTo(r *http.Request) {
 func directLogin(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	ar := base.AuthRequest{}
-	err := json.NewDecoder(r.Body).Decode(&ar)
+	data, _ := ioutil.ReadAll(r.Body)
+	err := json.Unmarshal(data, &ar)
 	if err != nil {
 		e := base.NewBadRequestError("Invalid authentication request " + err.Error())
 		writeError(w, e)
