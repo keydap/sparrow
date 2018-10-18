@@ -119,7 +119,7 @@ func initHome(srvHome string) *conf.ServerConf {
 				tmp.Https = true
 			}
 
-			data, err := json.Marshal(tmp)
+			data, err := json.MarshalIndent(tmp, "", "  ")
 			if err != nil {
 				panic(err)
 			}
