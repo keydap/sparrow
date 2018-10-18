@@ -6,6 +6,7 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,7 +20,7 @@ import (
 	"time"
 )
 
-const baseUrl = "http://localhost:7090/v2"
+const baseUrl = "https://localhost:7090/v2"
 const scimContentType = "application/scim+json; charset=UTF-8"
 
 type authRequest struct {
@@ -27,6 +28,9 @@ type authRequest struct {
 	Domain   string `json:"domain"`
 	Password string `json:"password"`
 }
+
+var tlsConf = &tls.Config{InsecureSkipVerify: true}
+var transport = &http.Transport{TLSClientConfig: tlsConf}
 
 func TestCreateResourcesPerf(t *testing.T) {
 	if true {
@@ -52,7 +56,7 @@ func TestCreateResourcesPerf(t *testing.T) {
 	count := 0
 
 	reqUrl, _ := url.Parse(baseUrl + "/Users")
-	client := &http.Client{}
+	client := &http.Client{Transport: transport}
 	req := &http.Request{Method: "POST", URL: reqUrl}
 	req.Header = make(map[string][]string)
 	req.Header.Add("Authorization", "Bearer "+token)
@@ -123,7 +127,7 @@ func BenchmarkTestSearchResourcesPerf(t *testing.B) {
 	}
 
 	reqUrl, _ := url.Parse(baseUrl + "/Users/.search")
-	client := &http.Client{}
+	client := &http.Client{Transport: transport}
 
 	//start := time.Now()
 	//fmt.Println(t.N)
@@ -155,8 +159,149 @@ func BenchmarkTestSearchResourcesPerf(t *testing.B) {
 		resp.Body.Close()
 	}
 
-	//durSec := time.Now().Sub(start).Seconds()
-	//fmt.Printf("total number of seconds for %d search iterations %f", t.N, durSec)
+	//dur := time.Now().Sub(start).String()
+	//fmt.Printf("total number of seconds for %d search iterations %s\n", t.N, dur)
+}
+
+func BenchmarkTestSearchAllOfSingleResourceType(t *testing.B) {
+	if true {
+		fmt.Println("Not running BenchmarkTestSearchAllOfSingleResourceType")
+		return
+	}
+
+	token, err := login()
+	if err != nil {
+		t.Logf("%s", err)
+		t.FailNow()
+	}
+
+	reqUrl, _ := url.Parse(baseUrl + "/Users")
+	client := &http.Client{Transport: transport}
+
+	start := time.Now()
+	//fmt.Println(t.N)
+	for i := 0; i < t.N; i++ {
+		req := &http.Request{Method: "GET", URL: reqUrl}
+		req.Header = make(map[string][]string)
+		req.Header.Add("Authorization", "Bearer "+token)
+
+		resp, se := client.Do(req)
+		if se != nil {
+			fmt.Printf("Error while searching User resource %#v\n", se)
+			t.Fail()
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			var lr base.ListResponse
+			decoder := json.NewDecoder(resp.Body)
+			decoder.Decode(&lr)
+			//durSec := time.Now().Sub(start).Seconds()
+			//fmt.Printf("%d resources fetched in %fsec\n", lr.TotalResults, durSec)
+		} else {
+			fmt.Println(resp.Status)
+			data, _ := ioutil.ReadAll(resp.Body)
+			fmt.Printf("%s", string(data))
+		}
+
+		resp.Body.Close()
+	}
+
+	dur := time.Now().Sub(start).String()
+	fmt.Printf("total number of seconds for %d search iterations %s\n", t.N, dur)
+}
+
+func BenchmarkTestSingleUser(t *testing.B) {
+	if true {
+		fmt.Println("Not running BenchmarkTestSingleUser")
+		return
+	}
+
+	token, err := login()
+	if err != nil {
+		t.Logf("%s", err)
+		t.FailNow()
+	}
+
+	reqUrl, _ := url.Parse(baseUrl + "/Users/00000000-0000-4000-4000-000000000000") // admin user
+	client := &http.Client{Transport: transport}
+
+	start := time.Now()
+	//fmt.Println(t.N)
+	for i := 0; i < t.N; i++ {
+		req := &http.Request{Method: "GET", URL: reqUrl}
+		req.Header = make(map[string][]string)
+		req.Header.Add("Authorization", "Bearer "+token)
+
+		resp, se := client.Do(req)
+		if se != nil {
+			fmt.Printf("Error while searching User resource %#v\n", se)
+			t.Fail()
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			var lr base.ListResponse
+			decoder := json.NewDecoder(resp.Body)
+			decoder.Decode(&lr)
+			//durSec := time.Now().Sub(start).Seconds()
+			//fmt.Printf("%d resources fetched in %fsec\n", lr.TotalResults, durSec)
+		} else {
+			fmt.Println(resp.Status)
+			data, _ := ioutil.ReadAll(resp.Body)
+			fmt.Printf("%s", string(data))
+		}
+
+		resp.Body.Close()
+	}
+
+	dur := time.Now().Sub(start).String()
+	fmt.Printf("total number of seconds for %d search iterations %s\n", t.N, dur)
+}
+
+func BenchmarkTestSingleUserUsingFilter(t *testing.B) {
+	if true {
+		fmt.Println("Not running BenchmarkTestSearchAllOfSingleResourceType")
+		return
+	}
+
+	token, err := login()
+	if err != nil {
+		t.Logf("%s", err)
+		t.FailNow()
+	}
+
+	reqUrl, _ := url.Parse(baseUrl + "/Users?filter=" + url.QueryEscape("id EQ \"00000000-0000-4000-4000-000000000000\"")) // admin user
+	client := &http.Client{Transport: transport}
+
+	start := time.Now()
+	//fmt.Println(t.N)
+	for i := 0; i < t.N; i++ {
+		req := &http.Request{Method: "GET", URL: reqUrl}
+		req.Header = make(map[string][]string)
+		req.Header.Add("Authorization", "Bearer "+token)
+
+		resp, se := client.Do(req)
+		if se != nil {
+			fmt.Printf("Error while searching User resource %#v\n", se)
+			t.Fail()
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			var lr base.ListResponse
+			decoder := json.NewDecoder(resp.Body)
+			decoder.Decode(&lr)
+			//durSec := time.Now().Sub(start).Seconds()
+			//fmt.Printf("%d resources fetched in %fsec\n", lr.TotalResults, durSec)
+		} else {
+			fmt.Println(resp.Status)
+			data, _ := ioutil.ReadAll(resp.Body)
+			fmt.Printf("%s", string(data))
+		}
+
+		resp.Body.Close()
+	}
+
+	dur := time.Now().Sub(start).String()
+	fmt.Printf("BenchmarkTestSingleUserUsingFilter: total number of seconds for %d search iterations %s\n", t.N, dur)
 }
 
 func login() (token string, err error) {
@@ -171,7 +316,8 @@ func login() (token string, err error) {
 	enc.Encode(&ar)
 
 	fmt.Println(string(buf.Bytes()))
-	resp, err := http.Post(baseUrl+"/directLogin", "application/json", &buf)
+	client := &http.Client{Transport: transport}
+	resp, err := client.Post(baseUrl+"/directLogin", "application/json", &buf)
 	if err != nil {
 		return "", err
 	}
