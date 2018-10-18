@@ -59,14 +59,17 @@
     },
 
     "oauth": {
-        "tokenTtl": 28800,
+        "tokenTtl": 1296000,
         "ssoSessionIdleTime": 3600,
-        "tokenPurgeInterval": 600,
+        "ssoSessionMaxLife": 86400,
+        "tokenPurgeInterval": 3600,
         "notes": ""
     },
 
     "ppolicy": {
-        "passwordHashAlgo": "ssha256"
+        "passwordHashAlgo": "ssha256",
+        "lockAccAfterNumFail": 10,
+        "unlockAccAfterSec": 600
     },
 
     "rfc2307bis": {
@@ -111,5 +114,9 @@
 
             "notes": ""
         }
-    ]
+    ],
+
+    "replication": {
+
+    }
 }
