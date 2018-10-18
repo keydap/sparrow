@@ -91,6 +91,7 @@ func createTestUser() *base.Resource {
 		panic(err)
 	}
 
+	rs.AddSA("schemas", []string{rt.Schema})
 	return rs
 }
 

@@ -154,6 +154,10 @@ func prCandidates(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, s
 		return 0
 	}
 
+	if node.Name == "id" { // for "id pr" complete db scan is needed
+		return math.MaxInt64
+	}
+
 	idx := sl.indices[rt.Name][node.Name]
 
 	var count int64
@@ -511,6 +515,9 @@ func compareScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl
 }
 
 func presenceScan(node *base.FilterNode, rt *schema.ResourceType, tx *bolt.Tx, sl *Silo) int64 {
+	if node.Name == "id" { // for "id pr" complete db scan is needed
+		return math.MaxInt64
+	}
 	// should we consider the count for more than one resource if searched at the server root? YES
 	atType := rt.GetAtType(node.Name)
 	node.SetAtType(atType)

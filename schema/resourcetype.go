@@ -108,6 +108,11 @@ func NewResourceType(data []byte, sm map[string]*Schema) (*ResourceType, error) 
 	mainSchema := rt.schemas[rt.Schema]
 	// common attributes
 	addCommonAttrs(mainSchema)
+	// it is important to validate the schema again after adding common attributes
+	err = validate(mainSchema)
+	if err != nil {
+		panic(err)
+	}
 
 	rt.UniqueAts = append(rt.UniqueAts, mainSchema.UniqueAts...)
 	copyReturnAttrs(rt, mainSchema)
@@ -166,6 +171,7 @@ func addCommonAttrs(mainSchema *Schema) {
 	idAttr.CaseExact = true
 	idAttr.MultiValued = false
 	idAttr.Mutability = "readonly"
+	idAttr.Uniqueness = "server"
 	idAttr.SchemaId = mainSchema.Id
 	mainSchema.Attributes = append(mainSchema.Attributes, idAttr)
 	mainSchema.AttrMap[idAttr.Name] = idAttr
@@ -204,17 +210,17 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaResTypeAttr.Mutability = "readonly"
 	metaResTypeAttr.SchemaId = mainSchema.Id
 	metaResTypeAttr.parent = metaAttr
-	metaAttr.SubAttrMap[strings.ToLower(metaResTypeAttr.Name)] = metaResTypeAttr
+	metaAttr.SubAttrMap[metaResTypeAttr.NormName] = metaResTypeAttr
 
 	// meta.created
 	metaCreatedAttr := newAttrType()
 	metaCreatedAttr.Name = "created"
-	metaCreatedAttr.NormName = metaCreatedAttr.Name
+	metaCreatedAttr.NormName = strings.ToLower(metaCreatedAttr.Name)
 	metaCreatedAttr.Type = "datetime"
 	metaCreatedAttr.Mutability = "readonly"
 	metaCreatedAttr.SchemaId = mainSchema.Id
 	metaCreatedAttr.parent = metaAttr
-	metaAttr.SubAttrMap[strings.ToLower(metaCreatedAttr.Name)] = metaCreatedAttr
+	metaAttr.SubAttrMap[metaCreatedAttr.NormName] = metaCreatedAttr
 
 	// meta.lastModified
 	metaLastModAttr := newAttrType()
@@ -224,26 +230,33 @@ func addCommonAttrs(mainSchema *Schema) {
 	metaLastModAttr.Mutability = "readonly"
 	metaLastModAttr.SchemaId = mainSchema.Id
 	metaLastModAttr.parent = metaAttr
-	metaAttr.SubAttrMap[strings.ToLower(metaLastModAttr.Name)] = metaLastModAttr
+	metaAttr.SubAttrMap[metaLastModAttr.NormName] = metaLastModAttr
 
 	// meta.location
 	metaLocAttr := newAttrType()
 	metaLocAttr.Name = "location"
-	metaLocAttr.NormName = metaLocAttr.Name
+	metaLocAttr.NormName = strings.ToLower(metaLocAttr.Name)
 	metaLocAttr.Mutability = "readonly"
 	metaLocAttr.SchemaId = mainSchema.Id
 	metaLocAttr.parent = metaAttr
-	metaAttr.SubAttrMap[strings.ToLower(metaLocAttr.Name)] = metaLocAttr
+	metaAttr.SubAttrMap[metaLocAttr.NormName] = metaLocAttr
 
 	// meta.version
 	metaVerAttr := newAttrType()
 	metaVerAttr.Name = "version"
-	metaVerAttr.NormName = metaVerAttr.Name
+	metaVerAttr.NormName = strings.ToLower(metaVerAttr.Name)
 	metaVerAttr.CaseExact = true
 	metaVerAttr.Mutability = "readonly"
 	metaVerAttr.SchemaId = mainSchema.Id
 	metaVerAttr.parent = metaAttr
-	metaAttr.SubAttrMap[strings.ToLower(metaVerAttr.Name)] = metaVerAttr
+	metaAttr.SubAttrMap[metaVerAttr.NormName] = metaVerAttr
+
+	metaAttr.SubAttributes = make([]*AttrType, len(metaAttr.SubAttrMap))
+	i := 0
+	for _, v := range metaAttr.SubAttrMap {
+		metaAttr.SubAttributes[i] = v
+		i++
+	}
 	setAttrDefaults(metaAttr)
 }
 

@@ -731,9 +731,12 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 					}
 				}
 			}
-			err := prIdx.add(name, rid, tx) // do not add sa.Name that will lose the attribute path
-			if err != nil {
-				panic(err)
+
+			if name != "id" { // do not add resource's id attribute - that will just blow up the index unnecessarily
+				err := prIdx.add(name, rid, tx) // do not add sa.Name that will lose the attribute path
+				if err != nil {
+					panic(err)
+				}
 			}
 			continue
 		}

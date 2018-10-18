@@ -22,6 +22,8 @@ type AuditLogger struct {
 	prv          *Provider // it is necessary to hold the reference to provider instance for rolling audit logs
 }
 
+var aeschemasAt = []string{"urn:keydap:params:scim:schemas:core:2.0:AuditEvent"}
+
 func NewLocalAuditLogger(prv *Provider) *AuditLogger {
 	al := &AuditLogger{}
 	al.rt = prv.RsTypes["AuditEvent"]
@@ -63,7 +65,10 @@ loop:
 
 			log.Debugf("%s", ae.Id)
 			res := al.eventToRes(ae)
-			al.sl.InsertInternal(res)
+			_, err := al.sl.InsertInternal(res)
+			if err != nil {
+				log.Warningf("failed to insert audit log event")
+			}
 
 		case now := <-al.roller:
 			log.Infof("rolling up the audit log")
@@ -95,6 +100,7 @@ func (al *AuditLogger) eventToRes(ae base.AuditEvent) *base.Resource {
 	res.AddSA("payload", ae.Payload)
 	res.AddSA("statuscode", ae.StatusCode)
 	res.AddSA("uri", ae.Uri)
+	res.AddSA("schemas", aeschemasAt)
 
 	return res
 }
