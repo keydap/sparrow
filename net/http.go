@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	logger "github.com/juju/loggo"
 	"github.com/mholt/caddy"
+	"github.com/mholt/caddy/caddy/caddymain"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"html/template"
 	"io/ioutil"
@@ -110,6 +111,7 @@ func startHttp() {
 		ServerTypeName: "http",
 	}
 
+	caddymain.EnableTelemetry = false // disables Caddy's telemetry
 	i, err := caddy.Start(input)
 	if err != nil {
 		panic(err)
@@ -188,7 +190,7 @@ func setup(c *caddy.Controller) error {
 	// SAMLv2 requests
 	samlRouter := router.PathPrefix(SAML_BASE).Subrouter()
 	samlRouter.HandleFunc("/idp/meta/{domain}", serveIdpMetadata).Methods("GET")
-	samlRouter.HandleFunc("/idp/logout", handleSamlLogout).Methods("POST")
+	samlRouter.HandleFunc("/idp/logout", handleSamlLogout).Methods("GET", "POST")
 	// match /saml with any number of query parameters
 	samlRouter.HandleFunc("/idp", handleSamlReq).Methods("GET", "POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
 		return true
