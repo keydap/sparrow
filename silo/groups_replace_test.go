@@ -63,8 +63,18 @@ func TestGroupAddAndDelete(t *testing.T) {
 	u1Id := user1.GetId()
 	u2Id := user2.GetId()
 
+	_, err := sl.Get(u1Id, restypes[userResName])
+	if err != nil {
+		t.Errorf("failed to find the first user")
+	}
+
+	_, err = sl.Get(u2Id, restypes[userResName])
+	if err != nil {
+		t.Errorf("failed to find the first user")
+	}
+
 	group := prepareGroup(user1, user2)
-	group, err := sl.Insert(group)
+	group, err = sl.Insert(group)
 	if err != nil {
 		t.Errorf("Failed to insert a group with users %s , %s (%#v)", u1Id, u2Id, err)
 	}
