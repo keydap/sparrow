@@ -145,7 +145,7 @@ func handleSamlLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	samlReq := r.Form.Get("SAMLRequest")
-	var logoutReq LogoutRequest
+	var logoutReq *LogoutRequest
 	if samlReq != "" {
 		data, err := readSamlReq(r)
 		if err == nil {
@@ -161,7 +161,7 @@ func handleSamlLogout(w http.ResponseWriter, r *http.Request) {
 		log.Debugf("no session exists, redirecting to the relaystate %s", relayState)
 		http.Redirect(w, r, relayState, http.StatusFound)
 		return
-	} else if &logoutReq != nil { //
+	} else if logoutReq != nil { //
 		_handleSamlBackChannelLogoutReq(r, w, logoutReq)
 		return
 	}
@@ -484,7 +484,7 @@ func readSamlReq(r *http.Request) (data []byte, err error) {
 	return data, nil
 }
 
-func _handleSamlBackChannelLogoutReq(r *http.Request, w http.ResponseWriter, logoutReq LogoutRequest) {
+func _handleSamlBackChannelLogoutReq(r *http.Request, w http.ResponseWriter, logoutReq *LogoutRequest) {
 	samlSessId := logoutReq.SessionIndex
 	// extract SSO session ID
 	pos := strings.Index(samlSessId, ".")
