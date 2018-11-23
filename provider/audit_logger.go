@@ -100,6 +100,7 @@ func (al *AuditLogger) eventToRes(ae base.AuditEvent) *base.Resource {
 	res.AddSA("payload", ae.Payload)
 	res.AddSA("statuscode", ae.StatusCode)
 	res.AddSA("uri", ae.Uri)
+	res.AddSA("actorname", ae.ActorName)
 	res.AddSA("schemas", aeschemasAt)
 
 	return res
@@ -133,6 +134,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		gc := ctx.(*base.GetContext)
 		ae.IpAddress = gc.ClientIP
 		ae.ActorId = gc.Session.Sub
+		ae.ActorName = gc.Session.Username
 		ae.Operation = "Get"
 		if gc.Rt == al.rt {
 			ae.Operation = "AuditGet"
@@ -154,6 +156,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		sc := ctx.(*base.SearchContext)
 		ae.IpAddress = sc.ClientIP
 		ae.ActorId = sc.Session.Sub
+		ae.ActorName = sc.Session.Username
 		ae.Operation = "Search"
 		ae.Uri = sc.Endpoint
 		singleRt := (len(sc.ResTypes) == 1)
@@ -177,6 +180,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		cc := ctx.(*base.CreateContext)
 		ae.IpAddress = cc.ClientIP
 		ae.ActorId = cc.Session.Sub
+		ae.ActorName = cc.Session.Username
 		ae.Operation = "Create"
 		if res != nil {
 			ae.Uri = res.GetType().Endpoint + "/" + res.GetId()
@@ -190,6 +194,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		pc := ctx.(*base.PatchContext)
 		ae.IpAddress = pc.ClientIP
 		ae.ActorId = pc.Session.Sub
+		ae.ActorName = pc.Session.Username
 		ae.Operation = "Patch"
 		ae.Uri = pc.Endpoint
 		if err == nil {
@@ -201,6 +206,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		rc := ctx.(*base.ReplaceContext)
 		ae.IpAddress = rc.ClientIP
 		ae.ActorId = rc.Session.Sub
+		ae.ActorName = rc.Session.Username
 		ae.Operation = "Replace"
 		ae.Uri = rc.Endpoint
 		if err == nil {
@@ -212,6 +218,7 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		dc := ctx.(*base.DeleteContext)
 		ae.IpAddress = dc.ClientIP
 		ae.ActorId = dc.Session.Sub
+		ae.ActorName = dc.Session.Username
 		ae.Operation = "Delete"
 		ae.Uri = dc.Endpoint
 		if err == nil {
@@ -248,6 +255,7 @@ func (al *AuditLogger) _logAuth(rid string, username string, ip string, status b
 	ae := base.AuditEvent{}
 	ae.IpAddress = ip
 	ae.ActorId = rid
+	ae.ActorName = username
 	ae.Operation = "PasswordCheck"
 	_setDesc(username, &ae, status)
 	al.LogEvent(ae)
@@ -291,6 +299,7 @@ func (al *AuditLogger) _logOtp(rid string, clientIP string, user *base.Resource,
 	ae := base.AuditEvent{}
 	ae.IpAddress = clientIP
 	ae.ActorId = rid
+	ae.ActorName = user.GetAttr("username").GetSimpleAt().GetStringVal()
 	ae.Operation = "OtpCheck"
 	username := ""
 	if user != nil {
@@ -316,6 +325,7 @@ func (al *AuditLogger) _logChangePasswd(rid string, clientIP string, user *base.
 	ae := base.AuditEvent{}
 	ae.IpAddress = clientIP
 	ae.ActorId = rid
+	ae.ActorName = user.GetAttr("username").GetSimpleAt().GetStringVal()
 	ae.Operation = "ChangePassword"
 	username := ""
 	if user != nil {
@@ -357,6 +367,7 @@ func (al *AuditLogger) _logDelSession(opCtx *base.OpContext, deleted bool) {
 	ae := base.AuditEvent{}
 	ae.IpAddress = opCtx.ClientIP
 	ae.ActorId = opCtx.Session.Sub
+	ae.ActorName = opCtx.Session.Username
 	ae.Uri = opCtx.Session.Jti
 	ae.Operation = "Logout"
 	if deleted {

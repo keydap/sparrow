@@ -36,6 +36,7 @@ func (engine *RbacEngine) NewRbacSession(rs *base.Resource) *base.RbacSession {
 	session.Iat = time.Now().Unix()
 	session.Exp = session.Iat + engine.TokenTtl
 	session.Jti = utils.NewRandShaStr()
+	session.Username = rs.GetAttr("username").GetSimpleAt().GetStringVal()
 
 	groups := rs.GetAttr("groups")
 	if groups == nil {

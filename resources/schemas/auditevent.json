@@ -26,6 +26,17 @@
             "uniqueness":"none"
         },
         {
+            "name":"actorName",
+            "type":"string",
+            "multiValued":false,
+            "description":"Name of the acting resource",
+            "required":false,
+            "caseExact":false,
+            "mutability":"immutable",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
             "name":"operation",
             "type":"string",
             "multiValued":false,

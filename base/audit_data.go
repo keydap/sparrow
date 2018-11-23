@@ -8,6 +8,7 @@ type AuditEvent struct {
 	Id         string // CSN of the event
 	Uri        string // URI of the endpoint
 	ActorId    string // user's ID, can be null
+	ActorName  string // user's name, can be null
 	Operation  string // operation
 	StatusCode int    // http status code
 	Desc       string // description of the error

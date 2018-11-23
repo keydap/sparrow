@@ -69,6 +69,7 @@ type RbacSession struct {
 	Jti      string                         `json:"jti"`
 	Ito      string                         `json:"ito"` // The ID of the oAuth client to who this JWT was sent to
 	Apps     map[string]SamlAppSession      `json:"-"`   // a map of application SAML issuer IDs and their SessionIndexes
+	Username string                         `json:"-"`
 	//Aud      string         `json:"aud"`
 	//Nbf	int64 `json:"nbf"`
 }
