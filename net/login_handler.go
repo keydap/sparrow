@@ -341,7 +341,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	if areq.RespType == "id_token" || strings.HasSuffix(areq.RespType, " id_token") {
 		// create RbacSession and then generate ID Token
 		idt := createIdToken(session, cl, pr)
-		idt["nonce"] = areq.Nonce // TODO set the nonce to the UUID of the session
+		idt["nonce"] = areq.Nonce
 		strIdt := oauth.ToJwt(idt, srvConf.PrivKey)
 		if hasCode {
 			tmpUri += "&"
@@ -391,18 +391,24 @@ func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Pro
 		ssoAt.GetValueInto(user, idt)
 	}
 
-	idt["aud"] = cl.Oauth.RedUri
+	idt["aud"] = cl.Id
 	idt["d"] = session.Domain
 	iat := time.Now().Unix()
 	idt["iat"] = iat
-	idt["exp"] = iat + 600 // TODO config
-	idt["iss"] = homeUrl
+	idt["exp"] = iat + cl.Oauth.TokenValidity
+	idt["iss"] = homeUrl + "/" + session.Domain
 	idt["jti"] = utils.NewRandShaStr()
 	// if sub is not already filled with custom attribute config
 	// fill it with the default value
 	if _, ok := idt["sub"]; !ok {
 		idt["sub"] = session.Sub
 	}
+
+	// the below claims are not supported yet
+	// and deleting them as a defense against spoofing them using app attribute configuration
+	delete(idt, "acr")
+	delete(idt, "amr")
+	delete(idt, "azp")
 
 	return idt
 }
