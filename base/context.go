@@ -8,10 +8,11 @@ import (
 )
 
 type OpContext struct {
-	Session  *RbacSession
-	Sso      bool
-	ClientIP string
-	Endpoint string
+	Session        *RbacSession
+	Sso            bool
+	UpdatedSession bool
+	ClientIP       string
+	Endpoint       string
 }
 
 type CreateContext struct {

@@ -22,6 +22,7 @@ import (
 	"sparrow/utils"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var log logger.Logger
@@ -45,7 +46,7 @@ var API_BASE = "/v2"       // NO slash at the end
 var OAUTH_BASE = "/oauth2" // NO slash at the end
 var SAML_BASE = "/saml"    // NO slash at the end
 var commaByte = []byte{','}
-
+var fiveMin = int64(5 * 60)
 var defaultDomain = "example.com"
 var srvConf *conf.ServerConf
 var templates map[string]*template.Template
@@ -890,7 +891,7 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(SparrowVersion))
+	w.Write([]byte(aboutStr))
 }
 
 func serveUI(w http.ResponseWriter, r *http.Request) {
@@ -1026,6 +1027,10 @@ func handleResRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		replaceResource(hc)
 	}
+
+	if opCtx.UpdatedSession {
+		setSsoCookie(pr, opCtx.Session, w)
+	}
 }
 
 func badContentType(w http.ResponseWriter, r *http.Request) bool {
@@ -1042,6 +1047,12 @@ func badContentType(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func createOpCtx(r *http.Request) (opCtx *base.OpContext, err error) {
+	pr, err := getPrFromParam(r)
+
+	if err != nil {
+		return nil, err
+	}
+
 	opCtx = &base.OpContext{}
 
 	authzHeader := r.Header.Get("Authorization")
@@ -1057,12 +1068,21 @@ func createOpCtx(r *http.Request) (opCtx *base.OpContext, err error) {
 		}
 	}
 
-	session, err := parseToken(authzHeader, opCtx, r)
+	session, err := parseToken(authzHeader, opCtx, pr)
 	if err != nil {
 		return nil, err
 	}
 
 	opCtx.Session = session
+	if opCtx.Sso {
+		// update the last accessed time of the session
+		now := time.Now().Unix()
+		if (now - session.LastAccAt) >= fiveMin {
+			session.LastAccAt = now
+			pr.StoreSsoSession(session)
+			opCtx.UpdatedSession = true
+		}
+	}
 	opCtx.ClientIP = utils.GetRemoteAddr(r)
 	opCtx.Endpoint = getEndpoint(r)
 
@@ -1126,13 +1146,7 @@ func parseAttrParam(attrParam string, rt *schema.ResourceType) map[string]*base.
 	return nil
 }
 
-func parseToken(token string, opCtx *base.OpContext, r *http.Request) (session *base.RbacSession, err error) {
-	pr, err := getPrFromParam(r)
-
-	if err != nil {
-		return nil, err
-	}
-
+func parseToken(token string, opCtx *base.OpContext, pr *provider.Provider) (session *base.RbacSession, err error) {
 	if opCtx.Sso {
 		session = pr.GetSsoSession(token)
 	} else {

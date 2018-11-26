@@ -34,6 +34,7 @@ func (engine *RbacEngine) NewRbacSession(rs *base.Resource) *base.RbacSession {
 	//session.Aud = ""
 	session.Domain = engine.Domain
 	session.Iat = time.Now().Unix()
+	session.LastAccAt = session.Iat
 	session.Exp = session.Iat + engine.TokenTtl
 	session.Jti = utils.NewRandShaStr()
 	session.Username = rs.GetAttr("username").GetSimpleAt().GetStringVal()

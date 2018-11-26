@@ -496,16 +496,7 @@ func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider,
 	session := prv.GenSessionForUser(user)
 	prv.StoreSsoSession(session)
 
-	cookie := &http.Cookie{}
-	cookie.Path = "/"
-	cookie.MaxAge = prv.Config.Oauth.SsoSessionMaxLife
-	cookie.Expires = time.Now().Add(time.Duration(cookie.MaxAge) * time.Second)
-	cookie.HttpOnly = true
-	cookie.SameSite = http.SameSiteStrictMode
-	cookie.Name = SSO_COOKIE
-	cookie.Value = session.Jti
-	//cookie.Secure
-	http.SetCookie(w, cookie)
+	setSsoCookie(prv, session, w)
 
 	if af.FromOauth() {
 		log.Debugf("sending oauth request for consent")
@@ -546,4 +537,17 @@ func handleChangePasswordReq(w http.ResponseWriter, r *http.Request) {
 	af.SetChangePassword(true)
 	setAuthFlow(af, w)
 	http.Redirect(w, r, path, http.StatusFound)
+}
+
+func setSsoCookie(pr *provider.Provider, session *base.RbacSession, w http.ResponseWriter) {
+	cookie := &http.Cookie{}
+	cookie.Path = "/"
+	cookie.MaxAge = pr.Config.Oauth.SsoSessionMaxLife
+	cookie.Expires = time.Now().Add(time.Duration(cookie.MaxAge) * time.Second)
+	cookie.HttpOnly = true
+	cookie.SameSite = http.SameSiteStrictMode
+	cookie.Name = SSO_COOKIE
+	cookie.Value = session.Jti
+	//cookie.Secure
+	http.SetCookie(w, cookie)
 }

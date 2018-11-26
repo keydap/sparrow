@@ -60,16 +60,17 @@ type SamlAppSession struct {
 }
 
 type RbacSession struct {
-	Roles    map[string]string              `json:"roles"`
-	EffPerms map[string]*ResourcePermission `json:"-"`
-	Domain   string                         `json:"iss"`
-	Sub      string                         `json:"sub"`
-	Exp      int64                          `json:"exp"`
-	Iat      int64                          `json:"iat"`
-	Jti      string                         `json:"jti"`
-	Ito      string                         `json:"ito"` // The ID of the oAuth client to who this JWT was sent to
-	Apps     map[string]SamlAppSession      `json:"-"`   // a map of application SAML issuer IDs and their SessionIndexes
-	Username string                         `json:"-"`
+	Roles     map[string]string              `json:"roles"`
+	EffPerms  map[string]*ResourcePermission `json:"-"`
+	Domain    string                         `json:"iss"`
+	Sub       string                         `json:"sub"`
+	Exp       int64                          `json:"exp"`
+	Iat       int64                          `json:"iat"`
+	Jti       string                         `json:"jti"`
+	Ito       string                         `json:"ito"` // The ID of the oAuth client to who this JWT was sent to
+	Apps      map[string]SamlAppSession      `json:"-"`   // a map of application SAML issuer IDs and their SessionIndexes
+	Username  string                         `json:"-"`
+	LastAccAt int64                          `json:"-"` // time when this session was last accessed
 	//Aud      string         `json:"aud"`
 	//Nbf	int64 `json:"nbf"`
 }
