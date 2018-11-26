@@ -101,7 +101,6 @@ type Ppolicy struct {
 }
 
 type OauthConfig struct {
-	TokenTTL           int    `json:"tokenTtl"`           // the life time of an OAuth token in seconds
 	SsoSessionIdleTime int    `json:"ssoSessionIdleTime"` // the idle time of a SSO session in seconds
 	SsoSessionMaxLife  int    `json:"ssoSessionMaxLife"`  // the max life time of a SSO session in seconds
 	TokenPurgeInterval int    `json:"tokenPurgeInterval"` // the number of seconds to wait between successive purges of expired tokens
@@ -174,7 +173,6 @@ func DefaultDomainConfig() *DomainConfig {
 	scim.Meta = meta
 
 	oauthCf := &OauthConfig{}
-	oauthCf.TokenTTL = 15 * 24 * 3600     // 15 days
 	oauthCf.SsoSessionIdleTime = 1 * 3600 // 1 hour
 	oauthCf.SsoSessionMaxLife = 24 * 3600 // 24 hours
 	oauthCf.TokenPurgeInterval = 1 * 3600 // 1 hour
