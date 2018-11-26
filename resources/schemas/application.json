@@ -43,7 +43,7 @@
             "description":"Application's secret. Though it is not 'required' server will always set a value",
             "required":false,
             "caseExact":true,
-            "mutability":"writeOnly",
+            "mutability":"readWrite",
             "returned":"request",
             "uniqueness":"none"
         },
@@ -337,10 +337,43 @@
             "uniqueness":"none"
         },
         {
+            "name":"tokenValidity",
+            "type":"integer",
+            "multiValued":false,
+            "description":"Time in seconds each generated ID token is valid for. Must be greater than 0. Default is 120 seconds",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
             "name":"groupIds",
             "type":"string",
             "multiValued":true,
             "description":"IDs of groups whose members are allowed to access this application",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"x509Cert",
+            "type":"binary",
+            "multiValued":false,
+            "description":"The value of an X.509 certificate.",
+            "required":false,
+            "caseExact":false,
+            "mutability":"readWrite",
+            "returned":"default",
+            "uniqueness":"none"
+        },
+        {
+            "name":"x509PrivKey",
+            "type":"binary",
+            "multiValued":false,
+            "description":"The value of private key corresponding to the X.509 certificate.",
             "required":false,
             "caseExact":false,
             "mutability":"readWrite",
