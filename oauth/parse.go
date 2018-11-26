@@ -24,9 +24,9 @@ func ParseAuthzReq(r *http.Request) (areq *AuthorizationReq) {
 
 	areq.State = r.Form.Get("state")
 
-	areq.Display = strings.TrimSpace(r.Form.Get("display"))
-	areq.Nonce = strings.TrimSpace(r.Form.Get("nonce"))
-	areq.Prompt = strings.TrimSpace(r.Form.Get("prompt"))
+	areq.Display = r.Form.Get("display")
+	areq.Nonce = r.Form.Get("nonce")
+	areq.Prompt = r.Form.Get("prompt")
 	areq.ResponseMode = strings.TrimSpace(r.Form.Get("response_mode"))
 
 	return areq
