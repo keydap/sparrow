@@ -79,6 +79,16 @@ func (pr *Provider) _toClient(rs *base.Resource) (cl *oauth.Client) {
 		oauthConf.ServerSecret, _ = hex.DecodeString(ss) // safe to ignore error
 		oauthAt := rs.GetAttr("oauthattributes")
 		oauthConf.Attributes = parseSsoAttributes(oauthAt)
+
+		validityAt := rs.GetAttr("tokenvalidity")
+		var tokenValidity int64
+		if validityAt != nil {
+			tokenValidity = validityAt.GetSimpleAt().Values[0].(int64)
+		}
+		if tokenValidity <= 0 {
+			tokenValidity = 120 // 2 minutes is the default
+		}
+		oauthConf.TokenValidity = tokenValidity
 	}
 
 	samlConf := &oauth.ClientSamlConf{}
@@ -103,11 +113,15 @@ func (pr *Provider) _toClient(rs *base.Resource) (cl *oauth.Client) {
 	samlAt := rs.GetAttr("samlattributes")
 	samlConf.Attributes = parseSsoAttributes(samlAt)
 
-	validityAt := rs.GetAttr("assertionvalidity")
+	validityAt := rs.GetAttr("assertionValidity")
+	var assertionValidity int64
 	if validityAt != nil {
-		val := validityAt.GetSimpleAt().Values[0].(int64)
-		samlConf.AssertionValidity = int(val)
+		assertionValidity = validityAt.GetSimpleAt().Values[0].(int64)
 	}
+	if assertionValidity <= 0 {
+		assertionValidity = 120 // 2 minutes is the default
+	}
+	samlConf.AssertionValidity = assertionValidity
 
 	cl.Saml = samlConf
 

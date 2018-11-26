@@ -48,7 +48,7 @@ type ClientSamlConf struct {
 	HomeUrl           string // URL of the home page
 	MetaData          *samlTypes.SPSSODescriptor
 	Attributes        map[string]*base.SsoAttr `json:"attrs"`
-	AssertionValidity int
+	AssertionValidity int64
 	IdpIssuer         string
 	SpIssuer          string
 }
@@ -56,8 +56,9 @@ type ClientSamlConf struct {
 type ClientOauthConf struct {
 	Secret          string                   `json:"secret"`
 	RedUri          string                   `json:"redUri"`
-	ServerSecret    []byte                   `json:"-"` // this secret is used as a key
-	HasQueryInUri   bool                     `json:"-"` // flag to indicate if there is query part in the path
+	TokenValidity   int64                    `json:"tokenValidity"` // the life time of an OAuth token in seconds
+	ServerSecret    []byte                   `json:"-"`             // this secret is used as a key
+	HasQueryInUri   bool                     `json:"-"`             // flag to indicate if there is query part in the path
 	ConsentRequired bool                     `json:"consentRequired"`
 	Attributes      map[string]*base.SsoAttr `json:"attrs"`
 }
