@@ -26,7 +26,7 @@ Not yet. We are aiming to make it production ready by Q4 2017.
 2. Adding audit logs
 
 ## Building and Running
-1. git checkout https://bitbucket.org/keydap/sparrow.git
+1. git checkout https://github.com/keydap/sparrow.git
 2. cd sparrow
 3. ./build-release.sh
 4. The binaries will be available under "dist" folder
