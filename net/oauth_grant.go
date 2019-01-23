@@ -25,19 +25,19 @@ const (
 	SAML2
 )
 
-// Represents OAuth code returned to clients
+// Represents OAuth authorization grant returned to clients
 // this structure helps in identifying the corresponding
 // user for whom this code was issued before generating
 // the access token, hence keeps the server working in a
 // stateless fashion.
 // The use of maps for holding either issued or used codes
 // is inefficient
-type oAuthCode struct {
-	IvAsId     string // the random IV in HEX form. It will be used as the unique ID for each oAuth code
+type oAuthGrant struct {
+	IvAsId     []byte // the random IV. It will be used as the unique ID for each oAuth grant
 	UserId     string
 	DomainCode string // first 8 chars of domain name's SHA256 hash
 	CreatedAt  int64
-	CType      CodeType // due to inclusion of this 1 byte there will be 15 padd bytes to fit the aes block size, can be used in future
+	CType      CodeType
 }
 
 func newOauthCode(cl *oauth.Client, createdAt time.Time, userId string, domainCode string, ctype CodeType) string {
@@ -81,7 +81,7 @@ func newOauthCode(cl *oauth.Client, createdAt time.Time, userId string, domainCo
 	return utils.B64UrlEncode(dst)
 }
 
-func decryptOauthCode(code string, cl *oauth.Client) *oAuthCode {
+func decryptOauthCode(code string, cl *oauth.Client) *oAuthGrant {
 	data, err := utils.B64UrlDecode(code)
 	if err != nil {
 		return nil
@@ -123,8 +123,8 @@ func decryptOauthCode(code string, cl *oauth.Client) *oAuthCode {
 
 	cbc.CryptBlocks(dst, data[macLen+aes.BlockSize:])
 
-	ac := &oAuthCode{}
-	ac.IvAsId = fmt.Sprintf("%x", iv)
+	ac := &oAuthGrant{}
+	ac.IvAsId = iv
 	ac.UserId = string(dst[:36])
 	ac.DomainCode = string(dst[36:44])
 	ac.CreatedAt = utils.Btoi(dst[44:52])
