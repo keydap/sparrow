@@ -22,8 +22,7 @@ And I want an identity server to have the ability to speak over HTTP directly wi
 Not yet. We are aiming to make it production ready by Q4 2017.
  
 ## What is Happening Right Now?
-1. Improving OpenIDConnect handler
-2. Adding audit logs
+1. Preparing for OpenIDConnect Certification
 
 ## Building and Running
 1. git checkout https://github.com/keydap/sparrow.git
