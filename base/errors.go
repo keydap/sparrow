@@ -114,6 +114,14 @@ func NewPreCondError(detail string) *ScimError {
 	err.Status = strconv.Itoa(err.code)
 	return err
 }
+func NewToomanyResults(detail string) *ScimError {
+	err := NewError()
+	err.Detail = detail
+	err.code = 412
+	err.ScimType = ST_TOOMANY
+	err.Status = strconv.Itoa(err.code)
+	return err
+}
 
 func (se ScimError) Code() int {
 	return se.code
