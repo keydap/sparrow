@@ -213,6 +213,8 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// section 4.1.2 - if the token is reused should revoke all the older tokens
+
 	if ac.CType == OAuth2 {
 		if atr.GrantType != "authorization_code" {
 			ep := &oauth.ErrorResp{}
