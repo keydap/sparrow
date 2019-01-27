@@ -192,6 +192,14 @@ func (pr *Provider) GetSsoSession(jti string) *base.RbacSession {
 	return pr.osl.GetSsoSession(jti)
 }
 
+func (pr *Provider) StoreGrantCodeId(creationTime int64, gcIvAsId []byte) (err error) {
+	return pr.osl.StoreGrantCodeId(creationTime, gcIvAsId)
+}
+
+func (pr *Provider) HasGrantCodeId(creationTime int64, gcIvAsId []byte) bool {
+	return pr.osl.HasGrantCodeId(creationTime, gcIvAsId)
+}
+
 func (pr *Provider) DeleteOauthSession(opCtx *base.OpContext) bool {
 	deleted := pr.osl.DeleteOauthSession(opCtx.Session.Jti)
 	pr.Al.LogDelSession(opCtx, deleted)

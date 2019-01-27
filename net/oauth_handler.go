@@ -213,8 +213,6 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// section 4.1.2 - if the token is reused should revoke all the older tokens
-
 	if ac.CType == OAuth2 {
 		if atr.GrantType != "authorization_code" {
 			ep := &oauth.ErrorResp{}
@@ -233,6 +231,18 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		sendOauthError(w, r, "", ep)
 		return
 	}
+
+	// section 4.1.2 - if the grant code is reused should revoke all the older tokens issued using this grant code
+	if pr.HasGrantCodeId(ac.CreatedAt, ac.IvAsId) {
+		ep := &oauth.ErrorResp{}
+		ep.Desc = "Invalid code, this was already used once"
+		ep.Err = oauth.ERR_INVALID_REQUEST
+		sendOauthError(w, r, "", ep)
+		// TODO revoke all tokens issued against this grant code
+		return
+	}
+
+	go pr.StoreGrantCodeId(ac.CreatedAt, ac.IvAsId)
 
 	session, err := prv.GenSessionForUserId(ac.UserId)
 	if err != nil {

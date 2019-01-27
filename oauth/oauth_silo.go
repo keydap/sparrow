@@ -6,11 +6,12 @@ package oauth
 import (
 	"bytes"
 	"encoding/gob"
-	bolt "github.com/coreos/bbolt"
+	"github.com/coreos/bbolt"
 	logger "github.com/juju/loggo"
 	"runtime/debug"
 	"sparrow/base"
 	"sparrow/utils"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,7 @@ type OauthSilo struct {
 	db                 *bolt.DB
 	tokenPurgeInterval int
 	rvTokens           map[string]bool
+	grantSilo          *oauthGrantCodeSilo
 }
 
 var log logger.Logger
@@ -38,7 +40,7 @@ func init() {
 	log = logger.GetLogger("sparrow.oauth")
 }
 
-func Open(path string, tokenPurgeInterval int) (osl *OauthSilo, err error) {
+func Open(path string, tokenPurgeInterval int, grantCodePurgeInterval int, grantCodeTTL int) (osl *OauthSilo, err error) {
 	db, err := bolt.Open(path, 0644, nil)
 
 	if err != nil {
@@ -84,8 +86,22 @@ func Open(path string, tokenPurgeInterval int) (osl *OauthSilo, err error) {
 	osl.tokenPurgeInterval = tokenPurgeInterval
 	osl.rvTokens = make(map[string]bool)
 
+	if strings.HasSuffix(path, ".db") {
+		path = path[0 : len(path)-3]
+	}
+	gslDbPath := path + "-grantcodes.db"
+	gsl, err := openGrantCodeSilo(gslDbPath, grantCodePurgeInterval, grantCodeTTL)
+	if err != nil {
+		log.Warningf("failed to open the grant code database [%#v]", err)
+		return nil, err
+	}
+
+	osl.grantSilo = gsl
+
 	// load revoked tokens
 	osl.loadRevokedSessions()
+
+	go osl.removeExpiredGrantCodes()
 
 	go removeExpiredSessions(osl, BUC_OAUTH_SESSIONS, BUC_IDX_OAUTH_SESSION_BY_JTI)
 
