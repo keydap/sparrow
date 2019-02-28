@@ -97,13 +97,13 @@ func TestGrantCodeAddAndPurge(t *testing.T) {
 		t.Fail()
 	}
 
-	time.Sleep(time.Duration(grantcodePurgeInterval*20) * time.Second)
+	time.Sleep(time.Duration(grantcodePurgeInterval) * time.Second)
+	log.Debugf("checked existence")
 
 	for _, v := range arr {
 		if osl.HasGrantCodeId(v.key, v.value) {
 			t.Logf("code with ID %d is expected to be purged", v.key)
-			// TODO fixme
-			//t.Fail()
+			t.Fail()
 			break
 		}
 	}

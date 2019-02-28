@@ -5,7 +5,7 @@ package oauth
 
 import (
 	"bytes"
-	"github.com/coreos/bbolt"
+	bolt "github.com/coreos/bbolt"
 	"sparrow/utils"
 	"time"
 )
@@ -89,6 +89,10 @@ func (osl *OauthSilo) HasGrantCodeId(creationTime int64, gcIvAsId []byte) bool {
 		return false
 	}
 
+	defer func() {
+		tx.Rollback()
+	}()
+
 	buck := tx.Bucket(buc_grant_codes)
 	dupBuck := buck.Bucket(key)
 	if dupBuck == nil {
@@ -96,7 +100,6 @@ func (osl *OauthSilo) HasGrantCodeId(creationTime int64, gcIvAsId []byte) bool {
 	}
 
 	val := dupBuck.Get(gcIvAsId)
-	tx.Rollback()
 
 	return val != nil
 }
@@ -111,6 +114,7 @@ func (osl *OauthSilo) removeExpiredGrantCodes() {
 	}()
 
 	for {
+		log.Debugf("still in the loop")
 		tx, err := osl.grantSilo.db.Begin(true)
 		if err != nil {
 			log.Warningf("Failed to open a transaction for removing expired grant codes %s", err)
@@ -126,16 +130,22 @@ func (osl *OauthSilo) removeExpiredGrantCodes() {
 		now = now - int64(osl.grantSilo.grantCodeTTL)
 		log.Debugf("searching key %d", now)
 		key := utils.Itob(now)
-		candidateKey, value := cursor.Seek(key)
+		candidateKey, _ := cursor.Seek(key)
 		if candidateKey != nil && (bytes.Compare(candidateKey, key) <= 0) {
-			log.Debugf("deleting key")
-			gcBuck.Delete(value)
+			log.Debugf("deleting an entire bucket of grant codes")
+			err := gcBuck.Delete(key)
+			if err != nil {
+				log.Debugf("error %#v", err)
+			}
 		}
 
 		k, _ := cursor.Prev()
 		for ; k != nil; k, _ = cursor.Prev() {
 			log.Debugf("deleting prev key %d", utils.Btoi(k))
-			gcBuck.Delete(k)
+			err := gcBuck.DeleteBucket(k)
+			if err != nil {
+				log.Debugf("error prev key %#v", err)
+			}
 		}
 
 		tx.Commit()
