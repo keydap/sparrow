@@ -128,6 +128,7 @@ func setup(c *caddy.Controller) error {
 	router := mux.NewRouter()
 	router.StrictSlash(true)
 	router.HandleFunc("/about", serveVersionInfo).Methods("GET")
+	router.HandleFunc("/", serveVersionInfo).Methods("GET")
 
 	// for serving the admin dashboard UI assets
 	fs := http.FileServer(http.Dir(homeDir + "/ui"))
@@ -891,6 +892,7 @@ func selfServe(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
 	w.Write([]byte(aboutStr))
 }
 

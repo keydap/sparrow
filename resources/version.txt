@@ -1,12 +1,11 @@
 package net
 
 const SparrowVersion = `$version`
-const aboutStr = `
-Name     : Sparrow Identity Server
-Version  : $version
-Revision : $revision
-Time     : $time
-
-SCIM API Base URI  : /v2
-OAuth API Base URI : /oauth2
-`
+const aboutStr = `{
+"name"     : "Sparrow Identity Server",
+"version"  : "$version",
+"revision" : "$revision",
+"time"     : "$time",
+"scim_base"  : "/v2",
+"oauth_base" : "/oauth2"
+}`
