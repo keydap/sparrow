@@ -82,9 +82,9 @@ func initHome(srvHome string) *conf.ServerConf {
 	utils.CheckAndCreate(tmplDir)
 	writeDefaultHtmlTemplates(tmplDir)
 
-	oauthDir := filepath.Join(srvHome, "oauth")
-	log.Debugf("Checking server's oauth directory %s", oauthDir)
-	utils.CheckAndCreate(oauthDir)
+	replDir := filepath.Join(srvHome, "replication")
+	log.Debugf("Checking server's repication directory %s", replDir)
+	utils.CheckAndCreate(replDir)
 
 	srvConfPath := filepath.Join(srvConfDir, "server.json")
 	_, err := os.Stat(srvConfPath)
