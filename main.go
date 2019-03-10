@@ -4,6 +4,7 @@
 package main
 
 import (
+	"flag"
 	logger "github.com/juju/loggo"
 	"os"
 	"os/signal"
@@ -16,6 +17,10 @@ var log logger.Logger
 func init() {
 	log = logger.GetLogger("sparrow.main")
 }
+
+//var profile = flag.String("profile", "", "write cpu profile to file")
+var address = flag.String("a", "0.0.0.0", "IP address or DNS name of the server (can optionally have the listening port as well prefixed with the : char)")
+var enableTls = flag.Bool("tls", true, "Flag to enable or disable TLS")
 
 func main() {
 	logger.ConfigureLoggers("<root>=debug")
