@@ -101,10 +101,12 @@ type Ppolicy struct {
 }
 
 type OauthConfig struct {
-	SsoSessionIdleTime int    `json:"ssoSessionIdleTime"` // the idle time of a SSO session in seconds
-	SsoSessionMaxLife  int    `json:"ssoSessionMaxLife"`  // the max life time of a SSO session in seconds
-	TokenPurgeInterval int    `json:"tokenPurgeInterval"` // the number of seconds to wait between successive purges of expired tokens
-	Notes              string `json:"notes"`
+	SsoSessionIdleTime     int    `json:"ssoSessionIdleTime"`     // the idle time of a SSO session in seconds
+	SsoSessionMaxLife      int    `json:"ssoSessionMaxLife"`      // the max life time of a SSO session in seconds
+	TokenPurgeInterval     int    `json:"tokenPurgeInterval"`     // the number of seconds to wait between successive purges of expired tokens
+	GrantCodePurgeInterval int    `json:"grantCodePurgeInterval"` // the number of seconds to wait before purging the OAuth grant codes
+	GrantCodeMaxLife       int    `json:"grantCodeMaxLife"`       // the number of seconds an OAuth grant code is valid for
+	Notes                  string `json:"notes"`
 }
 
 type Meta struct {
@@ -173,9 +175,11 @@ func DefaultDomainConfig() *DomainConfig {
 	scim.Meta = meta
 
 	oauthCf := &OauthConfig{}
-	oauthCf.SsoSessionIdleTime = 1 * 3600 // 1 hour
-	oauthCf.SsoSessionMaxLife = 24 * 3600 // 24 hours
-	oauthCf.TokenPurgeInterval = 1 * 3600 // 1 hour
+	oauthCf.SsoSessionIdleTime = 1 * 3600   // 1 hour
+	oauthCf.SsoSessionMaxLife = 24 * 3600   // 24 hours
+	oauthCf.TokenPurgeInterval = 1 * 3600   // 1 hour
+	oauthCf.GrantCodePurgeInterval = 5 * 60 // 5 minutes
+	oauthCf.GrantCodeMaxLife = 2 * 60       // 2 minutes
 
 	ppolicy := &Ppolicy{}
 	ppolicy.PasswdHashAlgo = "sha256"

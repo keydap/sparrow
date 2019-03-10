@@ -107,7 +107,7 @@ func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 	prv.sl.Engine.Domain = layout.name
 
 	odbFilePath := filepath.Join(layout.DataDir, "tokens.db")
-	prv.osl, err = oauth.Open(odbFilePath, prv.Config.Oauth.TokenPurgeInterval)
+	prv.osl, err = oauth.Open(odbFilePath, prv.Config.Oauth.TokenPurgeInterval, prv.Config.Oauth.GrantCodePurgeInterval, prv.Config.Oauth.GrantCodeMaxLife)
 
 	if err != nil {
 		return nil, err
