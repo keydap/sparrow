@@ -206,6 +206,10 @@ func setup(c *caddy.Controller) error {
 	httpserver.GetConfig(c).AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
 		return muxHandler{router: router, next: next}
 	})
+
+	replHandler := replHandler{}
+	// replication requests
+	router.PathPrefix("/repl/").Handler(replHandler)
 	//if srvConf.Https {
 	//	homeUrl = "https://" + hostAddr
 	//	logUrls()
