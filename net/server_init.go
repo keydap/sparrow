@@ -97,9 +97,11 @@ func initHome(srvHome string) *conf.ServerConf {
 		addr := flag.Lookup("a").Value.(flag.Getter).Get().(string)
 		enableTls := flag.Lookup("tls").Value.(flag.Getter).Get().(bool)
 		addr = strings.TrimSpace(addr)
+
+		var tmp conf.ServerConf
+		json.Unmarshal([]byte(strConf), &tmp)
+
 		if addr != "" || enableTls {
-			var tmp conf.ServerConf
-			json.Unmarshal([]byte(strConf), &tmp)
 			parts := strings.Split(addr, ":")
 			if len(parts) > 0 {
 				tmp.IpAddress = parts[0]
@@ -119,13 +121,14 @@ func initHome(srvHome string) *conf.ServerConf {
 				tmp.Https = true
 			}
 
-			data, err := json.MarshalIndent(tmp, "", "  ")
-			if err != nil {
-				panic(err)
-			}
-
-			strConf = string(data)
 		}
+
+		tmp.ServerId = genRandomServerId()
+		data, err := json.MarshalIndent(tmp, "", "  ")
+		if err != nil {
+			panic(err)
+		}
+		strConf = string(data)
 
 		err = ioutil.WriteFile(srvConfPath, []byte(strConf), utils.FILE_PERM)
 		if err != nil {
@@ -461,4 +464,15 @@ func writeResourceTypes(rtDir string) {
 
 	auditevent := filepath.Join(rtDir, "auditevent.json")
 	writeFile(auditevent, auditevent_type)
+}
+
+// Generates a ranom unsigned integer of two bytes
+// The first byte is a ranom value and the second is the first byte from MAC address of any interface
+func genRandomServerId() uint16 {
+	log.Debugf("generating server ID")
+	var id uint16
+	randBytes := utils.RandBytes(2)
+	id = uint16(randBytes[0])
+	id = id<<8 | uint16(randBytes[1])
+	return id
 }
