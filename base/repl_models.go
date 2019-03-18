@@ -11,14 +11,15 @@ type ConfigEvent struct {
 }
 
 type JoinEvent struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	ServerId int    `json:"serverId"`
+	Host     string `json:"host" valid:"ascii,required"`
+	Port     int    `json:"port" valid:"range(1|65535),required"`
+	ServerId int    `json:"serverId" valid:"range(0|65535),required"`
 }
 
 type PendingJoinRequest struct {
-	Host      string
-	Port      int
-	ServerId  int
-	CertChain []*x509.Certificate
+	Host        string
+	Port        int
+	ServerId    int
+	RequestTime int64
+	CertChain   []*x509.Certificate
 }

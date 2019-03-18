@@ -4,7 +4,11 @@
 package net
 
 import (
+	"encoding/json"
+	"github.com/asaskevich/govalidator"
+	"io/ioutil"
 	"net/http"
+	"sparrow/base"
 	"strings"
 )
 
@@ -33,6 +37,38 @@ func (rh replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleJoinRequest(w http.ResponseWriter, r *http.Request) {
-	//conStatus := r.TLS
-	//conStatus.PeerCertificates
+	conStatus := r.TLS
+	if conStatus == nil {
+		msg := "invalid transport, replication requests are only allowed over HTTPS"
+		log.Warningf(msg)
+		w.Write([]byte(msg))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	var joinEvent base.JoinEvent
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Debugf("%#v", err)
+		writeError(w, err)
+		return
+	}
+	err = json.Unmarshal(data, &joinEvent)
+	if err != nil {
+		log.Debugf("%#v", err)
+		writeError(w, err)
+		return
+	}
+
+	_, err = govalidator.ValidateStruct(joinEvent)
+	if err != nil {
+		log.Debugf("%#v", err)
+		writeError(w, err)
+		return
+	}
+
+	pendingReq := base.PendingJoinRequest{}
+	pendingReq.Host = joinEvent.Host
+	pendingReq.Port = joinEvent.Port
+	pendingReq.ServerId = joinEvent.ServerId
+	pendingReq.CertChain = conStatus.PeerCertificates
 }
