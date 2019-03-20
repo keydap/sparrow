@@ -20,6 +20,6 @@ type PendingJoinRequest struct {
 	Host        string
 	Port        int
 	ServerId    int
-	RequestTime int64
+	CreatedTime int64
 	CertChain   []*x509.Certificate
 }

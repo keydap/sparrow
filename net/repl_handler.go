@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sparrow/base"
+	"sparrow/utils"
 	"strings"
 )
 
@@ -32,6 +33,9 @@ func (rh replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "join":
 		handleJoinRequest(w, r)
 
+	case "approve":
+		// check authentication status and then approve
+		handleJoinRequest(w, r)
 	}
 	w.Write([]byte("received path " + uri + " action " + action))
 }
@@ -49,20 +53,20 @@ func handleJoinRequest(w http.ResponseWriter, r *http.Request) {
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Debugf("%#v", err)
-		writeError(w, err)
+		writeError(w, base.NewBadRequestError(err.Error()))
 		return
 	}
 	err = json.Unmarshal(data, &joinEvent)
 	if err != nil {
 		log.Debugf("%#v", err)
-		writeError(w, err)
+		writeError(w, base.NewBadRequestError(err.Error()))
 		return
 	}
 
 	_, err = govalidator.ValidateStruct(joinEvent)
 	if err != nil {
 		log.Debugf("%#v", err)
-		writeError(w, err)
+		writeError(w, base.NewBadRequestError(err.Error()))
 		return
 	}
 
@@ -71,4 +75,5 @@ func handleJoinRequest(w http.ResponseWriter, r *http.Request) {
 	pendingReq.Port = joinEvent.Port
 	pendingReq.ServerId = joinEvent.ServerId
 	pendingReq.CertChain = conStatus.PeerCertificates
+	pendingReq.CreatedTime = utils.DateTimeMillis()
 }

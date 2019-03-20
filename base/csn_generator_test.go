@@ -17,7 +17,7 @@ func TestCsnGeneration(t *testing.T) {
 		csn2 := cg.NewCsn().String()
 
 		l := len(csn1)
-		if l != 42 {
+		if l != 41 {
 			t.Errorf("Invalid CSN length %d %s", l, csn1)
 		}
 

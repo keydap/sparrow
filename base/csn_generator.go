@@ -46,7 +46,7 @@ func (ci csnImpl) ModificationCount() uint32 {
 func (ci csnImpl) String() string {
 	t := ci.now.Format(gtime_format)
 
-	return fmt.Sprintf("%s#%06x#%05d#%06x", t, ci.changeCount, ci.replicaId, ci.modCount)
+	return fmt.Sprintf("%s#%06x#%04x#%06x", t, ci.changeCount, ci.replicaId, ci.modCount)
 }
 
 func (ci csnImpl) DateTime() string {
