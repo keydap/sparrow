@@ -198,3 +198,23 @@ func GetRemoteAddr(r *http.Request) string {
 
 	return proxy
 }
+
+func Uint16tob(i uint16) []byte {
+	data := make([]byte, 2)
+	data[1] = uint8(i)
+	data[0] = uint8(i >> 8)
+
+	return data
+}
+
+func BtoUint16(data []byte) uint16 {
+	if len(data) > 2 {
+		panic("Invalid uint16 bytes, data length exceeds 2")
+	}
+
+	var x uint16
+	x = x<<8 | uint16(data[0])
+	x = x<<8 | uint16(data[1])
+
+	return x
+}

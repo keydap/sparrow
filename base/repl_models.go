@@ -13,13 +13,13 @@ type ConfigEvent struct {
 type JoinEvent struct {
 	Host     string `json:"host" valid:"ascii,required"`
 	Port     int    `json:"port" valid:"range(1|65535),required"`
-	ServerId int    `json:"serverId" valid:"range(0|65535),required"`
+	ServerId uint16 `json:"serverId" valid:"range(0|65535),required"`
 }
 
 type PendingJoinRequest struct {
 	Host        string
 	Port        int
-	ServerId    int
+	ServerId    uint16
 	CreatedTime int64
 	CertChain   []*x509.Certificate
 }
