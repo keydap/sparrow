@@ -3,23 +3,28 @@
 
 package base
 
-import "crypto/x509"
-
 type ConfigEvent struct {
 	Csn  string
 	Data []byte
 }
 
-type JoinEvent struct {
+type JoinRequest struct {
 	Host     string `json:"host" valid:"ascii,required"`
 	Port     int    `json:"port" valid:"range(1|65535),required"`
 	ServerId uint16 `json:"serverId" valid:"range(0|65535),required"`
 }
 
-type PendingJoinRequest struct {
+type PendingJoinPeer struct {
+	ServerId    uint16
 	Host        string
 	Port        int
-	ServerId    uint16
 	CreatedTime int64
-	CertChain   []*x509.Certificate
+}
+
+type ReplicationPeer struct {
+	ServerId        uint16
+	Url             string
+	WebHookToken    string
+	CreatedTime     int64
+	LastReqSentTime int64
 }

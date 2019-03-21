@@ -49,7 +49,7 @@ func handleJoinRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	var joinEvent base.JoinEvent
+	var joinEvent base.JoinRequest
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Debugf("%#v", err)
@@ -70,10 +70,9 @@ func handleJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pendingReq := base.PendingJoinRequest{}
+	pendingReq := base.PendingJoinPeer{}
 	pendingReq.Host = joinEvent.Host
 	pendingReq.Port = joinEvent.Port
 	pendingReq.ServerId = joinEvent.ServerId
-	pendingReq.CertChain = conStatus.PeerCertificates
 	pendingReq.CreatedTime = utils.DateTimeMillis()
 }
