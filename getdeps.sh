@@ -27,3 +27,7 @@ go get github.com/asaskevich/govalidator
 
 # Caddy web server
 go get github.com/mholt/caddy
+
+# Ginkgo test framework
+go get github.com/onsi/ginkgo/ginkgo
+go get github.com/onsi/gomega/...

@@ -74,5 +74,6 @@ func handleJoinRequest(w http.ResponseWriter, r *http.Request) {
 	pendingReq.Host = joinEvent.Host
 	pendingReq.Port = joinEvent.Port
 	pendingReq.ServerId = joinEvent.ServerId
+	pendingReq.WebHookToken = joinEvent.WebHookToken
 	pendingReq.CreatedTime = utils.DateTimeMillis()
 }

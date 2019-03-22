@@ -9,16 +9,18 @@ type ConfigEvent struct {
 }
 
 type JoinRequest struct {
-	Host     string `json:"host" valid:"ascii,required"`
-	Port     int    `json:"port" valid:"range(1|65535),required"`
-	ServerId uint16 `json:"serverId" valid:"range(0|65535),required"`
+	Host         string `json:"host" valid:"ascii,required"`
+	Port         int    `json:"port" valid:"range(1|65535),required"`
+	ServerId     uint16 `json:"serverId" valid:"range(0|65535),required"`
+	WebHookToken string `json:"webHookToken" valid:"required"`
 }
 
 type PendingJoinPeer struct {
-	ServerId    uint16
-	Host        string
-	Port        int
-	CreatedTime int64
+	ServerId     uint16
+	Host         string
+	Port         int
+	CreatedTime  int64
+	WebHookToken string
 }
 
 type ReplicationPeer struct {
@@ -27,4 +29,7 @@ type ReplicationPeer struct {
 	WebHookToken    string
 	CreatedTime     int64
 	LastReqSentTime int64
+}
+
+type JoinResponse struct {
 }

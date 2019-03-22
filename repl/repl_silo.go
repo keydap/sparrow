@@ -132,8 +132,8 @@ func (rl *ReplSilo) GetPendingJoinPeers() []base.PendingJoinPeer {
 	for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 		buf.Write(v)
 		var r base.PendingJoinPeer
-		err = dec.Decode(r)
-		if err != nil {
+		err = dec.Decode(&r)
+		if err == nil {
 			requests = append(requests, r)
 		}
 		buf.Reset()
@@ -198,11 +198,11 @@ func (rl *ReplSilo) DeleteReplicationPeer(serverId uint16) error {
 	return err
 }
 
-func (rl *ReplSilo) GetReplicationPeer(serverId uint16) (*base.ReplicationPeer, error) {
+func (rl *ReplSilo) GetReplicationPeer(serverId uint16) *base.ReplicationPeer {
 	key := utils.Uint16tob(serverId)
 	tx, err := rl.db.Begin(false)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
 	defer func() {
@@ -217,9 +217,14 @@ func (rl *ReplSilo) GetReplicationPeer(serverId uint16) (*base.ReplicationPeer, 
 	data := buck.Get(key)
 	var peer *base.ReplicationPeer
 	if data != nil {
-		var buf bytes.Buffer
-		dec := gob.NewDecoder(&buf)
-		err = dec.Decode(peer)
+		buf := bytes.NewBuffer(data)
+		dec := gob.NewDecoder(buf)
+		err = dec.Decode(&peer)
 	}
-	return peer, err
+
+	return peer
+}
+
+func (rl *ReplSilo) Close() {
+	rl.db.Close()
 }
