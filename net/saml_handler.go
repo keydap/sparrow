@@ -156,7 +156,7 @@ func handleSamlLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	session := getSession(r)
+	session := getSessionUsingCookie(r)
 	if session == nil && (&logoutReq == nil) { // both session and logout requests are nil
 		log.Debugf("no session exists, redirecting to the relaystate %s", relayState)
 		http.Redirect(w, r, relayState, http.StatusFound)
@@ -187,7 +187,7 @@ func handleSamlLogout(w http.ResponseWriter, r *http.Request) {
 // STEP 1 - check the presence of session otherwise redirect to login
 func handleSamlReq(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("handling saml request")
-	session := getSession(r)
+	session := getSessionUsingCookie(r)
 	if session != nil {
 		// valid session exists serve the SAMLResponse
 		log.Debugf("Valid session exists, sending the final response")

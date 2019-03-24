@@ -3,7 +3,7 @@ package repl
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/coreos/bbolt"
+	bolt "github.com/coreos/bbolt"
 	logger "github.com/juju/loggo"
 	"sparrow/base"
 	"sparrow/utils"
@@ -11,8 +11,9 @@ import (
 
 var (
 	// a bucket that holds the pending join requests
-	BUC_PENDING_JOIN_REQUESTS = []byte("pending_join_requests")
-	BUC_PEERS                 = []byte("peers")
+	BUC_SENT_JOIN_REQUESTS     = []byte("sent_join_requests")
+	BUC_RECEIVED_JOIN_REQUESTS = []byte("received_join_requests")
+	BUC_PEERS                  = []byte("peers")
 )
 var log logger.Logger
 
@@ -21,18 +22,18 @@ func init() {
 }
 
 type ReplSilo struct {
-	db *bbolt.DB
+	db *bolt.DB
 }
 
 func OpenReplSilo(path string) (*ReplSilo, error) {
-	db, err := bbolt.Open(path, 0644, nil)
+	db, err := bolt.Open(path, 0644, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	err = db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(BUC_PENDING_JOIN_REQUESTS)
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists(BUC_SENT_JOIN_REQUESTS)
 		if err != nil {
 			return err
 		}
@@ -56,7 +57,15 @@ func OpenReplSilo(path string) (*ReplSilo, error) {
 	return rl, nil
 }
 
-func (rl *ReplSilo) AddPendingJoinPeer(req base.PendingJoinPeer) error {
+func (rl *ReplSilo) AddSentJoinReq(req base.JoinRequest) error {
+	return rl._addJoinReq(req, BUC_SENT_JOIN_REQUESTS)
+}
+
+func (rl *ReplSilo) AddReceivedJoinReq(req base.JoinRequest) error {
+	return rl._addJoinReq(req, BUC_RECEIVED_JOIN_REQUESTS)
+}
+
+func (rl *ReplSilo) _addJoinReq(req base.JoinRequest, bucketName []byte) error {
 	key := utils.Uint16tob(req.ServerId)
 	tx, err := rl.db.Begin(true)
 	if err != nil {
@@ -70,10 +79,10 @@ func (rl *ReplSilo) AddPendingJoinPeer(req base.PendingJoinPeer) error {
 		}
 	}()
 
-	buck := tx.Bucket(BUC_PENDING_JOIN_REQUESTS)
+	buck := tx.Bucket(bucketName)
 	data := buck.Get(key)
 	if data != nil {
-		log.Debugf("replacing a pending join request for the server with ID %d", req.ServerId)
+		log.Debugf("replacing an existing join request for the server with ID %d", req.ServerId)
 	}
 
 	var buf bytes.Buffer
@@ -90,7 +99,15 @@ func (rl *ReplSilo) AddPendingJoinPeer(req base.PendingJoinPeer) error {
 	return err
 }
 
-func (rl *ReplSilo) DeletePendingJoinPeer(serverId uint16) error {
+func (rl *ReplSilo) DeleteSentJoinRequest(serverId uint16) error {
+	return rl._deleteJoinRequest(serverId, BUC_SENT_JOIN_REQUESTS)
+}
+
+func (rl *ReplSilo) DeleteReceivedJoinRequest(serverId uint16) error {
+	return rl._deleteJoinRequest(serverId, BUC_RECEIVED_JOIN_REQUESTS)
+}
+
+func (rl *ReplSilo) _deleteJoinRequest(serverId uint16, bucketName []byte) error {
 	key := utils.Uint16tob(serverId)
 	tx, err := rl.db.Begin(true)
 	if err != nil {
@@ -104,7 +121,7 @@ func (rl *ReplSilo) DeletePendingJoinPeer(serverId uint16) error {
 		}
 	}()
 
-	buck := tx.Bucket(BUC_PENDING_JOIN_REQUESTS)
+	buck := tx.Bucket(bucketName)
 	err = buck.Delete(key)
 	if err == nil {
 		tx.Commit()
@@ -112,8 +129,16 @@ func (rl *ReplSilo) DeletePendingJoinPeer(serverId uint16) error {
 	return err
 }
 
-func (rl *ReplSilo) GetPendingJoinPeers() []base.PendingJoinPeer {
-	requests := make([]base.PendingJoinPeer, 0)
+func (rl *ReplSilo) GetSentJoinRequests() []base.JoinRequest {
+	return rl._getJoinRequests(BUC_SENT_JOIN_REQUESTS)
+}
+
+func (rl *ReplSilo) GetReceivedJoinRequests() []base.JoinRequest {
+	return rl._getJoinRequests(BUC_SENT_JOIN_REQUESTS)
+}
+
+func (rl *ReplSilo) _getJoinRequests(bucketName []byte) []base.JoinRequest {
+	requests := make([]base.JoinRequest, 0)
 	tx, err := rl.db.Begin(false)
 	if err != nil {
 		log.Warningf("%#v", err)
@@ -124,14 +149,14 @@ func (rl *ReplSilo) GetPendingJoinPeers() []base.PendingJoinPeer {
 		tx.Rollback()
 	}()
 
-	buck := tx.Bucket(BUC_PENDING_JOIN_REQUESTS)
+	buck := tx.Bucket(bucketName)
 	cursor := buck.Cursor()
 
 	var buf bytes.Buffer
 	dec := gob.NewDecoder(&buf)
 	for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 		buf.Write(v)
-		var r base.PendingJoinPeer
+		var r base.JoinRequest
 		err = dec.Decode(&r)
 		if err == nil {
 			requests = append(requests, r)

@@ -19,7 +19,7 @@ import (
 // Handles the OAuth2 authorization request
 func authorize(w http.ResponseWriter, r *http.Request) {
 
-	session := getSession(r)
+	session := getSessionUsingCookie(r)
 	if session != nil {
 		// valid session exists serve the code or id_token
 		log.Debugf("Valid session exists, sending the final response")
@@ -313,7 +313,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 		} else {
 			// can happen when there is a redirect for consent
 			if session == nil {
-				session = getSession(r)
+				session = getSessionUsingCookie(r)
 			}
 
 			userId = session.Sub
@@ -335,7 +335,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 
 	// can happen when there is a redirect for consent
 	if session == nil {
-		session = getSession(r)
+		session = getSessionUsingCookie(r)
 	}
 
 	if areq.RespType == "id_token" || strings.HasSuffix(areq.RespType, " id_token") {
@@ -413,7 +413,7 @@ func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Pro
 	return idt
 }
 
-func getSession(r *http.Request) *base.RbacSession {
+func getSessionUsingCookie(r *http.Request) *base.RbacSession {
 	ssoCookie, _ := r.Cookie(SSO_COOKIE)
 
 	if ssoCookie != nil {

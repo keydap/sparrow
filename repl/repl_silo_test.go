@@ -42,31 +42,31 @@ var _ = Describe("testing replication silo", func() {
 
 	Context("pending replication join peers", func() {
 		It("insert, get and delete", func() {
-			peer := base.PendingJoinPeer{}
+			peer := base.JoinRequest{}
 			peer.WebHookToken = "abcd"
 			peer.ServerId = 1
 			peer.Host = "localhost"
 			peer.Port = 8080
 			peer.CreatedTime = utils.DateTimeMillis()
 
-			err := sl.AddPendingJoinPeer(peer)
+			err := sl.AddSentJoinReq(peer)
 			Expect(err).ToNot(HaveOccurred())
 
-			peers := sl.GetPendingJoinPeers()
+			peers := sl.GetSentJoinRequests()
 			Expect(len(peers)).To(Equal(1))
 			Expect(peers[0]).To(Equal(peer))
 
 			// insert another request with the same ID again and the count should be same
 			peer.Host = "127.0.0.1"
-			err = sl.AddPendingJoinPeer(peer)
+			err = sl.AddSentJoinReq(peer)
 			Expect(err).ToNot(HaveOccurred())
-			peers = sl.GetPendingJoinPeers()
+			peers = sl.GetSentJoinRequests()
 			Expect(len(peers)).To(Equal(1))
 			Expect(peers[0]).To(Equal(peer))
 
-			err = sl.DeletePendingJoinPeer(peer.ServerId)
+			err = sl.DeleteSentJoinRequest(peer.ServerId)
 			Expect(err).ToNot(HaveOccurred())
-			peers = sl.GetPendingJoinPeers()
+			peers = sl.GetSentJoinRequests()
 			Expect(len(peers)).To(Equal(0))
 		})
 	})

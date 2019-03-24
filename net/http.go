@@ -4,6 +4,7 @@
 package net
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
@@ -207,7 +208,10 @@ func setup(c *caddy.Controller) error {
 		return muxHandler{router: router, next: next}
 	})
 
-	replHandler := replHandler{}
+	replHandler := &replHandler{}
+	tlsConf := &tls.Config{InsecureSkipVerify: true}
+	replHandler.transport = &http.Transport{TLSClientConfig: tlsConf}
+
 	// replication requests
 	router.PathPrefix("/repl/").Handler(replHandler)
 	//if srvConf.Https {
