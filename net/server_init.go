@@ -38,6 +38,7 @@ var DEFAULT_SRV_CONF string = `{
 var COOKIE_LOGIN_NAME string = "SPLCN"
 
 var homeDir string
+var replDir string
 
 func Start(srvHome string) {
 	log.Debugf("Starting server(s)...")
@@ -82,7 +83,7 @@ func initHome(srvHome string) *conf.ServerConf {
 	utils.CheckAndCreate(tmplDir)
 	writeDefaultHtmlTemplates(tmplDir)
 
-	replDir := filepath.Join(srvHome, "replication")
+	replDir = filepath.Join(srvHome, "replication")
 	log.Debugf("Checking server's repication directory %s", replDir)
 	utils.CheckAndCreate(replDir)
 

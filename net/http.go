@@ -16,9 +16,11 @@ import (
 	"html/template"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/provider"
+	"sparrow/repl"
 	"sparrow/schema"
 	"sparrow/utils"
 	"strconv"
@@ -208,7 +210,13 @@ func setup(c *caddy.Controller) error {
 		return muxHandler{router: router, next: next}
 	})
 
+	var err error
 	replHandler := &replHandler{}
+	replHandler.rl, err = repl.OpenReplSilo(path.Join(replDir, "repl-data.db"))
+	if err != nil {
+		panic(err)
+	}
+	replHandler.webhookToken = replHandler.rl.GetWebHookToken()
 	tlsConf := &tls.Config{InsecureSkipVerify: true}
 	replHandler.transport = &http.Transport{TLSClientConfig: tlsConf}
 
