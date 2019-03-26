@@ -29,7 +29,7 @@ type ReplicationPeer struct {
 }
 
 type JoinResponse struct {
-	ApprovedBy       string
-	PeerWebHookToken string
-	PeerView         []ReplicationPeer
+	ApprovedBy       string            `json:"approvedBy" valid:"required"`
+	PeerWebHookToken string            `json:"peerWebHookToken" valid:"required"`
+	PeerView         []ReplicationPeer `json:"peerView"`
 }

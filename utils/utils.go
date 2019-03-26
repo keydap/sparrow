@@ -218,3 +218,7 @@ func BtoUint16(data []byte) uint16 {
 
 	return x
 }
+
+func SignWithWebHookToken(data []byte, key []byte) (string, error) {
+	return "", nil
+}

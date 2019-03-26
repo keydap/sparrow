@@ -14,6 +14,8 @@ var (
 	BUC_SENT_JOIN_REQUESTS     = []byte("sent_join_requests")
 	BUC_RECEIVED_JOIN_REQUESTS = []byte("received_join_requests")
 	BUC_PEERS                  = []byte("peers")
+	BUC_SELF_WEBHOOK_TOKEN     = []byte("self_webhook_token")
+	keySelfWebHookToken        = []byte("selfWebhookToken")
 )
 var log logger.Logger
 
@@ -22,7 +24,8 @@ func init() {
 }
 
 type ReplSilo struct {
-	db *bolt.DB
+	db           *bolt.DB
+	WebHookToken string // webook token of this server
 }
 
 func OpenReplSilo(path string) (*ReplSilo, error) {
@@ -32,6 +35,7 @@ func OpenReplSilo(path string) (*ReplSilo, error) {
 		return nil, err
 	}
 
+	token := ""
 	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(BUC_SENT_JOIN_REQUESTS)
 		if err != nil {
@@ -41,6 +45,19 @@ func OpenReplSilo(path string) (*ReplSilo, error) {
 		_, err = tx.CreateBucketIfNotExists(BUC_PEERS)
 		if err != nil {
 			return err
+		}
+
+		buck, err := tx.CreateBucketIfNotExists(BUC_SELF_WEBHOOK_TOKEN)
+		if err != nil {
+			return err
+		}
+
+		data := buck.Get(keySelfWebHookToken)
+		if data == nil {
+			token = utils.NewRandShaStr()
+			buck.Put(keySelfWebHookToken, []byte(token))
+		} else {
+			token = string(data)
 		}
 		return nil
 	})
@@ -52,6 +69,7 @@ func OpenReplSilo(path string) (*ReplSilo, error) {
 
 	rl := &ReplSilo{}
 	rl.db = db
+	rl.WebHookToken = token
 
 	log.Debugf("opened replication silo")
 	return rl, nil

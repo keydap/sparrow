@@ -19,9 +19,8 @@ import (
 )
 
 type replHandler struct {
-	rl           *repl.ReplSilo
-	transport    *http.Transport
-	webhookToken string // webook token of this server
+	rl        *repl.ReplSilo
+	transport *http.Transport
 }
 
 func HandleReplEvent() {
@@ -82,7 +81,12 @@ func (rh *replHandler) approveJoinRequest(w http.ResponseWriter, r *http.Request
 
 	joinResp := base.JoinResponse{}
 	joinResp.ApprovedBy = opCtx.Session.Username
-	joinResp.PeerWebHookToken = rh.webhookToken
+	joinResp.PeerWebHookToken = rh.rl.WebHookToken
+	joinResp.PeerView = make([]base.ReplicationPeer, 0)
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.Encode(joinResp)
 
 	approveReq := &http.Request{}
 	rp := base.ReplicationPeer{}
