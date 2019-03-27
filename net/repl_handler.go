@@ -5,11 +5,13 @@ package net
 
 import (
 	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"github.com/asaskevich/govalidator"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"sparrow/base"
 	"sparrow/provider"
 	"sparrow/repl"
@@ -49,6 +51,9 @@ func (rh *replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// internal methods
 	case "sendJoinRequest":
 		rh.sendJoinRequest(w, r)
+
+	case "receiveApproval":
+		rh.receiveApproval(w, r)
 	}
 	w.Write([]byte("received path " + uri + " action " + action))
 }
@@ -84,18 +89,41 @@ func (rh *replHandler) approveJoinRequest(w http.ResponseWriter, r *http.Request
 	joinResp.PeerWebHookToken = rh.rl.WebHookToken
 	joinResp.PeerView = make([]base.ReplicationPeer, 0)
 
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
+	var buf *bytes.Buffer
+	enc := json.NewEncoder(buf)
 	enc.Encode(joinResp)
 
+	baseUrl := "https://" + srvConf.IpAddress + "/repl"
+
 	approveReq := &http.Request{}
+	approveReq.URL, _ = url.Parse(baseUrl + "/receiveApproval")
+	approveReq.Body = ioutil.NopCloser(buf)
+	approveReq.Header.Add("Content-Type", "application/json")
+
+	client := &http.Client{Transport: rh.transport}
+	resp, err := client.Do(approveReq)
+	if err != nil {
+		log.Debugf("%#v", err)
+		writeError(w, base.NewPeerConnectionFailed(err.Error()))
+		return
+	}
+
+	if resp.StatusCode != 200 {
+		err = base.NewFromHttpResp(resp)
+		log.Debugf("%#v", err)
+		writeError(w, err)
+		return
+	}
+
 	rp := base.ReplicationPeer{}
 	rp.ServerId = joinReq.ServerId
 	rp.SentBy = joinReq.SentBy
 	rp.Domain = joinReq.Domain
-	rp.Url = fmt.Sprintf("https://%s:%d/repl/events", joinReq.Host, joinReq.Port)
+	rp.Url, _ = url.Parse(fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port))
 	rp.CreatedTime = utils.DateTimeMillis()
-
+	buf.Reset()
+	binaryEnc := gob.NewEncoder(buf)
+	binaryEnc.Encode(rp)
 }
 
 func (rh *replHandler) rejectJoinRequest(w http.ResponseWriter, r *http.Request) {

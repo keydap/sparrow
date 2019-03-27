@@ -3,6 +3,8 @@
 
 package base
 
+import "net/url"
+
 type ConfigEvent struct {
 	Csn  string
 	Data []byte
@@ -20,7 +22,7 @@ type JoinRequest struct {
 
 type ReplicationPeer struct {
 	ServerId        uint16
-	Url             string
+	Url             *url.URL
 	WebHookToken    string
 	SentBy          string
 	Domain          string
