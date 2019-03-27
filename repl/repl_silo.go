@@ -185,7 +185,7 @@ func (rl *ReplSilo) _getJoinRequests(bucketName []byte) []base.JoinRequest {
 	return requests
 }
 
-func (rl *ReplSilo) AddReplicationPeer(req base.ReplicationPeer) error {
+func (rl *ReplSilo) AddReplicationPeer(req *base.ReplicationPeer) error {
 	key := utils.Uint16tob(req.ServerId)
 	tx, err := rl.db.Begin(true)
 	if err != nil {
@@ -266,6 +266,40 @@ func (rl *ReplSilo) GetReplicationPeer(serverId uint16) *base.ReplicationPeer {
 	}
 
 	return peer
+}
+
+func (rl *ReplSilo) GetReplicationPeers() map[uint16]*base.ReplicationPeer {
+	peers := make(map[uint16]*base.ReplicationPeer, 0)
+	tx, err := rl.db.Begin(false)
+	if err != nil {
+		return peers
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			log.Warningf("%#v", e)
+		}
+		tx.Rollback()
+	}()
+
+	buck := tx.Bucket(BUC_PEERS)
+	cursor := buck.Cursor()
+	var buf bytes.Buffer
+	dec := gob.NewDecoder(&buf)
+	for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+		var p *base.ReplicationPeer
+		buf.Write(v)
+		err = dec.Decode(p)
+		buf.Reset()
+		if err != nil {
+			log.Warningf("%#v", err)
+			continue
+		}
+		peers[p.ServerId] = p
+	}
+
+	return peers
 }
 
 func (rl *ReplSilo) Close() {

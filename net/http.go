@@ -210,17 +210,7 @@ func setup(c *caddy.Controller) error {
 		return muxHandler{router: router, next: next}
 	})
 
-	var err error
-	replHandler := &replHandler{}
-	replHandler.rl, err = repl.OpenReplSilo(path.Join(replDir, "repl-data.db"))
-	if err != nil {
-		panic(err)
-	}
-	tlsConf := &tls.Config{InsecureSkipVerify: true}
-	replHandler.transport = &http.Transport{TLSClientConfig: tlsConf}
-
-	// replication requests
-	router.PathPrefix("/repl/").Handler(replHandler)
+	registerReplHandler(router)
 	//if srvConf.Https {
 	//	homeUrl = "https://" + hostAddr
 	//	logUrls()

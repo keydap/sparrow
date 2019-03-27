@@ -5,13 +5,15 @@ package net
 
 import (
 	"bytes"
-	"encoding/gob"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/asaskevich/govalidator"
+	"github.com/gorilla/mux"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
 	"sparrow/base"
 	"sparrow/provider"
 	"sparrow/repl"
@@ -23,6 +25,23 @@ import (
 type replHandler struct {
 	rl        *repl.ReplSilo
 	transport *http.Transport
+	peers     map[uint16]*base.ReplicationPeer
+}
+
+func registerReplHandler(router *mux.Router) {
+	var err error
+	replHandler := &replHandler{}
+	replHandler.rl, err = repl.OpenReplSilo(path.Join(replDir, "repl-data.db"))
+	if err != nil {
+		panic(err)
+	}
+	tlsConf := &tls.Config{InsecureSkipVerify: true}
+	replHandler.transport = &http.Transport{TLSClientConfig: tlsConf}
+
+	// load the existing peers
+	replHandler.peers = replHandler.rl.GetReplicationPeers()
+	// replication requests
+	router.PathPrefix("/repl/").Handler(replHandler)
 }
 
 func HandleReplEvent() {
@@ -52,10 +71,14 @@ func (rh *replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "sendJoinRequest":
 		rh.sendJoinRequest(w, r)
 
-	case "receiveApproval":
-		rh.receiveApproval(w, r)
+	case "receivedApproval":
+		rh.receivedApproval(w, r)
 	}
 	w.Write([]byte("received path " + uri + " action " + action))
+}
+
+func (rh *replHandler) receivedApproval(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func (rh *replHandler) approveJoinRequest(w http.ResponseWriter, r *http.Request) {
@@ -93,10 +116,11 @@ func (rh *replHandler) approveJoinRequest(w http.ResponseWriter, r *http.Request
 	enc := json.NewEncoder(buf)
 	enc.Encode(joinResp)
 
-	baseUrl := "https://" + srvConf.IpAddress + "/repl"
+	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
 
 	approveReq := &http.Request{}
-	approveReq.URL, _ = url.Parse(baseUrl + "/receiveApproval")
+	approveReq.Method = http.MethodPost
+	approveReq.URL, _ = url.Parse(baseUrl + "/receivedApproval")
 	approveReq.Body = ioutil.NopCloser(buf)
 	approveReq.Header.Add("Content-Type", "application/json")
 
@@ -115,15 +139,21 @@ func (rh *replHandler) approveJoinRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	rp := base.ReplicationPeer{}
+	log.Debugf("storing replication peer %s", baseUrl)
+	rp := &base.ReplicationPeer{}
 	rp.ServerId = joinReq.ServerId
 	rp.SentBy = joinReq.SentBy
 	rp.Domain = joinReq.Domain
-	rp.Url, _ = url.Parse(fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port))
+	rp.Url, _ = url.Parse(baseUrl + "/events")
 	rp.CreatedTime = utils.DateTimeMillis()
-	buf.Reset()
-	binaryEnc := gob.NewEncoder(buf)
-	binaryEnc.Encode(rp)
+	err = rh.rl.AddReplicationPeer(rp)
+	if err != nil {
+		log.Warningf("%#v", err)
+		writeError(w, base.NewInternalserverError(err.Error()))
+		return
+	}
+
+	rh.peers[rp.ServerId] = rp
 }
 
 func (rh *replHandler) rejectJoinRequest(w http.ResponseWriter, r *http.Request) {
@@ -216,6 +246,7 @@ func (rh *replHandler) sendJoinRequest(w http.ResponseWriter, r *http.Request) {
 	enc := json.NewEncoder(buf)
 	enc.Encode(joinReq)
 	httpReq := &http.Request{}
+	httpReq.Method = http.MethodPost
 	httpReq.Body = ioutil.NopCloser(buf)
 	httpReq.Header.Add("Content-Type", "application/json")
 
