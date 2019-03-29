@@ -33,6 +33,7 @@ var DEFAULT_SRV_CONF string = `{
     "certificateFile": "default.cer",
     "privatekeyFile": "default.key",
 	"controllerDomain": "example.com"
+	"skipPeerCertCheck": true
 }`
 
 var COOKIE_LOGIN_NAME string = "SPLCN"

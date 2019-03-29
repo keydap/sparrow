@@ -35,7 +35,14 @@ func registerReplHandler(router *mux.Router) {
 	if err != nil {
 		panic(err)
 	}
-	tlsConf := &tls.Config{InsecureSkipVerify: true}
+
+	skipCertCheck := false
+	if srvConf.SkipPeerCertCheck {
+		skipCertCheck = true
+	} else {
+		// configure the trust store
+	}
+	tlsConf := &tls.Config{InsecureSkipVerify: skipCertCheck}
 	replHandler.transport = &http.Transport{TLSClientConfig: tlsConf}
 
 	// load the existing peers
@@ -62,17 +69,17 @@ func (rh *replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rh.addJoinRequest(w, r)
 
 	case "approve":
-		rh.approveJoinRequest(w, r)
-
-	case "reject":
-		rh.rejectJoinRequest(w, r)
+		rh.receivedApproval(w, r)
 
 		// internal methods
-	case "sendJoinRequest":
+	case "sendJoinReq":
 		rh.sendJoinRequest(w, r)
 
-	case "receivedApproval":
-		rh.receivedApproval(w, r)
+	case "approveJoinReq":
+		rh.sendApprovalForJoinRequest(w, r)
+
+	case "rejectJoinReq":
+		rh.rejectJoinRequest(w, r)
 	}
 	w.Write([]byte("received path " + uri + " action " + action))
 }
@@ -81,7 +88,7 @@ func (rh *replHandler) receivedApproval(w http.ResponseWriter, r *http.Request) 
 
 }
 
-func (rh *replHandler) approveJoinRequest(w http.ResponseWriter, r *http.Request) {
+func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request) {
 	opCtx := getOpCtxOfAdminSessionOrAbort(w, r)
 	if opCtx == nil {
 		return
@@ -120,7 +127,7 @@ func (rh *replHandler) approveJoinRequest(w http.ResponseWriter, r *http.Request
 
 	approveReq := &http.Request{}
 	approveReq.Method = http.MethodPost
-	approveReq.URL, _ = url.Parse(baseUrl + "/receivedApproval")
+	approveReq.URL, _ = url.Parse(baseUrl + "/approve")
 	approveReq.Body = ioutil.NopCloser(buf)
 	approveReq.Header.Add("Content-Type", "application/json")
 
@@ -166,8 +173,9 @@ func (rh *replHandler) rejectJoinRequest(w http.ResponseWriter, r *http.Request)
 		return // erro was already handled so just return
 	}
 
-	err = rh.rl.DeleteSentJoinRequest(uint16(serverId))
+	err = rh.rl.DeleteReceivedJoinRequest(uint16(serverId))
 	log.Warningf("%#v", err)
+	// TODO send rejected response, but not sure if this is necessary
 }
 
 func (rh *replHandler) addJoinRequest(w http.ResponseWriter, r *http.Request) {
@@ -223,20 +231,19 @@ func (rh *replHandler) sendJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverId := r.Form.Get("serverId")
-	host := r.Form.Get("host")
-	port := r.Form.Get("port")
+	host := strings.TrimSpace(r.Form.Get("host"))
+	portVal := r.Form.Get("port")
 	joinReq := base.JoinRequest{}
-	id, err := strconv.Atoi(serverId)
+	port, err := strconv.Atoi(portVal)
 	if err != nil {
 		log.Debugf("%#v", err)
-		writeError(w, base.NewInternalserverError(err.Error()))
+		writeError(w, base.NewBadRequestError("invalid port number"))
 		return
 	}
 
-	joinReq.ServerId = uint16(id)
-	joinReq.Host = host
-	joinReq.Port, _ = strconv.Atoi(port)
+	joinReq.ServerId = srvConf.ServerId
+	joinReq.Host = srvConf.IpAddress
+	joinReq.Port = srvConf.HttpPort
 	joinReq.Domain = opCtx.Session.Domain
 	joinReq.WebHookToken = utils.NewRandShaStr()
 	joinReq.CreatedTime = utils.DateTimeMillis()
@@ -246,6 +253,7 @@ func (rh *replHandler) sendJoinRequest(w http.ResponseWriter, r *http.Request) {
 	enc := json.NewEncoder(buf)
 	enc.Encode(joinReq)
 	httpReq := &http.Request{}
+	httpReq.URL, _ = url.Parse(fmt.Sprintf("https://%s:%d/repl/join", host, port))
 	httpReq.Method = http.MethodPost
 	httpReq.Body = ioutil.NopCloser(buf)
 	httpReq.Header.Add("Content-Type", "application/json")

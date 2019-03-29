@@ -15,20 +15,21 @@ import (
 )
 
 type ServerConf struct {
-	ServerId         uint16              `json:"serverId" valid:"required~Server ID is required"` // used while generating CSNs
-	Https            bool                `json:"enableHttps" valid:"checkTLSSettings"`
-	HttpPort         int                 `json:"httpPort" valid:"required"`
-	LdapPort         int                 `json:"ldapPort"`
-	LdapEnabled      bool                `json:"ldapEnabled"`
-	LdapOverTlsOnly  bool                `json:"ldapOverTlsOnly"`
-	IpAddress        string              `json:"ipAddress" valid:"ip"`
-	CertFile         string              `json:"certificateFile"`
-	PrivKeyFile      string              `json:"privatekeyFile"`
-	ControllerDomain string              `json:"controllerDomain"` // the domain whose admin can manage other domains
-	TmplDir          string              `json:"-"`                // template directory
-	CertChain        []*x509.Certificate `json:"-"`
-	PrivKey          crypto.PrivateKey   `json:"-"`
-	PubKey           crypto.PublicKey    `json:"-"`
+	ServerId          uint16              `json:"serverId" valid:"required~Server ID is required"` // used while generating CSNs
+	Https             bool                `json:"enableHttps" valid:"checkTLSSettings"`
+	HttpPort          int                 `json:"httpPort" valid:"required"`
+	LdapPort          int                 `json:"ldapPort"`
+	LdapEnabled       bool                `json:"ldapEnabled"`
+	LdapOverTlsOnly   bool                `json:"ldapOverTlsOnly"`
+	IpAddress         string              `json:"ipAddress" valid:"ip"`
+	CertFile          string              `json:"certificateFile"`
+	PrivKeyFile       string              `json:"privatekeyFile"`
+	ControllerDomain  string              `json:"controllerDomain"` // the domain whose admin can manage other domains
+	SkipPeerCertCheck bool                `json:"skipPeerCertCheck"`
+	TmplDir           string              `json:"-"` // template directory
+	CertChain         []*x509.Certificate `json:"-"`
+	PrivKey           crypto.PrivateKey   `json:"-"`
+	PubKey            crypto.PublicKey    `json:"-"`
 }
 
 type AuthenticationScheme struct {
