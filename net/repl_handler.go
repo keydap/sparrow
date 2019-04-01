@@ -56,6 +56,15 @@ func HandleReplEvent() {
 }
 
 func (rh *replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	conStatus := r.TLS
+	if conStatus == nil {
+		msg := "invalid transport, replication requests are only allowed over HTTPS"
+		log.Warningf(msg)
+		w.Write([]byte(msg))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	uri := r.RequestURI
 	if strings.HasSuffix(uri, "/") {
 		uri = uri[:len(uri)-1]
@@ -71,6 +80,9 @@ func (rh *replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "approve":
 		rh.receivedApproval(w, r)
 
+	case "leave":
+		//rh.deletePeer(w, r)
+
 		// internal methods
 	case "sendJoinReq":
 		rh.sendJoinRequest(w, r)
@@ -80,12 +92,31 @@ func (rh *replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	case "rejectJoinReq":
 		rh.rejectJoinRequest(w, r)
+
+	case "sendLeaveReq":
+	//rh.sendLeaveReq(w, r)
+
+	default:
+		w.Write([]byte("received path " + uri + " action " + action))
 	}
-	w.Write([]byte("received path " + uri + " action " + action))
 }
 
 func (rh *replHandler) receivedApproval(w http.ResponseWriter, r *http.Request) {
+	var joinResp base.JoinResponse
+	err := parseJsonBody(w, r, &joinResp)
+	if err != nil {
+		return // error was already handled
+	}
 
+	sentReq := rh.rl.GetSentJoinRequest(joinResp.PeerServerId)
+	if sentReq == nil {
+		msg := fmt.Sprintf("no join request was sent to server with ID %d", joinResp.PeerServerId)
+		log.Debugf(msg)
+		writeError(w, base.NewNotFoundError(msg))
+		return
+	}
+
+	rh._storePeer(sentReq, w)
 }
 
 func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request) {
@@ -98,14 +129,7 @@ func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http
 		return // error was already handled so just return
 	}
 
-	var joinReq *base.JoinRequest
-	requests := rh.rl.GetReceivedJoinRequests()
-	for _, v := range requests {
-		if serverId == v.ServerId {
-			joinReq = &v
-			break
-		}
-	}
+	joinReq := rh.rl.GetReceivedJoinRequest(serverId)
 
 	if joinReq == nil {
 		msg := fmt.Sprintf("no pending join request exists for the server ID %d", serverId)
@@ -146,6 +170,11 @@ func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http
 		return
 	}
 
+	rh._storePeer(joinReq, w)
+}
+
+func (rh *replHandler) _storePeer(joinReq *base.JoinRequest, w http.ResponseWriter) error {
+	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
 	log.Debugf("storing replication peer %s", baseUrl)
 	rp := &base.ReplicationPeer{}
 	rp.ServerId = joinReq.ServerId
@@ -153,14 +182,16 @@ func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http
 	rp.Domain = joinReq.Domain
 	rp.Url, _ = url.Parse(baseUrl + "/events")
 	rp.CreatedTime = utils.DateTimeMillis()
-	err = rh.rl.AddReplicationPeer(rp)
+	err := rh.rl.AddReplicationPeer(rp)
 	if err != nil {
 		log.Warningf("%#v", err)
 		writeError(w, base.NewInternalserverError(err.Error()))
-		return
+		return err
 	}
 
 	rh.peers[rp.ServerId] = rp
+
+	return nil
 }
 
 func (rh *replHandler) rejectJoinRequest(w http.ResponseWriter, r *http.Request) {
@@ -179,33 +210,11 @@ func (rh *replHandler) rejectJoinRequest(w http.ResponseWriter, r *http.Request)
 }
 
 func (rh *replHandler) addJoinRequest(w http.ResponseWriter, r *http.Request) {
-	conStatus := r.TLS
-	if conStatus == nil {
-		msg := "invalid transport, replication requests are only allowed over HTTPS"
-		log.Warningf(msg)
-		w.Write([]byte(msg))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 	var joinReq base.JoinRequest
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Debugf("%#v", err)
-		writeError(w, base.NewBadRequestError(err.Error()))
-		return
-	}
-	err = json.Unmarshal(data, &joinReq)
-	if err != nil {
-		log.Debugf("%#v", err)
-		writeError(w, base.NewBadRequestError(err.Error()))
-		return
-	}
 
-	_, err = govalidator.ValidateStruct(joinReq)
+	err := parseJsonBody(w, r, &joinReq)
 	if err != nil {
-		log.Debugf("%#v", err)
-		writeError(w, base.NewBadRequestError(err.Error()))
-		return
+		return // error was already handled
 	}
 
 	if joinReq.ServerId != srvConf.ServerId {
@@ -318,4 +327,28 @@ func parseServerId(w http.ResponseWriter, r *http.Request) (uint16, error) {
 	}
 
 	return uint16(serverId), nil
+}
+
+func parseJsonBody(w http.ResponseWriter, r *http.Request, v interface{}) error {
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Debugf("%#v", err)
+		writeError(w, base.NewBadRequestError(err.Error()))
+		return err
+	}
+	err = json.Unmarshal(data, v)
+	if err != nil {
+		log.Debugf("%#v", err)
+		writeError(w, base.NewBadRequestError(err.Error()))
+		return err
+	}
+
+	_, err = govalidator.ValidateStruct(v)
+	if err != nil {
+		log.Debugf("%#v", err)
+		writeError(w, base.NewBadRequestError(err.Error()))
+		return err
+	}
+
+	return nil
 }

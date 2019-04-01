@@ -31,6 +31,7 @@ type ReplicationPeer struct {
 }
 
 type JoinResponse struct {
+	PeerServerId     uint16            `json:"peerServerId" valid:"range(0|65535),required"`
 	ApprovedBy       string            `json:"approvedBy" valid:"required"`
 	PeerWebHookToken string            `json:"peerWebHookToken" valid:"required"`
 	PeerView         []ReplicationPeer `json:"peerView"`

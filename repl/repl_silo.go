@@ -152,7 +152,7 @@ func (rl *ReplSilo) GetSentJoinRequests() []base.JoinRequest {
 }
 
 func (rl *ReplSilo) GetReceivedJoinRequests() []base.JoinRequest {
-	return rl._getJoinRequests(BUC_SENT_JOIN_REQUESTS)
+	return rl._getJoinRequests(BUC_RECEIVED_JOIN_REQUESTS)
 }
 
 func (rl *ReplSilo) _getJoinRequests(bucketName []byte) []base.JoinRequest {
@@ -262,10 +262,45 @@ func (rl *ReplSilo) GetReplicationPeer(serverId uint16) *base.ReplicationPeer {
 	if data != nil {
 		buf := bytes.NewBuffer(data)
 		dec := gob.NewDecoder(buf)
-		err = dec.Decode(&peer)
+		dec.Decode(&peer)
 	}
 
 	return peer
+}
+
+func (rl *ReplSilo) GetReceivedJoinRequest(serverId uint16) *base.JoinRequest {
+	return rl._getJoinRequest(serverId, BUC_RECEIVED_JOIN_REQUESTS)
+}
+
+func (rl *ReplSilo) GetSentJoinRequest(serverId uint16) *base.JoinRequest {
+	return rl._getJoinRequest(serverId, BUC_SENT_JOIN_REQUESTS)
+}
+
+func (rl *ReplSilo) _getJoinRequest(serverId uint16, buckName []byte) *base.JoinRequest {
+	key := utils.Uint16tob(serverId)
+	tx, err := rl.db.Begin(false)
+	if err != nil {
+		return nil
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			log.Warningf("%#v", e)
+		}
+		tx.Rollback()
+	}()
+
+	buck := tx.Bucket(buckName)
+	data := buck.Get(key)
+	var joinReq *base.JoinRequest
+	if data != nil {
+		buf := bytes.NewBuffer(data)
+		dec := gob.NewDecoder(buf)
+		dec.Decode(&joinReq)
+	}
+
+	return joinReq
 }
 
 func (rl *ReplSilo) GetReplicationPeers() map[uint16]*base.ReplicationPeer {
