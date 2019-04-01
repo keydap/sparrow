@@ -127,7 +127,7 @@ func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 	if cf.Rfc2307bis.Enabled {
 		uidNumber, err := prv.sl.GetMaxIndexedValOfAt(prv.RsTypes["User"], "uidNumber")
 		if err != nil {
-			log.Debugf("failed get the highest uidNumber %s", err.Error())
+			log.Debugf("failed to get the highest uidNumber %s", err.Error())
 		}
 		if cf.Rfc2307bis.UidNumberStart > uidNumber {
 			uidNumber = cf.Rfc2307bis.UidNumberStart - 1 // decrement by one so that it exactly starts at the configured number
@@ -154,7 +154,7 @@ func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 }
 
 func (pr *Provider) Close() {
-	log.Debugf("Closing provider %s", pr.Name)
+	log.Debugf("closing provider %s", pr.Name)
 	pr.sl.Close()
 	pr.osl.Close()
 	pr.Al.Close()
@@ -198,7 +198,7 @@ func (prv *Provider) createDefaultResources(rfc2307i *Rfc2307BisAttrInterceptor)
 			return err
 		}
 
-		log.Infof("Successfully inserted default administrator user %s", AdminUserId)
+		log.Infof("successfully inserted default administrator user %s", AdminUserId)
 	}
 
 	groupName := "Administrator"
@@ -235,7 +235,7 @@ func (prv *Provider) createDefaultResources(rfc2307i *Rfc2307BisAttrInterceptor)
 			return err
 		}
 
-		log.Infof("Successfully inserted default admin group %s", AdminGroupId)
+		log.Infof("successfully inserted default admin group %s", AdminGroupId)
 	}
 
 	groupName = "System"
@@ -272,7 +272,7 @@ func (prv *Provider) createDefaultResources(rfc2307i *Rfc2307BisAttrInterceptor)
 			return err
 		}
 
-		log.Infof("Successfully inserted default system group %s", SystemGroupId)
+		log.Infof("successfully inserted default system group %s", SystemGroupId)
 	}
 
 	return nil
@@ -294,7 +294,7 @@ func (prv *Provider) GetSchema(id string) (string, error) {
 	sc := prv.Schemas[id]
 
 	if sc == nil {
-		return "", fmt.Errorf("No schema present with the ID %s", id)
+		return "", fmt.Errorf("no schema present with the ID %s", id)
 	}
 
 	return sc.Text, nil
@@ -316,7 +316,7 @@ func (prv *Provider) GetResourceType(name string) (string, error) {
 	rt := prv.RsTypes[name]
 
 	if rt == nil {
-		return "", fmt.Errorf("No resource type present with the ID %s", name)
+		return "", fmt.Errorf("no resource type present with the ID %s", name)
 	}
 
 	return rt.Text, nil
@@ -334,7 +334,7 @@ func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resour
 	isAuditRes := (crCtx.InRes.GetType() == prv.Al.rt)
 
 	if isAuditRes || !crCtx.AllowOp() {
-		return nil, base.NewForbiddenError("Insufficent privileges to create a resource")
+		return nil, base.NewForbiddenError("insufficent privileges to create a resource")
 	}
 
 	err = prv.firePreInterceptors(crCtx)
@@ -360,7 +360,7 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {
 
 	od := delCtx.GetDecision()
 	if od.Deny {
-		err = base.NewForbiddenError("Insufficent privileges to delete the resource")
+		err = base.NewForbiddenError("insufficent privileges to delete the resource")
 		return err
 	}
 
@@ -368,7 +368,7 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {
 		res, err := prv.sl.Get(delCtx.Rid, delCtx.Rt)
 		if res != nil {
 			if !delCtx.EvalDelete(res) {
-				err = base.NewForbiddenError("Insufficent privileges to delete the resource")
+				err = base.NewForbiddenError("insufficent privileges to delete the resource")
 				return err
 			}
 		} else {
@@ -378,12 +378,12 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {
 	}
 
 	if delCtx.Rid == delCtx.Session.Sub {
-		err = base.NewForbiddenError("Cannot delete self")
+		err = base.NewForbiddenError("cannot delete self")
 		return err
 	}
 
 	if _, ok := prv.immResIds[delCtx.Rid]; ok {
-		msg := fmt.Sprintf("Resource with ID %s cannot be deleted, it is required for the functioning of server", delCtx.Rid)
+		msg := fmt.Sprintf("resource with ID %s cannot be deleted, it is required for the functioning of server", delCtx.Rid)
 		log.Debugf(msg)
 		err = base.NewForbiddenError(msg)
 		return err
@@ -404,7 +404,7 @@ func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, e
 
 	od := getCtx.GetDecision()
 	if od.Deny {
-		return nil, base.NewForbiddenError("Insufficent privileges to read the resource")
+		return nil, base.NewForbiddenError("insufficent privileges to read the resource")
 	} else if od.EvalFilter {
 		res, err = sl.Get(getCtx.Rid, getCtx.Rt)
 		if err != nil {
@@ -415,7 +415,7 @@ func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, e
 		if allow {
 			return res, nil
 		} else {
-			return nil, base.NewForbiddenError("Insufficent privileges to read the resource")
+			return nil, base.NewForbiddenError("insufficent privileges to read the resource")
 		}
 	}
 
@@ -435,7 +435,7 @@ func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource)
 
 	deny, fn := sc.CanDenyOp()
 	if deny {
-		err = base.NewForbiddenError("Insufficent privileges to search resources")
+		err = base.NewForbiddenError("insufficent privileges to search resources")
 		return err
 	}
 
@@ -460,7 +460,7 @@ func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resourc
 	}()
 
 	if !replaceCtx.AllowOp() {
-		return nil, base.NewForbiddenError("Insufficent privileges to replace the resource")
+		return nil, base.NewForbiddenError("insufficent privileges to replace the resource")
 	}
 
 	return prv.sl.Replace(replaceCtx.InRes, replaceCtx.IfMatch)
@@ -473,7 +473,7 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err
 
 	od := patchCtx.GetDecision()
 	if od.Deny {
-		return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
+		return nil, base.NewForbiddenError("insufficent privileges to update the resource")
 	}
 
 	if od.EvalFilter {
@@ -483,11 +483,11 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err
 		}
 
 		if !patchCtx.EvalPatch(res) {
-			return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
+			return nil, base.NewForbiddenError("insufficent privileges to update the resource")
 		}
 	} else if od.EvalWithoutFetch {
 		if !patchCtx.EvalPatch(nil) {
-			return nil, base.NewForbiddenError("Insufficent privileges to update the resource")
+			return nil, base.NewForbiddenError("insufficent privileges to update the resource")
 		}
 	}
 
@@ -578,7 +578,7 @@ func (prv *Provider) GetUserByName(username string) (res *base.Resource) {
 	user, err := prv.sl.GetUserByName(username)
 
 	if err != nil {
-		log.Debugf("No user found with username %s", username)
+		log.Debugf("no user found with username %s", username)
 		return nil
 	}
 
@@ -615,7 +615,7 @@ func (prv *Provider) ModifyGroupsOfUser(autg base.ModifyGroupsOfUserRequest) (us
 	}
 
 	if !autg.AllowOp(res) {
-		return nil, base.NewForbiddenError("Insufficent privileges to add groups to user")
+		return nil, base.NewForbiddenError("insufficent privileges to add groups to user")
 	}
 
 	return prv.sl.ModifyGroupsOfUser(autg)
@@ -644,7 +644,7 @@ func (prv *Provider) firePreInterceptors(ctx interface{}) (err error) {
 			err = i.PrePatch(ctx.(*base.PatchContext))
 
 		default:
-			log.Warningf("Unknown operation context type %t", t)
+			log.Warningf("unknown operation context type %t", t)
 		}
 
 		if err != nil {
