@@ -11,6 +11,7 @@ type OpContext struct {
 	Session        *RbacSession
 	Sso            bool
 	UpdatedSession bool
+	Repl           bool
 	ClientIP       string
 	Endpoint       string
 }

@@ -327,6 +327,9 @@ func (prv *Provider) GetConfigJson() (data []byte, err error) {
 }
 
 func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resource, err error) {
+	if crCtx.Repl {
+		prv.sl.InsertInternal(crCtx.InRes)
+	}
 	defer func() {
 		prv.Al.Log(crCtx, res, err)
 	}()
