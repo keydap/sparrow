@@ -143,7 +143,10 @@ func TestInsert(t *testing.T) {
 	user.AddCA("meta", metaMap)
 	uMeta := user.GetMeta()
 
-	rs, err := sl.Insert(user)
+	crCtx := &base.CreateContext{}
+	crCtx.InRes = user
+	err := sl.Insert(crCtx)
+	rs := crCtx.InRes
 
 	//fmt.Println(rs.ToJSON())
 
@@ -229,7 +232,7 @@ func TestInsert(t *testing.T) {
 	}
 
 	// add the same user, should return an error
-	rs, err = sl.Insert(user)
+	err = sl.Insert(crCtx)
 	if err == nil {
 		t.Error("Failed to detect uniqueness violation of username attribute in the resource")
 	}
@@ -265,7 +268,8 @@ func TestIndexOps(t *testing.T) {
 
 	// first user
 	rs := createTestUser()
-	sl.Insert(rs)
+	crCtx := &base.CreateContext{InRes: rs}
+	sl.Insert(crCtx)
 	rid1 := rs.GetId()
 
 	readTx, _ = sl.db.Begin(false)
@@ -288,7 +292,9 @@ func TestIndexOps(t *testing.T) {
 
 	// second user
 	rs = createTestUser()
-	sl.Insert(rs)
+	crCtx = &base.CreateContext{}
+	crCtx.InRes = rs
+	sl.Insert(crCtx)
 	rid2 := rs.GetId()
 
 	readTx, _ = sl.db.Begin(false)
@@ -371,10 +377,12 @@ func assertPrCount(rs *base.Resource, readTx *bolt.Tx, expected int64, t *testin
 func TestSearch(t *testing.T) {
 	initSilo()
 	rs1 := createTestUser()
-	rs1, _ = sl.Insert(rs1)
+	crCtx1 := &base.CreateContext{InRes: rs1}
+	sl.Insert(crCtx1)
 
 	rs2 := createTestUser()
-	rs2, _ = sl.Insert(rs2)
+	crCtx2 := &base.CreateContext{InRes: rs2}
+	sl.Insert(crCtx2)
 
 	filter, _ := base.ParseFilter("userName eq \"" + rs1.GetAttr("username").GetSimpleAt().Values[0].(string) + "\"")
 	sc := &base.SearchContext{}

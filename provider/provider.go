@@ -193,7 +193,8 @@ func (prv *Provider) createDefaultResources(rfc2307i *Rfc2307BisAttrInterceptor)
 				return err
 			}
 		}
-		_, err = prv.sl.InsertInternal(userRes)
+		crCtx := &base.CreateContext{InRes: userRes}
+		err = prv.sl.InsertInternal(crCtx)
 		if err != nil {
 			return err
 		}
@@ -230,7 +231,8 @@ func (prv *Provider) createDefaultResources(rfc2307i *Rfc2307BisAttrInterceptor)
 				return err
 			}
 		}
-		_, err = prv.sl.InsertInternal(grpRes)
+		crCtx := &base.CreateContext{InRes: grpRes}
+		err = prv.sl.InsertInternal(crCtx)
 		if err != nil {
 			return err
 		}
@@ -267,7 +269,8 @@ func (prv *Provider) createDefaultResources(rfc2307i *Rfc2307BisAttrInterceptor)
 			}
 		}
 
-		_, err = prv.sl.InsertInternal(grpRes)
+		crCtx := &base.CreateContext{InRes: grpRes}
+		err = prv.sl.InsertInternal(crCtx)
 		if err != nil {
 			return err
 		}
@@ -328,8 +331,12 @@ func (prv *Provider) GetConfigJson() (data []byte, err error) {
 
 func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resource, err error) {
 	if crCtx.Repl {
-		prv.sl.InsertInternal(crCtx.InRes)
+		err = prv.sl.InsertInternal(crCtx)
+		// run the rfc2307bis interceptor, the syncing of uid and gid across cluster is a big thing and worth solving
+		// how about deriving a number from the corresponding resource's UUID instead of incrementing??
+		return crCtx.InRes, err
 	}
+
 	defer func() {
 		prv.Al.Log(crCtx, res, err)
 	}()
@@ -345,7 +352,7 @@ func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resour
 		return nil, err
 	}
 
-	res, err = prv.sl.Insert(crCtx.InRes)
+	err = prv.sl.Insert(crCtx)
 
 	if err == nil {
 		for _, intrcptr := range prv.interceptors {

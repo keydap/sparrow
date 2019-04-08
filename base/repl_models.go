@@ -5,9 +5,22 @@ package base
 
 import "net/url"
 
-type ConfigEvent struct {
+type DataType uint8
+
+const (
+	SERVER_CONFIG DataType = iota
+	PROVIDER_CONFIG
+	TEMPLATES
+	RESOURCE_CREATE
+	RESOURCE_PATCH
+	RESOURCE_DELETE
+)
+
+type ReplicationEvent struct {
 	Csn  string
+	Type DataType
 	Data []byte
+	Res  *Resource
 }
 
 type JoinRequest struct {

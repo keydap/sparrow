@@ -30,3 +30,10 @@ func removeNeverAttrs(rs *base.Resource) {
 		rs.DeleteAttr(atPath)
 	}
 }
+
+func (ri *RemoveNeverAttrInterceptor) PreDelete(delCtx *base.DeleteContext) error {
+	return nil
+}
+
+func (ri *RemoveNeverAttrInterceptor) PostDelete(delCtx *base.DeleteContext) {
+}

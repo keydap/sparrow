@@ -635,19 +635,20 @@ func fillIndexMap(bucket *bolt.Bucket, m map[string]*Index) error {
 	return err
 }
 
-func (sl *Silo) Insert(inRes *base.Resource) (res *base.Resource, err error) {
-	inRes.RemoveReadOnlyAt()
+func (sl *Silo) Insert(crCtx *base.CreateContext) (err error) {
+	crCtx.InRes.RemoveReadOnlyAt()
 
 	rid := utils.GenUUID()
-	inRes.SetId(rid)
+	crCtx.InRes.SetId(rid)
 
-	return sl.InsertInternal(inRes)
+	return sl.InsertInternal(crCtx)
 }
 
-func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err error) {
+func (sl *Silo) InsertInternal(crCtx *base.CreateContext) (err error) {
+	inRes := crCtx.InRes
 	err = inRes.CheckMissingRequiredAts()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	rid := inRes.GetId()
@@ -663,7 +664,7 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 		detail := fmt.Sprintf("Could not begin a transaction for inserting the resource [%s]", err.Error())
 		log.Criticalf(detail)
 		err = base.NewInternalserverError(detail)
-		return nil, err
+		return err
 	}
 
 	sl.mutex.Lock()
@@ -676,11 +677,9 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 
 		if err != nil {
 			tx.Rollback()
-			res = nil
 			log.Debugf("failed to insert %s resource [%s]", rt.Name, err)
 		} else {
 			tx.Commit()
-			res = inRes
 
 			if isGroup {
 				sl.Engine.UpsertRole(inRes, sl.resTypes)
@@ -774,7 +773,7 @@ func (sl *Silo) InsertInternal(inRes *base.Resource) (res *base.Resource, err er
 
 	sl.storeResource(tx, inRes)
 
-	return inRes, nil
+	return nil
 }
 
 func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string, displayName string, tx *bolt.Tx) {

@@ -109,3 +109,10 @@ func validateClient(rs *base.Resource, opCtx *base.OpContext) error {
 
 	return nil
 }
+
+func (ai *ApplicationInterceptor) PreDelete(delCtx *base.DeleteContext) error {
+	return nil
+}
+
+func (ai *ApplicationInterceptor) PostDelete(delCtx *base.DeleteContext) {
+}

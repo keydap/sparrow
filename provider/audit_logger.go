@@ -54,6 +54,7 @@ func start(al *AuditLogger) {
 
 	al.roller <- time.Now()
 
+	ctx := &base.CreateContext{}
 loop:
 	for {
 		select {
@@ -65,7 +66,8 @@ loop:
 
 			log.Debugf("%s", ae.Id)
 			res := al.eventToRes(ae)
-			_, err := al.sl.InsertInternal(res)
+			ctx.InRes = res
+			err := al.sl.InsertInternal(ctx)
 			if err != nil {
 				log.Warningf("failed to insert audit log event")
 			}

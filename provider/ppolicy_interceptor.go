@@ -79,3 +79,10 @@ outer:
 
 func (pi *PpolicyInterceptor) PostPatch(patchedRs *base.Resource, patchCtx *base.PatchContext) {
 }
+
+func (pi *PpolicyInterceptor) PreDelete(delCtx *base.DeleteContext) error {
+	return nil
+}
+
+func (pi *PpolicyInterceptor) PostDelete(delCtx *base.DeleteContext) {
+}

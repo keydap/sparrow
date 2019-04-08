@@ -137,3 +137,10 @@ func (ri *Rfc2307BisAttrInterceptor) PrePatch(patchCtx *base.PatchContext) error
 
 func (ri *Rfc2307BisAttrInterceptor) PostPatch(patchedRs *base.Resource, patchCtx *base.PatchContext) {
 }
+
+func (ri *Rfc2307BisAttrInterceptor) PreDelete(delCtx *base.DeleteContext) error {
+	return nil
+}
+
+func (ri *Rfc2307BisAttrInterceptor) PostDelete(delCtx *base.DeleteContext) {
+}
