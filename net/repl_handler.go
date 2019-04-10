@@ -217,8 +217,8 @@ func (rh *replHandler) addJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return // error was already handled
 	}
 
-	if joinReq.ServerId != srvConf.ServerId {
-		msg := fmt.Sprintf("Mismatched server ID %s", joinReq.ServerId)
+	if joinReq.ServerId == srvConf.ServerId {
+		msg := fmt.Sprintf("cannot join self, received server ID %s", joinReq.ServerId)
 		log.Debugf(msg)
 		writeError(w, base.NewBadRequestError(msg))
 		return

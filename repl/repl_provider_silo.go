@@ -80,6 +80,7 @@ func (rpl *ReplProviderSilo) SendEventsAfter(csn string, target chan []byte) {
 	}
 
 	defer func() {
+		recover() // to recover when the channel is closed by the caller
 		tx.Rollback()
 	}()
 
@@ -90,4 +91,6 @@ func (rpl *ReplProviderSilo) SendEventsAfter(csn string, target chan []byte) {
 	for k, v := cursor.Prev(); k != nil; k, v = cursor.Prev() {
 		target <- v
 	}
+
+	target <- nil
 }

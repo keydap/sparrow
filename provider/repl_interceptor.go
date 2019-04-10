@@ -1,8 +1,12 @@
 package provider
 
-import "sparrow/base"
+import (
+	"sparrow/base"
+	"sparrow/repl"
+)
 
 type ReplInterceptor struct {
+	replSilo *repl.ReplProviderSilo
 }
 
 func (ri *ReplInterceptor) PreCreate(crCtx *base.CreateContext) error {
@@ -10,7 +14,12 @@ func (ri *ReplInterceptor) PreCreate(crCtx *base.CreateContext) error {
 }
 
 func (ri *ReplInterceptor) PostCreate(crCtx *base.CreateContext) {
-	panic("implement me")
+	event := base.ReplicationEvent{}
+	event.Csn = crCtx.InRes.GetMeta().GetValue("csn").(string)
+	event.Res = crCtx.InRes
+	event.Type = base.RESOURCE_CREATE
+	ri.replSilo.StoreEvent(event)
+	// send to the peers
 }
 
 func (ri *ReplInterceptor) PrePatch(patchCtx *base.PatchContext) error {
