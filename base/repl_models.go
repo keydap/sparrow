@@ -17,10 +17,11 @@ const (
 )
 
 type ReplicationEvent struct {
-	Csn  string
-	Type DataType
-	Data []byte
-	Res  *Resource
+	Csn        string
+	DomainCode string
+	Type       DataType
+	Data       []byte
+	Res        *Resource
 }
 
 type JoinRequest struct {
