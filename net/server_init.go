@@ -5,6 +5,7 @@ package net
 
 import (
 	"crypto"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -12,6 +13,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sparrow/conf"
@@ -190,6 +192,15 @@ func initHome(srvHome string) *conf.ServerConf {
 	log.Debugf("Checking server domains directory %s", domainsDir)
 	utils.CheckAndCreate(domainsDir)
 
+	skipCertCheck := false
+	if sc.SkipPeerCertCheck {
+		skipCertCheck = true
+	} else {
+		// configure the trust store
+	}
+	tlsConf := &tls.Config{InsecureSkipVerify: skipCertCheck}
+	sc.ReplTransport = &http.Transport{TLSClientConfig: tlsConf}
+
 	loadProviders(domainsDir, sc)
 
 	cwd, _ := os.Getwd()
@@ -262,6 +273,7 @@ func loadProviders(domainsDir string, sc *conf.ServerConf) {
 					prv.Cert = sc.CertChain[0]
 					prv.PrivKey = sc.PrivKey
 					prv.ServerId = sc.ServerId
+					prv.ReplTransport = sc.ReplTransport
 					providers[lName] = prv
 					dcPrvMap[prv.DomainCode()] = prv
 				}

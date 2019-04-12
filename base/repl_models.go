@@ -41,6 +41,7 @@ type ReplicationPeer struct {
 	SentBy          string
 	Domain          string
 	CreatedTime     int64
+	LastCsn         string
 	LastReqSentTime int64
 }
 

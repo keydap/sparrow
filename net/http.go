@@ -4,7 +4,6 @@
 package net
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
@@ -16,11 +15,9 @@ import (
 	"html/template"
 	"io/ioutil"
 	"net/http"
-	"path"
 	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/provider"
-	"sparrow/repl"
 	"sparrow/schema"
 	"sparrow/utils"
 	"strconv"

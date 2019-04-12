@@ -5,7 +5,6 @@ package net
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/asaskevich/govalidator"
@@ -36,15 +35,7 @@ func registerReplHandler(router *mux.Router) {
 		panic(err)
 	}
 
-	skipCertCheck := false
-	if srvConf.SkipPeerCertCheck {
-		skipCertCheck = true
-	} else {
-		// configure the trust store
-	}
-	tlsConf := &tls.Config{InsecureSkipVerify: skipCertCheck}
-	replHandler.transport = &http.Transport{TLSClientConfig: tlsConf}
-
+	replHandler.transport = srvConf.ReplTransport
 	// load the existing peers
 	replHandler.peers = replHandler.rl.GetReplicationPeers()
 	// replication requests

@@ -16,6 +16,7 @@ import (
 	samlTypes "github.com/russellhaering/gosaml2/types"
 	"html/template"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sparrow/base"
@@ -46,6 +47,7 @@ type Provider struct {
 	interceptors  []base.Interceptor
 	Al            *AuditLogger
 	SamlMdCache   map[string]*samlTypes.SPSSODescriptor
+	ReplTransport *http.Transport
 }
 
 const AdminGroupId = "01000000-0000-4000-4000-000000000000"

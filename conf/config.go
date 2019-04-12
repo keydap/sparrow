@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"sparrow/base"
 	"sparrow/utils"
 	"time"
@@ -30,6 +31,7 @@ type ServerConf struct {
 	CertChain         []*x509.Certificate `json:"-"`
 	PrivKey           crypto.PrivateKey   `json:"-"`
 	PubKey            crypto.PublicKey    `json:"-"`
+	ReplTransport     *http.Transport     `json:"-"`
 }
 
 type AuthenticationScheme struct {

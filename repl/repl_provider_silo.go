@@ -44,10 +44,10 @@ func OpenReplProviderSilo(path string) (*ReplProviderSilo, error) {
 	return rl, nil
 }
 
-func (rpl *ReplProviderSilo) StoreEvent(event base.ReplicationEvent) error {
+func (rpl *ReplProviderSilo) StoreEvent(event base.ReplicationEvent) (*bytes.Buffer, error) {
 	tx, err := rpl.db.Begin(true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// not using defer block intentionally
@@ -57,19 +57,19 @@ func (rpl *ReplProviderSilo) StoreEvent(event base.ReplicationEvent) error {
 	err = enc.Encode(event)
 	if err != nil {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
 
 	buck := tx.Bucket(BUC_REPL_EVENTS)
 	err = buck.Put([]byte(event.Csn), buf.Bytes())
 	if err != nil {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
 
 	err = tx.Commit()
 
-	return err
+	return &buf, err
 }
 
 func (rpl *ReplProviderSilo) SendEventsAfter(csn string, target chan []byte) {
