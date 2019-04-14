@@ -331,27 +331,27 @@ func (prv *Provider) GetConfigJson() (data []byte, err error) {
 	return json.Marshal(prv.Config.Scim)
 }
 
-func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resource, err error) {
+func (prv *Provider) CreateResource(crCtx *base.CreateContext) (err error) {
 	if crCtx.Repl {
 		err = prv.sl.InsertInternal(crCtx)
 		// run the rfc2307bis interceptor, the syncing of uid and gid across cluster is a big thing and worth solving
 		// how about deriving a number from the corresponding resource's UUID instead of incrementing??
-		return crCtx.InRes, err
+		return err
 	}
 
 	defer func() {
-		prv.Al.Log(crCtx, res, err)
+		prv.Al.Log(crCtx, crCtx.InRes, err)
 	}()
 
 	isAuditRes := (crCtx.InRes.GetType() == prv.Al.rt)
 
 	if isAuditRes || !crCtx.AllowOp() {
-		return nil, base.NewForbiddenError("insufficent privileges to create a resource")
+		return base.NewForbiddenError("insufficent privileges to create a resource")
 	}
 
 	err = prv.firePreInterceptors(crCtx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = prv.sl.Insert(crCtx)
@@ -362,7 +362,7 @@ func (prv *Provider) CreateResource(crCtx *base.CreateContext) (res *base.Resour
 		}
 	}
 
-	return res, err
+	return err
 }
 
 func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {

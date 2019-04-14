@@ -11,7 +11,6 @@ import (
 	"sparrow/provider"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 // a struct for deserializing incoming config JSON patchset
@@ -21,11 +20,8 @@ type confPatch struct {
 	Value interface{}
 }
 
-// Mutex to serialize updates to the domain configuration
-var dconfUpdateMutex sync.Mutex
-
-func handleDomainConf(w http.ResponseWriter, r *http.Request) {
-	opCtx, err := createOpCtx(r)
+func (sp *Sparrow) handleDomainConf(w http.ResponseWriter, r *http.Request) {
+	opCtx, err := createOpCtx(r, sp)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -37,7 +33,7 @@ func handleDomainConf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pr := providers[opCtx.Session.Domain]
+	pr := sp.providers[opCtx.Session.Domain]
 	log.Debugf("serving configuration of the domain %s", pr.Name)
 
 	hc := httpContext{w, r, pr, opCtx}
@@ -45,7 +41,7 @@ func handleDomainConf(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		sendDomainConf(pr, hc)
 	} else if r.Method == http.MethodPatch {
-		updateDomainConf(pr, hc)
+		updateDomainConf(pr, hc, sp)
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 	}
@@ -61,7 +57,7 @@ func sendDomainConf(pr *provider.Provider, hc httpContext) {
 	hc.w.Write(buf.Bytes())
 }
 
-func updateDomainConf(pr *provider.Provider, hc httpContext) {
+func updateDomainConf(pr *provider.Provider, hc httpContext, sp *Sparrow) {
 	var cpatches []confPatch
 	dec := json.NewDecoder(hc.r.Body)
 	err := dec.Decode(&cpatches)
@@ -71,7 +67,7 @@ func updateDomainConf(pr *provider.Provider, hc httpContext) {
 		return
 	}
 
-	dconfUpdateMutex.Lock()
+	sp.dconfUpdateMutex.Lock()
 	log.Infof("%v", cpatches)
 
 	defer func() {
@@ -80,7 +76,7 @@ func updateDomainConf(pr *provider.Provider, hc httpContext) {
 			log.Errorf("failed to updated domain config %v", e)
 			writeError(hc.w, e.(error))
 		}
-		dconfUpdateMutex.Unlock()
+		sp.dconfUpdateMutex.Unlock()
 	}()
 
 	ifMatch := hc.r.Header.Get("If-Match")

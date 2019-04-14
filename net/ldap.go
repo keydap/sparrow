@@ -27,12 +27,8 @@ type LdapSession struct {
 	*base.OpContext
 }
 
-var tlsConf *tls.Config
-
-var listener *net.TCPListener
-
-func startLdap() error {
-	hostAddr := srvConf.IpAddress + ":" + strconv.Itoa(srvConf.LdapPort)
+func (sp *Sparrow) startLdap() error {
+	hostAddr := sp.srvConf.IpAddress + ":" + strconv.Itoa(sp.srvConf.LdapPort)
 
 	log.Infof("Starting ldap server...")
 	laddr, err := net.ResolveTCPAddr("tcp", hostAddr)
@@ -41,30 +37,30 @@ func startLdap() error {
 		return err
 	}
 
-	listener, err = net.ListenTCP("tcp", laddr)
+	sp.listener, err = net.ListenTCP("tcp", laddr)
 	if err != nil {
 		log.Warningf("Failed to listen at the local address %s, %s", hostAddr, err)
 		return err
 	}
 
-	tlsConf = &tls.Config{}
-	tlsCert, _ := tls.LoadX509KeyPair(srvConf.CertFile, srvConf.PrivKeyFile)
+	tlsConf := &tls.Config{}
+	tlsCert, _ := tls.LoadX509KeyPair(sp.srvConf.CertFile, sp.srvConf.PrivKeyFile)
 	tlsConf.Certificates = []tls.Certificate{tlsCert}
 
-	go acceptConns(listener)
+	go acceptConns(sp, tlsConf)
 
 	log.Infof("LDAP server is accessible at ldap://%s", hostAddr)
 	return nil
 }
 
-func stopLdap() {
-	listener.Close()
+func (sp *Sparrow) stopLdap() {
+	sp.listener.Close()
 	log.Debugf("Stopped LDAP server")
 }
 
-func acceptConns(listener *net.TCPListener) {
+func acceptConns(sp *Sparrow, tlsConf *tls.Config) {
 	for {
-		con, err := listener.AcceptTCP()
+		con, err := sp.listener.AcceptTCP()
 		if err != nil {
 			if oe, ok := err.(*net.OpError); ok {
 				// Source will be null if the listener was closed
@@ -83,11 +79,11 @@ func acceptConns(listener *net.TCPListener) {
 		ls.OpContext = &base.OpContext{}
 		ls.ClientIP = remoteAddr
 		ls.con = con
-		go serveClient(ls)
+		go serveClient(ls, sp, tlsConf)
 	}
 }
 
-func serveClient(ls *LdapSession) {
+func serveClient(ls *LdapSession, sp *Sparrow, tlsConf *tls.Config) {
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -98,7 +94,7 @@ func serveClient(ls *LdapSession) {
 		log.Debugf("closing connection %s", ls.ClientIP)
 		ls.con.Close()
 		if ls.Session != nil {
-			pr := providers[ls.Session.Domain]
+			pr := sp.providers[ls.Session.Domain]
 			if pr != nil {
 				pr.Al.LogDelSession(ls.OpContext, true)
 			}
@@ -129,7 +125,7 @@ func serveClient(ls *LdapSession) {
 
 		switch appMessage.Tag {
 		case ldap.ApplicationBindRequest:
-			secure := isSecure(messageId, ldap.ApplicationBindResponse, ls)
+			secure := isSecure(sp, messageId, ldap.ApplicationBindResponse, ls)
 			if !secure {
 				continue
 			}
@@ -139,13 +135,13 @@ func serveClient(ls *LdapSession) {
 			// password is sometimes coming as wrong or empty
 			bindReq.Password = string(appMessage.Children[2].Data.Bytes())
 
-			handleSimpleBind(bindReq, ls, messageId)
+			handleSimpleBind(sp, bindReq, ls, messageId)
 
 		case ldap.ApplicationUnbindRequest:
 			return // defer() will close the connection
 
 		case ldap.ApplicationSearchRequest:
-			secure := isSecure(messageId, ldap.ApplicationSearchResultDone, ls)
+			secure := isSecure(sp, messageId, ldap.ApplicationSearchResultDone, ls)
 			if !secure {
 				continue
 			}
@@ -157,21 +153,21 @@ func serveClient(ls *LdapSession) {
 				continue
 			}
 
-			handleSearch(messageId, packet, ls)
+			handleSearch(sp, messageId, packet, ls)
 
 		case ldap.ApplicationExtendedRequest:
 			oid := string(appMessage.Children[0].Data.Bytes())
 			if oid == "1.3.6.1.4.1.1466.20037" { // startTLS
 				resp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultSuccess, "")
 				ls.con.Write(resp.Bytes())
-				startTls(messageId, ls)
+				startTls(messageId, ls, tlsConf)
 			} else if oid == "1.3.6.1.4.1.4203.1.11.1" { // PasswordModify
-				secure := isSecure(messageId, ldap.ApplicationExtendedResponse, ls)
+				secure := isSecure(sp, messageId, ldap.ApplicationExtendedResponse, ls)
 				if !secure {
 					continue
 				}
 
-				modifyPassword(messageId, appMessage.Children[1], ls)
+				modifyPassword(sp, messageId, appMessage.Children[1], ls)
 			} else {
 				errResp := generateResultCode(messageId, ldap.ApplicationExtendedResponse, ldap.LDAPResultOther, "Unsupported extended operation "+oid)
 				ls.con.Write(errResp.Bytes())
@@ -188,9 +184,9 @@ func serveClient(ls *LdapSession) {
 	}
 }
 
-func isSecure(messageId int, appRespTag ber.Tag, ls *LdapSession) bool {
+func isSecure(sp *Sparrow, messageId int, appRespTag ber.Tag, ls *LdapSession) bool {
 	_, isTlsCon := ls.con.(*tls.Conn)
-	if srvConf.LdapOverTlsOnly && !isTlsCon {
+	if sp.srvConf.LdapOverTlsOnly && !isTlsCon {
 		errResp := generateResultCode(messageId, appRespTag, ldap.LDAPResultConfidentialityRequired, "operation is allowed only on connections secured using TLS")
 		ls.con.Write(errResp.Bytes())
 		return false
@@ -199,18 +195,18 @@ func isSecure(messageId int, appRespTag ber.Tag, ls *LdapSession) bool {
 	return true
 }
 
-func startTls(messageId int, ls *LdapSession) {
+func startTls(messageId int, ls *LdapSession, tlsConf *tls.Config) {
 	log.Debugf("securing the connection %s using startTLS", ls.ClientIP)
 	ls.con = tls.Server(ls.con, tlsConf)
 }
 
-func handleSimpleBind(bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageId int) {
+func handleSimpleBind(sp *Sparrow, bindReq *ldap.SimpleBindRequest, ls *LdapSession, messageId int) {
 	log.Debugf("handling bind request from %s", ls.ClientIP)
 	log.Debugf("bind dn = %s", bindReq.Username)
 
 	domain, _ := getDomainAndEndpoint(bindReq.Username)
 
-	pr := providers[domain]
+	pr := sp.providers[domain]
 
 	if pr == nil {
 		errResp := generateResultCode(messageId, ldap.ApplicationBindResponse, ldap.LDAPResultInvalidCredentials, "Invalid username or password")
@@ -264,7 +260,7 @@ func generateResultCode(messageId int, appRespTag ber.Tag, resultCode int, errMs
 	return response
 }
 
-func toSearchContext(req ldap.SearchRequest, ls *LdapSession) (searchCtx *base.SearchContext, pr *provider.Provider, err error) {
+func toSearchContext(req ldap.SearchRequest, ls *LdapSession, sp *Sparrow) (searchCtx *base.SearchContext, pr *provider.Provider, err error) {
 	sr := &base.SearchRequest{Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:SearchRequest"}}
 	sr.Count = req.SizeLimit
 	searchCtx = &base.SearchContext{}
@@ -275,7 +271,7 @@ func toSearchContext(req ldap.SearchRequest, ls *LdapSession) (searchCtx *base.S
 	domain, endPoint := getDomainAndEndpoint(req.BaseDN)
 	searchCtx.Endpoint = endPoint
 
-	pr = providers[domain]
+	pr = sp.providers[domain]
 
 	if pr == nil {
 		return nil, nil, fmt.Errorf("Invalid base DN '%s'", domain)
@@ -310,7 +306,7 @@ func toLdapSearchRequest(packet *ber.Packet) ldap.SearchRequest {
 	return req
 }
 
-func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
+func handleSearch(sp *Sparrow, messageId int, packet *ber.Packet, ls *LdapSession) {
 	log.Debugf("handling search request from %s", ls.username)
 	child := packet.Children[1]
 
@@ -318,11 +314,11 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 
 	// RootDSE search
 	if len(ldapReq.BaseDN) == 0 {
-		sendRootDSE(messageId, ls)
+		sendRootDSE(sp, messageId, ls)
 		return
 	}
 
-	sc, pr, err := toSearchContext(ldapReq, ls)
+	sc, pr, err := toSearchContext(ldapReq, ls, sp)
 
 	if pr != nil {
 		defer pr.Al.Log(sc, nil, err)
@@ -420,7 +416,7 @@ func handleSearch(messageId int, packet *ber.Packet, ls *LdapSession) {
 	ls.con.Write(entryEnvelope.Bytes())
 }
 
-func sendRootDSE(messageId int, ls *LdapSession) {
+func sendRootDSE(sp *Sparrow, messageId int, ls *LdapSession) {
 	rootDseEnvelope := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Message Envelope")
 	rootDseEnvelope.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageId, "Message ID"))
 
@@ -438,7 +434,7 @@ func sendRootDSE(messageId int, ls *LdapSession) {
 	addAttributeStringsPacket(versionLdapAt, attributes, SparrowVersion)
 
 	namingContextsAt := &schema.LdapAttribute{LdapAttrName: "namingContexts"}
-	for k, _ := range providers {
+	for k, _ := range sp.providers {
 		dn := domainNameToDn(k)
 		addAttributeStringsPacket(namingContextsAt, attributes, dn)
 	}
@@ -942,7 +938,7 @@ func parseFilter(packet *ber.Packet, ldapReq ldap.SearchRequest, searchCtx *base
 	return attrParam, nil
 }
 
-func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession) {
+func modifyPassword(sp *Sparrow, messageId int, extReqValPacket *ber.Packet, ls *LdapSession) {
 	var userIdentity, oldPasswd, newPasswd string
 	var hasUserId, hasOldPasswd, hasNewPasswd bool
 
@@ -992,7 +988,7 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 		getCtx := &base.GetContext{}
 		getCtx.OpContext = ls.OpContext
 		getCtx.Rid = ls.Session.Sub
-		pr = providers[ls.Session.Domain]
+		pr = sp.providers[ls.Session.Domain]
 		var err error
 		user, err = pr.GetResource(getCtx)
 		if err != nil {
@@ -1017,9 +1013,9 @@ func modifyPassword(messageId int, extReqValPacket *ber.Packet, ls *LdapSession)
 				return
 			}
 
-			pr = providers[normDomain]
+			pr = sp.providers[normDomain]
 		} else {
-			pr = providers[ls.Session.Domain]
+			pr = sp.providers[ls.Session.Domain]
 			effSession = ls.Session
 		}
 

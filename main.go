@@ -25,7 +25,8 @@ var enableTls = flag.Bool("tls", true, "Flag to enable or disable TLS")
 func main() {
 	logger.ConfigureLoggers("<root>=debug")
 	//logger.ConfigureLoggers("<root>=debug; sparrow.base=warning; sparrow.net=info; sparrow.schema=warning; sparrow.provider=warning; sparrow.silo=warning")
-	go net.Start("/tmp/sparrow")
+	sp := net.NewSparrowServer("/tmp/sparrow")
+	go sp.Start()
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -33,5 +34,5 @@ func main() {
 	log.Debugf("Waiting for signals...")
 	<-sigs
 	log.Infof("Shutting down...")
-	net.Stop()
+	sp.Stop()
 }

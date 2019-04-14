@@ -11,8 +11,8 @@ import (
 	"strings"
 )
 
-func handleTemplateConf(w http.ResponseWriter, r *http.Request) {
-	opCtx, err := createOpCtx(r)
+func (sp *Sparrow) handleTemplateConf(w http.ResponseWriter, r *http.Request) {
+	opCtx, err := createOpCtx(r, sp)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -24,7 +24,7 @@ func handleTemplateConf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pr := providers[opCtx.Session.Domain]
+	pr := sp.providers[opCtx.Session.Domain]
 	log.Debugf("serving templates of the domain %s", pr.Name)
 
 	hc := httpContext{w, r, pr, opCtx}
@@ -32,7 +32,7 @@ func handleTemplateConf(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		sendTemplate(pr, hc)
 	} else if r.Method == http.MethodPut {
-		updateTemplate(pr, hc)
+		updateTemplate(pr, hc, sp)
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 	}
@@ -58,7 +58,7 @@ func sendTemplate(pr *provider.Provider, hc httpContext) {
 	hc.w.Write(data)
 }
 
-func updateTemplate(pr *provider.Provider, hc httpContext) {
+func updateTemplate(pr *provider.Provider, hc httpContext, sp *Sparrow) {
 	hc.r.ParseForm()
 	name := hc.r.Form.Get("name")
 	name = strings.TrimSpace(name)
@@ -67,7 +67,7 @@ func updateTemplate(pr *provider.Provider, hc httpContext) {
 		return
 	}
 
-	dconfUpdateMutex.Lock()
+	sp.dconfUpdateMutex.Lock()
 	log.Debugf("replacing the template %s", name)
 
 	defer func() {
@@ -77,7 +77,7 @@ func updateTemplate(pr *provider.Provider, hc httpContext) {
 			log.Errorf("failed to updated template %s %v", name, e)
 			writeError(hc.w, e.(error))
 		}
-		dconfUpdateMutex.Unlock()
+		sp.dconfUpdateMutex.Unlock()
 	}()
 
 	data, err := ioutil.ReadAll(hc.r.Body)
@@ -92,7 +92,7 @@ func updateTemplate(pr *provider.Provider, hc httpContext) {
 	} else {
 		if t != nil {
 			// unlike LDAP templates html templates are global at the moment
-			templates[t.Name()] = t
+			sp.templates[t.Name()] = t
 		}
 		headers := hc.w.Header()
 		headers.Add("Content-Type", "text/plain")

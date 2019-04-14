@@ -11,17 +11,23 @@ import (
 	"encoding/pem"
 	"flag"
 	"fmt"
+	"github.com/mholt/caddy"
 	"html/template"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/provider"
+	"sparrow/repl"
 	"sparrow/schema"
 	"sparrow/utils"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var DEFAULT_SRV_CONF string = `{
@@ -34,46 +40,88 @@ var DEFAULT_SRV_CONF string = `{
     "ipAddress" : "0.0.0.0",
     "certificateFile": "default.cer",
     "privatekeyFile": "default.key",
-	"controllerDomain": "example.com"
+	"controllerDomain": "example.com",
 	"skipPeerCertCheck": true
 }`
 
 var COOKIE_LOGIN_NAME string = "SPLCN"
 
-var homeDir string
-var replDir string
+type Sparrow struct {
+	providers map[string]*provider.Provider
 
-func Start(srvHome string) {
+	// a map of providers keyed using the hashcode of the domain name
+	// this exists to keep the length of Oauth code fixed to N bytes
+	dcPrvMap map[string]*provider.Provider
+
+	// used for encrypting authflow cookies
+	ckc *utils.CookieKeyCache
+
+	homeUrl string
+
+	uiHandler     http.Handler
+	defaultDomain string
+	srvConf       *conf.ServerConf
+	templates     map[string]*template.Template
+	instance      *caddy.Instance
+	homeDir       string
+	replDir       string
+	listener      *net.TCPListener
+
+	rl    *repl.ReplSilo
+	peers map[uint16]*base.ReplicationPeer
+
+	// Mutex to serialize updates to the domain configuration
+	dconfUpdateMutex sync.Mutex
+}
+
+func NewSparrowServer(homeDir string) *Sparrow {
+	sparrow := &Sparrow{}
+	sparrow.homeDir = homeDir
+	sparrow.defaultDomain = "example.com"
+	sparrow.ckc = utils.NewCookieKeyCache()
+	return sparrow
+}
+
+func (sp *Sparrow) Start() {
 	log.Debugf("Starting server(s)...")
 
-	homeDir = srvHome
-	srvConf = initHome(srvHome)
-	templates = parseTemplates(srvConf.TmplDir)
+	sp.initHome()
+	sp.templates = parseTemplates(sp.srvConf.TmplDir)
 
-	if len(providers) == 1 {
-		for _, pr := range providers {
-			defaultDomain = pr.Name
+	if len(sp.providers) == 1 {
+		for _, pr := range sp.providers {
+			sp.defaultDomain = pr.Name
 		}
 	}
 
-	if srvConf.LdapEnabled {
-		err := startLdap()
+	var err error
+	sp.rl, err = repl.OpenReplSilo(path.Join(sp.replDir, "repl-data.db"))
+	if err != nil {
+		panic(err)
+	}
+
+	// load the existing peers
+	sp.peers = sp.rl.GetReplicationPeers()
+
+	if sp.srvConf.LdapEnabled {
+		err := sp.startLdap()
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	startHttp()
+	sp.startHttp()
 }
 
-func Stop() {
-	if srvConf.LdapEnabled {
-		stopLdap()
+func (sp *Sparrow) Stop() {
+	if sp.srvConf.LdapEnabled {
+		sp.stopLdap()
 	}
-	stopHttp()
+	sp.stopHttp()
 }
 
-func initHome(srvHome string) *conf.ServerConf {
+func (sp *Sparrow) initHome() *conf.ServerConf {
+	srvHome := sp.homeDir
 	log.Debugf("Checking server home directory %s", srvHome)
 	utils.CheckAndCreate(srvHome)
 
@@ -86,9 +134,9 @@ func initHome(srvHome string) *conf.ServerConf {
 	utils.CheckAndCreate(tmplDir)
 	writeDefaultHtmlTemplates(tmplDir)
 
-	replDir = filepath.Join(srvHome, "replication")
-	log.Debugf("Checking server's repication directory %s", replDir)
-	utils.CheckAndCreate(replDir)
+	sp.replDir = filepath.Join(srvHome, "replication")
+	log.Debugf("Checking server's repication directory %s", sp.replDir)
+	utils.CheckAndCreate(sp.replDir)
 
 	srvConfPath := filepath.Join(srvConfDir, "server.json")
 	_, err := os.Stat(srvConfPath)
@@ -103,7 +151,10 @@ func initHome(srvHome string) *conf.ServerConf {
 		addr = strings.TrimSpace(addr)
 
 		var tmp conf.ServerConf
-		json.Unmarshal([]byte(strConf), &tmp)
+		err = json.Unmarshal([]byte(strConf), &tmp)
+		if err != nil {
+			panic(err)
+		}
 
 		if addr != "" || enableTls {
 			parts := strings.Split(addr, ":")
@@ -201,13 +252,14 @@ func initHome(srvHome string) *conf.ServerConf {
 	tlsConf := &tls.Config{InsecureSkipVerify: skipCertCheck}
 	sc.ReplTransport = &http.Transport{TLSClientConfig: tlsConf}
 
-	loadProviders(domainsDir, sc)
+	sp.srvConf = sc
+	sp.loadProviders(domainsDir)
 
 	cwd, _ := os.Getwd()
 	fmt.Println("Current working directory: ", cwd)
 
-	if len(providers) == 0 {
-		createDefaultDomain(domainsDir, sc)
+	if len(sp.providers) == 0 {
+		sp.createDefaultDomain(domainsDir)
 	}
 
 	uiDir := filepath.Join(srvHome, "ui")
@@ -238,7 +290,11 @@ func pemDecode(srvConfDir string, givenFilePath string) (pb *pem.Block, absFileP
 	return pb, givenFilePath, nil
 }
 
-func loadProviders(domainsDir string, sc *conf.ServerConf) {
+func (sp *Sparrow) loadProviders(domainsDir string) {
+	sc := sp.srvConf
+	sp.providers = make(map[string]*provider.Provider)
+	sp.dcPrvMap = make(map[string]*provider.Provider)
+
 	log.Infof("Loading domains")
 	dir, err := os.Open(domainsDir)
 	if err != nil {
@@ -261,7 +317,7 @@ func loadProviders(domainsDir string, sc *conf.ServerConf) {
 				log.Infof("Could not create a layout from the directory %s [%s]", lDir, err.Error())
 			} else {
 				lName := layout.Name()
-				if _, ok := providers[lName]; ok {
+				if _, ok := sp.providers[lName]; ok {
 					log.Infof("A provider for the domain %s already loaded, ignoring the domain present at %s", lName, lDir)
 					continue
 				}
@@ -274,17 +330,18 @@ func loadProviders(domainsDir string, sc *conf.ServerConf) {
 					prv.PrivKey = sc.PrivKey
 					prv.ServerId = sc.ServerId
 					prv.ReplTransport = sc.ReplTransport
-					providers[lName] = prv
-					dcPrvMap[prv.DomainCode()] = prv
+					sp.providers[lName] = prv
+					sp.dcPrvMap[prv.DomainCode()] = prv
 				}
 			}
 		}
 	}
 
-	log.Infof("Loaded providers for %d domains", len(providers))
+	log.Infof("Loaded providers for %d domains", len(sp.providers))
 }
 
-func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
+func (sp *Sparrow) createDefaultDomain(domainsDir string) {
+	sc := sp.srvConf
 	log.Infof("Creating default domain")
 
 	defaultDomain := filepath.Join(domainsDir, "example.com")
@@ -314,8 +371,8 @@ func createDefaultDomain(domainsDir string, sc *conf.ServerConf) {
 
 	prv.Cert = sc.CertChain[0]
 	prv.PrivKey = sc.PrivKey
-	providers[layout.Name()] = prv
-	dcPrvMap[prv.DomainCode()] = prv
+	sp.providers[layout.Name()] = prv
+	sp.dcPrvMap[prv.DomainCode()] = prv
 }
 
 func copyDir(src, dest string) {

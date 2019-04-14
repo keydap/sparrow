@@ -12,11 +12,9 @@ import (
 	"github.com/mholt/caddy"
 	"github.com/mholt/caddy/caddy/caddymain"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
-	"html/template"
 	"io/ioutil"
 	"net/http"
 	"sparrow/base"
-	"sparrow/conf"
 	"sparrow/provider"
 	"sparrow/schema"
 	"sparrow/utils"
@@ -26,12 +24,6 @@ import (
 )
 
 var log logger.Logger
-
-var providers = make(map[string]*provider.Provider)
-
-// a map of providers keyed using the hashcode of the domain name
-// this exists to keep the length of Oauth code fixed to N bytes
-var dcPrvMap = make(map[string]*provider.Provider)
 
 var TENANT_HEADER = "X-Sparrow-Domain"
 var TENANT_COOKIE = "SD"
@@ -47,27 +39,9 @@ var OAUTH_BASE = "/oauth2" // NO slash at the end
 var SAML_BASE = "/saml"    // NO slash at the end
 var commaByte = []byte{','}
 var fiveMin = int64(5 * 60)
-var defaultDomain = "example.com"
-var srvConf *conf.ServerConf
-var templates map[string]*template.Template
-var instance *caddy.Instance
-
-// used for encrypting authflow cookies
-var ckc *utils.CookieKeyCache
-
-var homeUrl = ""
-
-var uiHandler http.Handler
 
 func init() {
 	log = logger.GetLogger("sparrow.net")
-	ckc = utils.NewCookieKeyCache()
-	//fmt.Println("registering sparrow plugin")
-	httpserver.RegisterDevDirective("sparrow", "startup")
-	caddy.RegisterPlugin("sparrow", caddy.Plugin{
-		ServerType: "http",
-		Action:     setup,
-	})
 }
 
 type httpContext struct {
@@ -87,23 +61,31 @@ func (mh muxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, err
 	return 0, nil
 }
 
-func startHttp() {
+func (sp *Sparrow) startHttp() {
+	srvConf := sp.srvConf
 	hostAddr := srvConf.IpAddress + ":" + strconv.Itoa(srvConf.HttpPort)
-	log.Infof("Starting http server %s", hostAddr)
+	log.Infof("Starting http server(%d) %s", srvConf.ServerId, hostAddr)
 	caddy.AppName = "Sparrow Identity Server"
 	caddy.AppVersion = SparrowVersion
 
 	tlsDirective := ""
 	if srvConf.Https {
 		tlsDirective = "tls " + srvConf.CertFile + " " + srvConf.PrivKeyFile
-		homeUrl = "https://" + srvConf.IpAddress
+		sp.homeUrl = "https://" + srvConf.IpAddress
 	} else {
-		homeUrl = "http://" + srvConf.IpAddress
+		sp.homeUrl = "http://" + srvConf.IpAddress
 	}
 
 	if srvConf.HttpPort != 80 && srvConf.HttpPort != 443 {
-		homeUrl += ":" + strconv.Itoa(srvConf.HttpPort)
+		sp.homeUrl += ":" + strconv.Itoa(srvConf.HttpPort)
 	}
+
+	//fmt.Println("registering sparrow plugin")
+	httpserver.RegisterDevDirective("sparrow", "startup")
+	caddy.RegisterPlugin("sparrow", caddy.Plugin{
+		ServerType: "http",
+		Action:     sp.setup,
+	})
 
 	caddyFile := fmt.Sprintf("%s\n%s\n%s", hostAddr, "sparrow", tlsDirective)
 	input := caddy.CaddyfileInput{
@@ -118,96 +100,105 @@ func startHttp() {
 		panic(err)
 	}
 
-	logUrls()
+	logUrls(sp.homeUrl)
 
-	instance = i
-	instance.Wait()
+	sp.instance = i
+	sp.instance.Wait()
 }
 
-func setup(c *caddy.Controller) error {
+func (sp *Sparrow) stopHttp() {
+	sp.instance.Stop() // first stop the HTTP server to prevent incoming request processing
+	for _, pr := range sp.providers {
+		pr.Close()
+	}
+	log.Debugf("Stopped HTTP server with id %d", sp.srvConf.ServerId)
+}
+
+func (sp *Sparrow) setup(c *caddy.Controller) error {
 	router := mux.NewRouter()
 	router.StrictSlash(true)
 	router.HandleFunc("/about", serveVersionInfo).Methods("GET")
 	router.HandleFunc("/", serveVersionInfo).Methods("GET")
 
 	// for serving the admin dashboard UI assets
-	fs := http.FileServer(http.Dir(homeDir + "/ui"))
-	uiHandler = http.StripPrefix("/ui", fs)
-	router.PathPrefix("/ui").Methods("GET").HandlerFunc(serveUI)
+	fs := http.FileServer(http.Dir(sp.homeDir + "/ui"))
+	sp.uiHandler = http.StripPrefix("/ui", fs)
+	router.PathPrefix("/ui").Methods("GET").HandlerFunc(sp.serveUI)
 
 	// scim requests
 	scimRouter := router.PathPrefix(API_BASE).Subrouter()
 
-	scimRouter.HandleFunc("/directLogin", directLogin).Methods("POST")
+	scimRouter.HandleFunc("/directLogin", sp.directLogin).Methods("POST")
 	//scimRouter.HandleFunc("/revoke", handleRevoke).Methods("DELETE")
-	scimRouter.HandleFunc("/Me", selfServe).Methods("GET")
-	scimRouter.HandleFunc("/logout", handleLogout).Methods("POST")
+	scimRouter.HandleFunc("/Me", sp.selfServe).Methods("GET")
+	scimRouter.HandleFunc("/logout", sp.handleLogout).Methods("POST")
 
 	// generic service provider methods
-	scimRouter.HandleFunc("/ServiceProviderConfigs", getSrvProvConf).Methods("GET")
-	scimRouter.HandleFunc("/DomainConfig", handleDomainConf).Methods("GET", "PATCH") // Sparrow specific endpoint
-	scimRouter.HandleFunc("/Templates", handleTemplateConf).Methods("GET", "PUT")    // Sparrow specific endpoint
-	scimRouter.HandleFunc("/ResourceTypes", getResTypes).Methods("GET")
-	scimRouter.HandleFunc("/Schemas", getSchemas).Methods("GET")
+	scimRouter.HandleFunc("/ServiceProviderConfigs", sp.getSrvProvConf).Methods("GET")
+	scimRouter.HandleFunc("/DomainConfig", sp.handleDomainConf).Methods("GET", "PATCH") // Sparrow specific endpoint
+	scimRouter.HandleFunc("/Templates", sp.handleTemplateConf).Methods("GET", "PUT")    // Sparrow specific endpoint
+	scimRouter.HandleFunc("/ResourceTypes", sp.getResTypes).Methods("GET")
+	scimRouter.HandleFunc("/Schemas", sp.getSchemas).Methods("GET")
 	scimRouter.HandleFunc("/Bulk", bulkUpdate).Methods("POST")
 
 	// root level search
-	scimRouter.HandleFunc("/.search", handleResRequest).Methods("POST")
+	scimRouter.HandleFunc("/.search", sp.handleResRequest).Methods("POST")
 	// for group management, Sparrow specific method, not a SCIM standard
-	scimRouter.HandleFunc("/ModifyGroupsOfUser", handleResRequest).Methods("POST")
+	scimRouter.HandleFunc("/ModifyGroupsOfUser", sp.handleResRequest).Methods("POST")
 
 	// register routes for each resourcetype endpoint
 	// FIXME fix the routes with regex to ignore trailing / chars
-	for _, p := range providers {
+	for _, p := range sp.providers {
 		for _, rt := range p.RsTypes {
-			scimRouter.HandleFunc("/ResourceTypes/"+rt.Name, getResTypes).Methods("GET")
+			scimRouter.HandleFunc("/ResourceTypes/"+rt.Name, sp.getResTypes).Methods("GET")
 
-			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("POST")
-			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET")
-			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("filter", "")
-			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("attributes", "")
-			scimRouter.HandleFunc(rt.Endpoint, handleResRequest).Methods("GET").Queries("excludedAttributes", "")
-			scimRouter.HandleFunc(rt.Endpoint+"/.search", handleResRequest).Methods("POST")
-			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("PUT", "PATCH", "DELETE")
-			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET")
-			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET").Queries("attributes", "")
-			scimRouter.HandleFunc(rt.Endpoint+"/{id}", handleResRequest).Methods("GET").Queries("excludedAttributes", "")
+			scimRouter.HandleFunc(rt.Endpoint, sp.handleResRequest).Methods("POST")
+			scimRouter.HandleFunc(rt.Endpoint, sp.handleResRequest).Methods("GET")
+			scimRouter.HandleFunc(rt.Endpoint, sp.handleResRequest).Methods("GET").Queries("filter", "")
+			scimRouter.HandleFunc(rt.Endpoint, sp.handleResRequest).Methods("GET").Queries("attributes", "")
+			scimRouter.HandleFunc(rt.Endpoint, sp.handleResRequest).Methods("GET").Queries("excludedAttributes", "")
+			scimRouter.HandleFunc(rt.Endpoint+"/.search", sp.handleResRequest).Methods("POST")
+			scimRouter.HandleFunc(rt.Endpoint+"/{id}", sp.handleResRequest).Methods("PUT", "PATCH", "DELETE")
+			scimRouter.HandleFunc(rt.Endpoint+"/{id}", sp.handleResRequest).Methods("GET")
+			scimRouter.HandleFunc(rt.Endpoint+"/{id}", sp.handleResRequest).Methods("GET").Queries("attributes", "")
+			scimRouter.HandleFunc(rt.Endpoint+"/{id}", sp.handleResRequest).Methods("GET").Queries("excludedAttributes", "")
 		}
 
 		for _, sc := range p.Schemas {
-			scimRouter.HandleFunc("/Schemas/"+sc.Id, getSchemas).Methods("GET")
+			scimRouter.HandleFunc("/Schemas/"+sc.Id, sp.getSchemas).Methods("GET")
 		}
 	}
 
 	// OAuth2 requests
 	oauthRouter := router.PathPrefix(OAUTH_BASE).Subrouter()
 	// match /authorize with any number of query parameters
-	oauthRouter.HandleFunc("/authorize", authorize).Methods("GET", "POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+	oauthRouter.HandleFunc("/authorize", sp.authorize).Methods("GET", "POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
 		return true
 	})
 
-	oauthRouter.HandleFunc("/token", sendToken).Methods("POST")
-	oauthRouter.HandleFunc("/consent", verifyConsent).Methods("POST")
+	oauthRouter.HandleFunc("/token", sp.sendToken).Methods("POST")
+	oauthRouter.HandleFunc("/consent", sp.verifyConsent).Methods("POST")
 
 	// SAMLv2 requests
 	samlRouter := router.PathPrefix(SAML_BASE).Subrouter()
-	samlRouter.HandleFunc("/idp/meta/{domain}", serveIdpMetadata).Methods("GET")
-	samlRouter.HandleFunc("/idp/logout", handleSamlLogout).Methods("GET", "POST")
+	samlRouter.HandleFunc("/idp/meta/{domain}", sp.serveIdpMetadata).Methods("GET")
+	samlRouter.HandleFunc("/idp/logout", sp.handleSamlLogout).Methods("GET", "POST")
 	// match /saml with any number of query parameters
-	samlRouter.HandleFunc("/idp", handleSamlReq).Methods("GET", "POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+	samlRouter.HandleFunc("/idp", sp.handleSamlReq).Methods("GET", "POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
 		return true
 	})
 
-	router.HandleFunc("/login", showLogin).Methods("GET")
-	router.HandleFunc("/verifyPassword", verifyPassword).Methods("POST")
-	router.HandleFunc("/changePassword", handleChangePasswordReq).Methods("GET")
-	router.HandleFunc("/registerTotp", registerTotp).Methods("POST")
+	router.HandleFunc("/login", sp.showLogin).Methods("GET")
+	router.HandleFunc("/verifyPassword", sp.verifyPassword).Methods("POST")
+	router.HandleFunc("/changePassword", sp.handleChangePasswordReq).Methods("GET")
+	router.HandleFunc("/registerTotp", sp.registerTotp).Methods("POST")
+
+	router.PathPrefix("/repl/").HandlerFunc(sp.replHandler)
 
 	httpserver.GetConfig(c).AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
 		return muxHandler{router: router, next: next}
 	})
 
-	registerReplHandler(router)
 	//if srvConf.Https {
 	//	homeUrl = "https://" + hostAddr
 	//	logUrls()
@@ -223,18 +214,10 @@ func setup(c *caddy.Controller) error {
 	return nil
 }
 
-func logUrls() {
+func logUrls(homeUrl string) {
 	log.Infof("SCIM API is accessible at %s", homeUrl+API_BASE)
 	log.Infof("OAuth2 and OpenIDConnect API is accessible at %s", homeUrl+OAUTH_BASE)
 	log.Infof("SAML2 API is accessible at %s", homeUrl+SAML_BASE)
-}
-
-func stopHttp() {
-	instance.Stop() // first stop the HTTP server to prevent incoming request processing
-	for _, pr := range providers {
-		pr.Close()
-	}
-	log.Debugf("Stopped HTTP server")
 }
 
 func bulkUpdate(w http.ResponseWriter, r *http.Request) {
@@ -532,19 +515,19 @@ func createResource(hc *httpContext) {
 	}
 
 	createCtx := base.CreateContext{InRes: rs, OpContext: hc.OpContext}
-	insertedRs, err := hc.pr.CreateResource(&createCtx)
+	err = hc.pr.CreateResource(&createCtx)
 	if err != nil {
 		writeError(hc.w, err)
 		return
 	}
 
-	rid := insertedRs.GetId()
+	rid := rs.GetId()
 	writeCommonHeaders(hc.w)
 	header := hc.w.Header()
 	header.Add("Location", hc.r.RequestURI+"/"+rid)
-	header.Add("Etag", insertedRs.GetVersion())
+	header.Add("Etag", rs.GetVersion())
 	hc.w.WriteHeader(http.StatusCreated)
-	d := insertedRs.Serialize()
+	d := rs.Serialize()
 	log.Debugf("-------------------\n%s", string(d))
 	hc.w.Write(d)
 	log.Debugf("Successfully inserted the resource with ID %s", rid)
@@ -700,8 +683,8 @@ func deleteResource(hc *httpContext) {
 	log.Debugf("Successfully deleted the resource with ID %s", rid)
 }
 
-func getSrvProvConf(w http.ResponseWriter, r *http.Request) {
-	pr, err := getPrFromParam(r)
+func (sp *Sparrow) getSrvProvConf(w http.ResponseWriter, r *http.Request) {
+	pr, err := getPrFromParam(r, sp)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -719,7 +702,7 @@ func getSrvProvConf(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getPrFromParam(r *http.Request) (pr *provider.Provider, err error) {
+func getPrFromParam(r *http.Request, sp *Sparrow) (pr *provider.Provider, err error) {
 	// NO NEED TO parse Form cause the domain ID will be either in the
 	// Header or in a Cookie
 	//r.ParseForm()
@@ -737,10 +720,10 @@ func getPrFromParam(r *http.Request) (pr *provider.Provider, err error) {
 	domain = strings.ToLower(domain)
 
 	if len(domain) == 0 {
-		domain = defaultDomain
+		domain = sp.defaultDomain
 	}
 
-	pr = providers[domain]
+	pr = sp.providers[domain]
 	if pr == nil {
 		se := base.NewNotFoundError(fmt.Sprintf("No domain '%s' found", domain))
 		return nil, se
@@ -748,8 +731,8 @@ func getPrFromParam(r *http.Request) (pr *provider.Provider, err error) {
 	return pr, nil
 }
 
-func getResTypes(w http.ResponseWriter, r *http.Request) {
-	pr, err := getPrFromParam(r)
+func (sp *Sparrow) getResTypes(w http.ResponseWriter, r *http.Request) {
+	pr, err := getPrFromParam(r, sp)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -779,8 +762,8 @@ func getResTypes(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(data))
 }
 
-func getSchemas(w http.ResponseWriter, r *http.Request) {
-	pr, err := getPrFromParam(r)
+func (sp *Sparrow) getSchemas(w http.ResponseWriter, r *http.Request) {
+	pr, err := getPrFromParam(r, sp)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -810,14 +793,14 @@ func getSchemas(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(data))
 }
 
-func handleLogout(w http.ResponseWriter, r *http.Request) {
-	opCtx, err := createOpCtx(r)
+func (sp *Sparrow) handleLogout(w http.ResponseWriter, r *http.Request) {
+	opCtx, err := createOpCtx(r, sp)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 
-	pr := providers[opCtx.Session.Domain]
+	pr := sp.providers[opCtx.Session.Domain]
 	code := 404
 	deleted := false
 	if opCtx.Sso {
@@ -837,16 +820,16 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(code)
 }
 
-func selfServe(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) selfServe(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("-------------------- Headers received on /Me -----------\n%#v\n--------------------------------", r.Header)
 
-	opCtx, err := createOpCtx(r)
+	opCtx, err := createOpCtx(r, sp)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 
-	pr := providers[opCtx.Session.Domain]
+	pr := sp.providers[opCtx.Session.Domain]
 	log.Debugf("handling %s request on %s for the domain %s", r.Method, r.RequestURI, pr.Name)
 
 	//TODO add additional checks for preventing CSRF
@@ -898,24 +881,24 @@ func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(aboutStr))
 }
 
-func serveUI(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) serveUI(w http.ResponseWriter, r *http.Request) {
 	//static assets
 	if strings.HasSuffix(r.URL.Path, ".css") {
-		uiHandler.ServeHTTP(w, r)
+		sp.uiHandler.ServeHTTP(w, r)
 		return
 	}
 
 	cookie, err := r.Cookie(SSO_COOKIE)
 	if err != nil {
 		addUiRedirectTo(r)
-		showLogin(w, r)
+		sp.showLogin(w, r)
 		return
 	}
 
-	pr, err := getPrFromParam(r)
+	pr, err := getPrFromParam(r, sp)
 	if pr == nil {
 		addUiRedirectTo(r)
-		showLogin(w, r)
+		sp.showLogin(w, r)
 		return
 	}
 
@@ -924,18 +907,18 @@ func serveUI(w http.ResponseWriter, r *http.Request) {
 	if session == nil {
 		log.Debugf("no session is found with the cookie %v", cookie)
 		addUiRedirectTo(r)
-		showLogin(w, r)
+		sp.showLogin(w, r)
 		return
 	}
 
 	if session.IsExpired() {
 		log.Debugf("Expired session %v", cookie)
 		addUiRedirectTo(r)
-		showLogin(w, r)
+		sp.showLogin(w, r)
 		return
 	}
 
-	uiHandler.ServeHTTP(w, r)
+	sp.uiHandler.ServeHTTP(w, r)
 }
 
 func addUiRedirectTo(r *http.Request) {
@@ -943,7 +926,7 @@ func addUiRedirectTo(r *http.Request) {
 	r.Form.Add(PARAM_REDIRECT_TO, "/ui")
 }
 
-func directLogin(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) directLogin(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	ar := base.AuthRequest{}
 	data, _ := ioutil.ReadAll(r.Body)
@@ -957,9 +940,9 @@ func directLogin(w http.ResponseWriter, r *http.Request) {
 	ar.ClientIP = utils.GetRemoteAddr(r)
 	normDomain := strings.ToLower(ar.Domain)
 	if len(normDomain) == 0 {
-		normDomain = defaultDomain
+		normDomain = sp.defaultDomain
 	}
-	pr := providers[normDomain]
+	pr := sp.providers[normDomain]
 
 	if pr == nil {
 		e := base.NewBadRequestError("Invalid domain name " + ar.Domain)
@@ -985,16 +968,16 @@ func directLogin(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(token.Jti))
 }
 
-func handleResRequest(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) handleResRequest(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("-------------------- Headers received-----------\n%#v\n--------------------------------", r.Header)
 
-	opCtx, err := createOpCtx(r)
+	opCtx, err := createOpCtx(r, sp)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 
-	pr := providers[opCtx.Session.Domain]
+	pr := sp.providers[opCtx.Session.Domain]
 	log.Debugf("handling %s request on %s for the domain %s", r.Method, r.RequestURI, pr.Name)
 
 	hc := &httpContext{w, r, pr, opCtx}
@@ -1050,8 +1033,8 @@ func badContentType(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func createOpCtx(r *http.Request) (opCtx *base.OpContext, err error) {
-	pr, err := getPrFromParam(r)
+func createOpCtx(r *http.Request, sp *Sparrow) (opCtx *base.OpContext, err error) {
+	pr, err := getPrFromParam(r, sp)
 
 	if err != nil {
 		return nil, err
@@ -1180,13 +1163,13 @@ func parseToken(token string, opCtx *base.OpContext, pr *provider.Provider) (ses
 	return session, nil
 }
 
-func keyFunc(jt *jwt.Token) (key interface{}, err error) {
+func (sp *Sparrow) keyFunc(jt *jwt.Token) (key interface{}, err error) {
 	domain := jt.Header["d"]
 	if domain == nil {
 		return nil, jwt.NewValidationError("Missing domain attribute 'd' in the header", jwt.ValidationErrorMalformed)
 	}
 
-	prv := providers[domain.(string)]
+	prv := sp.providers[domain.(string)]
 	return prv.Cert.PublicKey, nil
 }
 

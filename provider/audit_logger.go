@@ -185,10 +185,10 @@ func (al *AuditLogger) _log(ctx interface{}, res *base.Resource, err error) {
 		ae.ActorName = cc.Session.Username
 		ae.Operation = "Create"
 		if res != nil {
-			ae.Uri = res.GetType().Endpoint + "/" + res.GetId()
+			ae.Uri = cc.InRes.GetType().Endpoint + "/" + res.GetId()
 		}
 		if err == nil {
-			ae.Desc = "Created a " + res.GetType().Name + " resource"
+			ae.Desc = "Created a " + cc.InRes.GetType().Name + " resource"
 			ae.StatusCode = 201
 		}
 

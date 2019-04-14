@@ -17,13 +17,13 @@ import (
 
 // STEP 1 Client sends the request to the Authorization Server
 // Handles the OAuth2 authorization request
-func authorize(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) authorize(w http.ResponseWriter, r *http.Request) {
 
-	session := getSessionUsingCookie(r)
+	session := getSessionUsingCookie(r, sp)
 	if session != nil {
 		// valid session exists serve the code or id_token
 		log.Debugf("Valid session exists, sending the final response")
-		sendFinalResponse(w, r, session, nil)
+		sendFinalResponse(sp, w, r, session, nil)
 		return
 	}
 
@@ -37,7 +37,7 @@ func authorize(w http.ResponseWriter, r *http.Request) {
 	af := &authFlow{}
 	af.SetFromOauth(true)
 
-	setAuthFlow(af, w)
+	setAuthFlow(sp, af, w)
 	paramMap, err := parseParamMap(r)
 	if err != nil {
 		sendOauthError(w, r, "", err)
@@ -50,26 +50,26 @@ func authorize(w http.ResponseWriter, r *http.Request) {
 
 // STEP 2 Authorization Server Authenticates the End-User
 // show login form
-func showLogin(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) showLogin(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	paramMap := copyParams(r)
 
-	ologin := templates["login.html"]
+	ologin := sp.templates["login.html"]
 	ologin.Execute(w, paramMap)
 }
 
-func showOtpPage(w http.ResponseWriter, paramMap map[string]string) {
-	totp := templates["totp-send.html"]
+func showOtpPage(sp *Sparrow, w http.ResponseWriter, paramMap map[string]string) {
+	totp := sp.templates["totp-send.html"]
 	totp.Execute(w, paramMap)
 }
 
-func showChangePasswordPage(w http.ResponseWriter, paramMap map[string]string) {
-	cp := templates["changepassword.html"]
+func showChangePasswordPage(sp *Sparrow, w http.ResponseWriter, paramMap map[string]string) {
+	cp := sp.templates["changepassword.html"]
 	cp.Execute(w, paramMap)
 }
 
 // STEP 2 Authorization Server Authenticates the End-User
-func verifyPassword(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) verifyPassword(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		log.Debugf("Failed to parse the login form %s", err)
@@ -77,7 +77,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	af := getAuthFlow(r)
+	af := getAuthFlow(r, sp)
 
 	if af == nil {
 		log.Debugf("authflow data is nil, initializing")
@@ -86,7 +86,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 
 	paramMap := copyParams(r)
 
-	domain := defaultDomain
+	domain := sp.defaultDomain
 	var prv *provider.Provider
 
 	username := r.Form.Get("username")
@@ -97,13 +97,13 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 			domain = strings.ToLower(username[pos+1:])
 			username = username[:pos]
 		}
-		prv = providers[domain]
+		prv = sp.providers[domain]
 	} else {
-		prv = dcPrvMap[af.DomainCode]
+		prv = sp.dcPrvMap[af.DomainCode]
 	}
 
 	if prv == nil {
-		login := templates["login.html"]
+		login := sp.templates["login.html"]
 		login.Execute(w, paramMap)
 		return
 	}
@@ -117,7 +117,7 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		ar := base.AuthRequest{Username: username, Password: password, ClientIP: utils.GetRemoteAddr(r)}
 		lr := prv.Authenticate(ar)
 		if lr.Status == base.LOGIN_FAILED {
-			login := templates["login.html"]
+			login := sp.templates["login.html"]
 			login.Execute(w, paramMap)
 			return
 		} else if lr.Status == base.LOGIN_SUCCESS {
@@ -138,13 +138,13 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		af.DomainCode = prv.DomainCode()
 
 		if af.RegisterTfa() {
-			showTotpRegistration(username, prv, af, w, paramMap)
+			showTotpRegistration(username, prv, af, w, paramMap, sp)
 			return
 		}
 
 		if af.ChangePassword() {
-			setAuthFlow(af, w)
-			showChangePasswordPage(w, paramMap)
+			setAuthFlow(sp, af, w)
+			showChangePasswordPage(sp, w, paramMap)
 			return
 		}
 	}
@@ -156,13 +156,13 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		delete(paramMap, "cnfNewPassword")
 		if newPassword != cnfNewPassword {
 			paramMap["errMsg"] = "New passwords didn't match"
-			showChangePasswordPage(w, paramMap)
+			showChangePasswordPage(sp, w, paramMap)
 			return
 		}
 
 		_, err := prv.ChangePassword(af.UserId, newPassword, utils.GetRemoteAddr(r))
 		if err != nil {
-			showChangePasswordPage(w, paramMap)
+			showChangePasswordPage(sp, w, paramMap)
 			return
 		} else {
 			af.SetChangePassword(false)
@@ -175,35 +175,35 @@ func verifyPassword(w http.ResponseWriter, r *http.Request) {
 		delete(paramMap, "otp")
 
 		if otp == "" {
-			setAuthFlow(af, w)
-			showOtpPage(w, paramMap)
+			setAuthFlow(sp, af, w)
+			showOtpPage(sp, w, paramMap)
 			return
 		}
 
 		log.Debugf("verifying otp")
 		lr := prv.VerifyOtp(af.UserId, otp, utils.GetRemoteAddr(r))
 		if lr.Status == base.LOGIN_FAILED {
-			showOtpPage(w, paramMap)
+			showOtpPage(sp, w, paramMap)
 			return
 		} else if lr.Status == base.LOGIN_SUCCESS {
 			af.SetTfaRequired(false)
-			setAuthFlow(af, w)
+			setAuthFlow(sp, af, w)
 			af.markLoginSuccessful()
 		} else if lr.Status == base.LOGIN_CHANGE_PASSWORD {
 			af.SetChangePassword(true)
 			af.SetTfaRequired(false) // otp has been validated earlier, so not required again
-			setAuthFlow(af, w)
-			showChangePasswordPage(w, paramMap)
+			setAuthFlow(sp, af, w)
+			showChangePasswordPage(sp, w, paramMap)
 			return
 		}
 	}
 
-	redirectToUrl(af, prv, w, r, paramMap)
+	redirectToUrl(sp, af, prv, w, r, paramMap)
 }
 
 // STEP 3. Authorization Server obtains End-User Consent/Authorization.
-func verifyConsent(w http.ResponseWriter, r *http.Request) {
-	af := getAuthFlow(r)
+func (sp *Sparrow) verifyConsent(w http.ResponseWriter, r *http.Request) {
+	af := getAuthFlow(r, sp)
 
 	if af != nil {
 		log.Debugf("verifying consent...")
@@ -212,10 +212,10 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 			consent := r.Form.Get("consent")
 			if consent == "authorize" {
 				log.Debugf("sending final response in oauth flow")
-				sendFinalResponse(w, r, nil, af)
+				sendFinalResponse(sp, w, r, nil, af)
 			} else {
 				clientId := r.Form.Get("client_id")
-				pr, _ := getPrFromParam(r)
+				pr, _ := getPrFromParam(r, sp)
 				var cl *oauth.Client
 				if pr != nil {
 					cl = pr.GetClientById(clientId)
@@ -235,12 +235,12 @@ func verifyConsent(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		log.Debugf("received request for verifying consent but authflow cookie is missing")
-		setAuthFlow(nil, w)
+		setAuthFlow(sp, nil, w)
 	}
 }
 
 // STEP 4 Authorization Server sends the End-User back to the Client with an Authorization Code
-func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.RbacSession, af *authFlow) {
+func sendFinalResponse(sp *Sparrow, w http.ResponseWriter, r *http.Request, session *base.RbacSession, af *authFlow) {
 	err := r.ParseForm()
 	if err != nil {
 		log.Debugf("Failed to parse the form, sending error to the user agent")
@@ -259,7 +259,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 
 	log.Debugf("Received authorization request is valid, searching for client")
 
-	pr, _ := getPrFromParam(r)
+	pr, _ := getPrFromParam(r, sp)
 	var cl *oauth.Client
 	if pr != nil {
 		cl = pr.GetClientById(areq.ClientId)
@@ -313,11 +313,11 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 		} else {
 			// can happen when there is a redirect for consent
 			if session == nil {
-				session = getSessionUsingCookie(r)
+				session = getSessionUsingCookie(r, sp)
 			}
 
 			userId = session.Sub
-			domainCode = providers[session.Domain].DomainCode()
+			domainCode = sp.providers[session.Domain].DomainCode()
 		}
 		code := newOauthCode(cl, ttl, userId, domainCode, cType)
 		tmpUri += ("code=" + url.QueryEscape(code))
@@ -335,14 +335,14 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 
 	// can happen when there is a redirect for consent
 	if session == nil {
-		session = getSessionUsingCookie(r)
+		session = getSessionUsingCookie(r, sp)
 	}
 
 	if areq.RespType == "id_token" || strings.HasSuffix(areq.RespType, " id_token") {
 		// create RbacSession and then generate ID Token
-		idt := createIdToken(session, cl, pr)
+		idt := createIdToken(sp, session, cl, pr)
 		idt["nonce"] = areq.Nonce
-		strIdt := oauth.ToJwt(idt, srvConf.PrivKey)
+		strIdt := oauth.ToJwt(idt, sp.srvConf.PrivKey)
 		if hasCode {
 			tmpUri += "&"
 		}
@@ -359,7 +359,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	log.Debugf("redirecting to the client with response")
 
 	// delete the authflow cookie
-	setAuthFlow(nil, w)
+	setAuthFlow(sp, nil, w)
 	headers := w.Header()
 	headers.Add("Cache-Control", "no-store")
 	headers.Add("Pragma", "no-cache")
@@ -378,7 +378,7 @@ func sendFinalResponse(w http.ResponseWriter, r *http.Request, session *base.Rba
 	*/
 }
 
-func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Provider) jwt.MapClaims {
+func createIdToken(sp *Sparrow, session *base.RbacSession, cl *oauth.Client, pr *provider.Provider) jwt.MapClaims {
 	idt := jwt.MapClaims{}
 
 	user, err := pr.GetUserById(session.Sub)
@@ -396,7 +396,7 @@ func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Pro
 	iat := time.Now().Unix()
 	idt["iat"] = iat
 	idt["exp"] = iat + cl.Oauth.TokenValidity
-	idt["iss"] = homeUrl + "/" + session.Domain
+	idt["iss"] = sp.homeUrl + "/" + session.Domain
 	idt["jti"] = utils.NewRandShaStr()
 	// if sub is not already filled with custom attribute config
 	// fill it with the default value
@@ -413,11 +413,11 @@ func createIdToken(session *base.RbacSession, cl *oauth.Client, pr *provider.Pro
 	return idt
 }
 
-func getSessionUsingCookie(r *http.Request) *base.RbacSession {
+func getSessionUsingCookie(r *http.Request, sp *Sparrow) *base.RbacSession {
 	ssoCookie, _ := r.Cookie(SSO_COOKIE)
 
 	if ssoCookie != nil {
-		pr, _ := getPrFromParam(r)
+		pr, _ := getPrFromParam(r, sp)
 		var session *base.RbacSession
 
 		if pr != nil {
@@ -460,37 +460,37 @@ func isValidAuthzReq(w http.ResponseWriter, r *http.Request, areq *oauth.Authori
 	return false
 }
 
-func redirectToUrl(af *authFlow, prv *provider.Provider, w http.ResponseWriter, r *http.Request, paramMap map[string]string) {
+func redirectToUrl(sp *Sparrow, af *authFlow, prv *provider.Provider, w http.ResponseWriter, r *http.Request, paramMap map[string]string) {
 	if !af.isLoginSuccessful() {
 		log.Debugf("login is not marked as successful returning to login page")
-		setAuthFlow(nil, w)
-		showLogin(w, r)
+		setAuthFlow(sp, nil, w)
+		sp.showLogin(w, r)
 		return
 	}
 
 	user, err := prv.GetUserById(af.UserId)
 	if err != nil {
 		log.Debugf("could not find the authenticated user. [%v]", err)
-		setAuthFlow(nil, w)
-		showLogin(w, r)
+		setAuthFlow(sp, nil, w)
+		sp.showLogin(w, r)
 		return
 	}
 
 	if af.FromOauth() || af.FromSaml() {
 		log.Debugf("oauth/saml workflow")
-		setSessionCookie(user, af, prv, w, r, paramMap)
+		setSessionCookie(sp, user, af, prv, w, r, paramMap)
 		return
 	} else {
 		rt := paramMap[PARAM_REDIRECT_TO]
 		if rt != "" {
 			log.Debugf("redirecting to %s after authentication", rt)
-			setSessionCookie(user, af, prv, w, r, paramMap)
+			setSessionCookie(sp, user, af, prv, w, r, paramMap)
 			return
 		}
 	}
 
 	log.Debugf("successfully authenticated, there is no redirect parameter, not creating session")
-	setAuthFlow(nil, w)
+	setAuthFlow(sp, nil, w)
 	// close the window
 	if paramMap["cl"] == "1" {
 		script := `<script type="text/javascript">window.close();</script>`
@@ -498,7 +498,7 @@ func redirectToUrl(af *authFlow, prv *provider.Provider, w http.ResponseWriter, 
 	}
 }
 
-func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider, w http.ResponseWriter, r *http.Request, paramMap map[string]string) *base.RbacSession {
+func setSessionCookie(sp *Sparrow, user *base.Resource, af *authFlow, prv *provider.Provider, w http.ResponseWriter, r *http.Request, paramMap map[string]string) *base.RbacSession {
 	session := prv.GenSessionForUser(user)
 	prv.StoreSsoSession(session)
 
@@ -507,18 +507,18 @@ func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider,
 	if af.FromOauth() {
 		log.Debugf("sending oauth request for consent")
 		// FIXME show consent only if application/client config enforces it
-		setAuthFlow(af, w)
-		consentTmpl := templates["consent.html"]
+		setAuthFlow(sp, af, w)
+		consentTmpl := sp.templates["consent.html"]
 		consentTmpl.Execute(w, paramMap)
 		return session
 	} else if af.FromSaml() {
 		log.Debugf("resuming SAML flow")
-		setAuthFlow(nil, w)
-		sendSamlResponse(w, r, session, af)
+		setAuthFlow(sp, nil, w)
+		sendSamlResponse(sp, w, r, session, af)
 		return session
 	}
 
-	setAuthFlow(nil, w)
+	setAuthFlow(sp, nil, w)
 
 	rt := paramMap[PARAM_REDIRECT_TO]
 	http.Redirect(w, r, rt, http.StatusFound)
@@ -526,7 +526,7 @@ func setSessionCookie(user *base.Resource, af *authFlow, prv *provider.Provider,
 	return session
 }
 
-func handleChangePasswordReq(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) handleChangePasswordReq(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	paramMap := copyParams(r)
 	path := "/login"
@@ -541,7 +541,7 @@ func handleChangePasswordReq(w http.ResponseWriter, r *http.Request) {
 
 	af := &authFlow{}
 	af.SetChangePassword(true)
-	setAuthFlow(af, w)
+	setAuthFlow(sp, af, w)
 	http.Redirect(w, r, path, http.StatusFound)
 }
 

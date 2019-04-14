@@ -47,7 +47,7 @@ type idpMetadata struct {
 	SSOLocation             string
 }
 
-func serveIdpMetadata(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) serveIdpMetadata(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimSpace(r.URL.Path)
 	plen := len(path) - 1
 	if path[plen] == '/' {
@@ -57,7 +57,7 @@ func serveIdpMetadata(w http.ResponseWriter, r *http.Request) {
 	pos := strings.LastIndex(path, "/")
 	domain := path[pos+1:]
 	domain = strings.ToLower(domain)
-	pr := providers[domain]
+	pr := sp.providers[domain]
 	if pr == nil {
 		// send error
 		w.WriteHeader(http.StatusNotFound)
@@ -75,9 +75,9 @@ func serveIdpMetadata(w http.ResponseWriter, r *http.Request) {
 	meta.WantAuthnRequestsSigned = false // for now
 	meta.X509Certificate = utils.B64Encode(pr.Cert.Raw)
 
-	meta.SLOLocation = homeUrl + SAML_BASE + "/idp/logout"
+	meta.SLOLocation = sp.homeUrl + SAML_BASE + "/idp/logout"
 	meta.SLORespLocation = meta.SLOLocation
-	meta.SSOLocation = homeUrl + SAML_BASE + "/idp"
+	meta.SSOLocation = sp.homeUrl + SAML_BASE + "/idp"
 
 	var buf bytes.Buffer
 	metaTemplate.Execute(&buf, meta)

@@ -128,7 +128,7 @@ func init() {
 	template.Must(metaTemplate.Parse(idpMetadataXml))
 }
 
-func handleSamlLogout(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) handleSamlLogout(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("handling SAML logout")
 
 	err := r.ParseForm()
@@ -156,17 +156,17 @@ func handleSamlLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	session := getSessionUsingCookie(r)
+	session := getSessionUsingCookie(r, sp)
 	if session == nil && (&logoutReq == nil) { // both session and logout requests are nil
 		log.Debugf("no session exists, redirecting to the relaystate %s", relayState)
 		http.Redirect(w, r, relayState, http.StatusFound)
 		return
 	} else if logoutReq != nil { //
-		_handleSamlBackChannelLogoutReq(r, w, logoutReq)
+		_handleSamlBackChannelLogoutReq(sp, r, w, logoutReq)
 		return
 	}
 
-	pr := providers[session.Domain]
+	pr := sp.providers[session.Domain]
 
 	if pr == nil {
 		log.Debugf("invalid session, no provider found for %s", session.Domain)
@@ -185,13 +185,13 @@ func handleSamlLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 // STEP 1 - check the presence of session otherwise redirect to login
-func handleSamlReq(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) handleSamlReq(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("handling saml request")
-	session := getSessionUsingCookie(r)
+	session := getSessionUsingCookie(r, sp)
 	if session != nil {
 		// valid session exists serve the SAMLResponse
 		log.Debugf("Valid session exists, sending the final response")
-		sendSamlResponse(w, r, session, nil)
+		sendSamlResponse(sp, w, r, session, nil)
 		return
 	}
 
@@ -206,7 +206,7 @@ func handleSamlReq(w http.ResponseWriter, r *http.Request) {
 	af := &authFlow{}
 	af.SetFromSaml(true)
 
-	setAuthFlow(af, w)
+	setAuthFlow(sp, af, w)
 
 	paramMap, err := parseParamMap(r)
 	if err != nil {
@@ -238,7 +238,7 @@ func parseParamMap(r *http.Request) (paramMap map[string]string, err error) {
 	return paramMap, nil
 }
 
-func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.RbacSession, af *authFlow) {
+func sendSamlResponse(sp *Sparrow, w http.ResponseWriter, r *http.Request, session *base.RbacSession, af *authFlow) {
 	err := r.ParseForm()
 	if err != nil {
 		log.Debugf("Failed to parse the form, sending error to the user agent")
@@ -266,7 +266,7 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 
 	log.Debugf("Received SAMLRequest is valid, searching for client")
 
-	pr, _ := getPrFromParam(r)
+	pr, _ := getPrFromParam(r, sp)
 	var cl *oauth.Client
 	if pr != nil {
 		cl = pr.GetClientByIssuer(samlAuthnReq.Issuer)
@@ -299,10 +299,10 @@ func sendSamlResponse(w http.ResponseWriter, r *http.Request, session *base.Rbac
 		return
 	}
 
-	genSamlResponse(w, r, pr, session, cl, samlAuthnReq)
+	genSamlResponse(sp, w, r, pr, session, cl, samlAuthnReq)
 }
 
-func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provider, session *base.RbacSession, cl *oauth.Client, authnReq saml.AuthNRequest) {
+func genSamlResponse(sparrow *Sparrow, w http.ResponseWriter, r *http.Request, pr *provider.Provider, session *base.RbacSession, cl *oauth.Client, authnReq saml.AuthNRequest) {
 	user, err := pr.GetUserById(session.Sub)
 	if err != nil {
 		err = fmt.Errorf("Error while generating SAML response for the request ID %s", authnReq.ID)
@@ -399,7 +399,7 @@ func genSamlResponse(w http.ResponseWriter, r *http.Request, pr *provider.Provid
 	log.Debugf("SAML response: %s", sp.ResponseText)
 	log.Debugf("RelayState: %s", sp.RelayStateVal)
 	//log.Debugf("assertion: %s", serAsrtn)
-	templates["saml_response.html"].Execute(w, sp)
+	sparrow.templates["saml_response.html"].Execute(w, sp)
 }
 
 func sendSamlError(w http.ResponseWriter, err error, status int) {
@@ -484,7 +484,7 @@ func readSamlReq(r *http.Request) (data []byte, err error) {
 	return data, nil
 }
 
-func _handleSamlBackChannelLogoutReq(r *http.Request, w http.ResponseWriter, logoutReq *LogoutRequest) {
+func _handleSamlBackChannelLogoutReq(sp *Sparrow, r *http.Request, w http.ResponseWriter, logoutReq *LogoutRequest) {
 	samlSessId := logoutReq.SessionIndex
 	// extract SSO session ID
 	pos := strings.Index(samlSessId, ".")
@@ -492,7 +492,7 @@ func _handleSamlBackChannelLogoutReq(r *http.Request, w http.ResponseWriter, log
 	domainCode := ssoId[:8]
 	ssoId = ssoId[8:]
 
-	pr := dcPrvMap[domainCode]
+	pr := sp.dcPrvMap[domainCode]
 	if pr == nil {
 		log.Debugf("invalid session index %s", samlSessId)
 		return

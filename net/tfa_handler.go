@@ -15,7 +15,7 @@ import (
 
 const OTP_LEN = 6
 
-func showTotpRegistration(username string, prv *provider.Provider, af *authFlow, w http.ResponseWriter, paramMap map[string]string) {
+func showTotpRegistration(username string, prv *provider.Provider, af *authFlow, w http.ResponseWriter, paramMap map[string]string, sp *Sparrow) {
 	// only SHA1 seems to be supported by google's authenticator app
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      prv.Name,
@@ -31,7 +31,7 @@ func showTotpRegistration(username string, prv *provider.Provider, af *authFlow,
 	}
 
 	af.TotpSecret = key.Secret()
-	setAuthFlow(af, w)
+	setAuthFlow(sp, af, w)
 
 	var buf bytes.Buffer
 	img, _ := key.Image(250, 250)
@@ -44,19 +44,19 @@ func showTotpRegistration(username string, prv *provider.Provider, af *authFlow,
 	tmplMap["paramMap"] = paramMap
 	tmplMap["qrcode"] = qrcode
 
-	tmpl := templates["totp-register.html"]
+	tmpl := sp.templates["totp-register.html"]
 	tmpl.Execute(w, tmplMap)
 }
 
-func registerTotp(w http.ResponseWriter, r *http.Request) {
-	af := getAuthFlow(r)
+func (sp *Sparrow) registerTotp(w http.ResponseWriter, r *http.Request) {
+	af := getAuthFlow(r, sp)
 
 	if af == nil || !af.VerifiedPassword() {
-		showLogin(w, r)
+		sp.showLogin(w, r)
 		return
 	}
 
-	pr := dcPrvMap[af.DomainCode]
+	pr := sp.dcPrvMap[af.DomainCode]
 	err := pr.StoreTotpSecret(af.UserId, af.TotpSecret, utils.GetRemoteAddr(r))
 	if err != nil {
 		log.Warningf("Failed to store totp secret %s", err)
@@ -65,8 +65,8 @@ func registerTotp(w http.ResponseWriter, r *http.Request) {
 	af.TotpSecret = ""
 	af.SetTfaRegister(false)
 	af.SetTfaRequired(true)
-	setAuthFlow(af, w)
+	setAuthFlow(sp, af, w)
 
-	tmpl := templates["totp-send.html"]
+	tmpl := sp.templates["totp-send.html"]
 	tmpl.Execute(w, copyParams(r))
 }

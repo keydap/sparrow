@@ -8,45 +8,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/asaskevich/govalidator"
-	"github.com/gorilla/mux"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path"
 	"sparrow/base"
 	"sparrow/provider"
-	"sparrow/repl"
 	"sparrow/utils"
 	"strconv"
 	"strings"
 )
 
-type replHandler struct {
-	rl        *repl.ReplSilo
-	transport *http.Transport
-	peers     map[uint16]*base.ReplicationPeer
-}
-
-func registerReplHandler(router *mux.Router) {
-	var err error
-	replHandler := &replHandler{}
-	replHandler.rl, err = repl.OpenReplSilo(path.Join(replDir, "repl-data.db"))
-	if err != nil {
-		panic(err)
-	}
-
-	replHandler.transport = srvConf.ReplTransport
-	// load the existing peers
-	replHandler.peers = replHandler.rl.GetReplicationPeers()
-	// replication requests
-	router.PathPrefix("/repl/").Handler(replHandler)
-}
-
 func HandleReplEvent() {
 
 }
 
-func (rh *replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 	conStatus := r.TLS
 	if conStatus == nil {
 		msg := "invalid transport, replication requests are only allowed over HTTPS"
@@ -66,23 +42,23 @@ func (rh *replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm() //ignore any errors
 	switch action {
 	case "join":
-		rh.addJoinRequest(w, r)
+		addJoinRequest(w, r, sp)
 
 	case "approve":
-		rh.receivedApproval(w, r)
+		receivedApproval(w, r, sp)
 
 	case "leave":
-		//rh.deletePeer(w, r)
+		//deletePeer(sp, w, r)
 
 		// internal methods
 	case "sendJoinReq":
-		rh.sendJoinRequest(w, r)
+		sendJoinRequest(w, r, sp)
 
 	case "approveJoinReq":
-		rh.sendApprovalForJoinRequest(w, r)
+		sendApprovalForJoinRequest(w, r, sp)
 
 	case "rejectJoinReq":
-		rh.rejectJoinRequest(w, r)
+		rejectJoinRequest(w, r, sp)
 
 	case "sendLeaveReq":
 	//rh.sendLeaveReq(w, r)
@@ -92,14 +68,14 @@ func (rh *replHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (rh *replHandler) receivedApproval(w http.ResponseWriter, r *http.Request) {
+func receivedApproval(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	var joinResp base.JoinResponse
 	err := parseJsonBody(w, r, &joinResp)
 	if err != nil {
 		return // error was already handled
 	}
 
-	sentReq := rh.rl.GetSentJoinRequest(joinResp.PeerServerId)
+	sentReq := sp.rl.GetSentJoinRequest(joinResp.PeerServerId)
 	if sentReq == nil {
 		msg := fmt.Sprintf("no join request was sent to server with ID %d", joinResp.PeerServerId)
 		log.Debugf(msg)
@@ -107,11 +83,11 @@ func (rh *replHandler) receivedApproval(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	rh._storePeer(sentReq, w)
+	_storePeer(sentReq, w, sp)
 }
 
-func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request) {
-	opCtx := getOpCtxOfAdminSessionOrAbort(w, r)
+func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
+	opCtx := getOpCtxOfAdminSessionOrAbort(w, r, sp)
 	if opCtx == nil {
 		return
 	}
@@ -120,7 +96,7 @@ func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http
 		return // error was already handled so just return
 	}
 
-	joinReq := rh.rl.GetReceivedJoinRequest(serverId)
+	joinReq := sp.rl.GetReceivedJoinRequest(serverId)
 
 	if joinReq == nil {
 		msg := fmt.Sprintf("no pending join request exists for the server ID %d", serverId)
@@ -131,7 +107,7 @@ func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http
 
 	joinResp := base.JoinResponse{}
 	joinResp.ApprovedBy = opCtx.Session.Username
-	joinResp.PeerWebHookToken = rh.rl.WebHookToken
+	joinResp.PeerWebHookToken = sp.rl.WebHookToken
 	joinResp.PeerView = make([]base.ReplicationPeer, 0)
 
 	var buf *bytes.Buffer
@@ -146,7 +122,7 @@ func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http
 	approveReq.Body = ioutil.NopCloser(buf)
 	approveReq.Header.Add("Content-Type", "application/json")
 
-	client := &http.Client{Transport: rh.transport}
+	client := &http.Client{Transport: sp.srvConf.ReplTransport}
 	resp, err := client.Do(approveReq)
 	if err != nil {
 		log.Debugf("%#v", err)
@@ -161,10 +137,10 @@ func (rh *replHandler) sendApprovalForJoinRequest(w http.ResponseWriter, r *http
 		return
 	}
 
-	rh._storePeer(joinReq, w)
+	_storePeer(joinReq, w, sp)
 }
 
-func (rh *replHandler) _storePeer(joinReq *base.JoinRequest, w http.ResponseWriter) error {
+func _storePeer(joinReq *base.JoinRequest, w http.ResponseWriter, sp *Sparrow) error {
 	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
 	log.Debugf("storing replication peer %s", baseUrl)
 	rp := &base.ReplicationPeer{}
@@ -173,20 +149,20 @@ func (rh *replHandler) _storePeer(joinReq *base.JoinRequest, w http.ResponseWrit
 	rp.Domain = joinReq.Domain
 	rp.Url, _ = url.Parse(baseUrl + "/events")
 	rp.CreatedTime = utils.DateTimeMillis()
-	err := rh.rl.AddReplicationPeer(rp)
+	err := sp.rl.AddReplicationPeer(rp)
 	if err != nil {
 		log.Warningf("%#v", err)
 		writeError(w, base.NewInternalserverError(err.Error()))
 		return err
 	}
 
-	rh.peers[rp.ServerId] = rp
+	sp.peers[rp.ServerId] = rp
 
 	return nil
 }
 
-func (rh *replHandler) rejectJoinRequest(w http.ResponseWriter, r *http.Request) {
-	opCtx := getOpCtxOfAdminSessionOrAbort(w, r)
+func rejectJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
+	opCtx := getOpCtxOfAdminSessionOrAbort(w, r, sp)
 	if opCtx == nil {
 		return
 	}
@@ -195,12 +171,12 @@ func (rh *replHandler) rejectJoinRequest(w http.ResponseWriter, r *http.Request)
 		return // erro was already handled so just return
 	}
 
-	err = rh.rl.DeleteReceivedJoinRequest(uint16(serverId))
+	err = sp.rl.DeleteReceivedJoinRequest(uint16(serverId))
 	log.Warningf("%#v", err)
 	// TODO send rejected response, but not sure if this is necessary
 }
 
-func (rh *replHandler) addJoinRequest(w http.ResponseWriter, r *http.Request) {
+func addJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	var joinReq base.JoinRequest
 
 	err := parseJsonBody(w, r, &joinReq)
@@ -208,8 +184,8 @@ func (rh *replHandler) addJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return // error was already handled
 	}
 
-	if joinReq.ServerId == srvConf.ServerId {
-		msg := fmt.Sprintf("cannot join self, received server ID %s", joinReq.ServerId)
+	if joinReq.ServerId == sp.srvConf.ServerId {
+		msg := fmt.Sprintf("cannot join self, received server ID %d", joinReq.ServerId)
 		log.Debugf(msg)
 		writeError(w, base.NewBadRequestError(msg))
 		return
@@ -217,7 +193,7 @@ func (rh *replHandler) addJoinRequest(w http.ResponseWriter, r *http.Request) {
 
 	joinReq.CreatedTime = utils.DateTimeMillis()
 
-	err = rh.rl.AddReceivedJoinReq(joinReq)
+	err = sp.rl.AddReceivedJoinReq(joinReq)
 	if err != nil {
 		log.Debugf("%#v", err)
 		writeError(w, base.NewInternalserverError(err.Error()))
@@ -225,8 +201,8 @@ func (rh *replHandler) addJoinRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (rh *replHandler) sendJoinRequest(w http.ResponseWriter, r *http.Request) {
-	opCtx := getOpCtxOfAdminSessionOrAbort(w, r)
+func sendJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
+	opCtx := getOpCtxOfAdminSessionOrAbort(w, r, sp)
 	if opCtx == nil {
 		return
 	}
@@ -241,9 +217,9 @@ func (rh *replHandler) sendJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	joinReq.ServerId = srvConf.ServerId
-	joinReq.Host = srvConf.IpAddress
-	joinReq.Port = srvConf.HttpPort
+	joinReq.ServerId = sp.srvConf.ServerId
+	joinReq.Host = sp.srvConf.IpAddress
+	joinReq.Port = sp.srvConf.HttpPort
 	joinReq.Domain = opCtx.Session.Domain
 	joinReq.WebHookToken = utils.NewRandShaStr()
 	joinReq.CreatedTime = utils.DateTimeMillis()
@@ -258,7 +234,7 @@ func (rh *replHandler) sendJoinRequest(w http.ResponseWriter, r *http.Request) {
 	httpReq.Body = ioutil.NopCloser(buf)
 	httpReq.Header.Add("Content-Type", "application/json")
 
-	client := &http.Client{Transport: rh.transport}
+	client := &http.Client{Transport: sp.srvConf.ReplTransport}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		log.Debugf("%#v", err)
@@ -273,11 +249,11 @@ func (rh *replHandler) sendJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rh.rl.AddSentJoinReq(joinReq)
+	sp.rl.AddSentJoinReq(joinReq)
 }
 
-func getOpCtxOfAdminSessionOrAbort(w http.ResponseWriter, r *http.Request) *base.OpContext {
-	opCtx, err := createOpCtx(r)
+func getOpCtxOfAdminSessionOrAbort(w http.ResponseWriter, r *http.Request, sp *Sparrow) *base.OpContext {
+	opCtx, err := createOpCtx(r, sp)
 	if err != nil {
 		log.Debugf("%#v", err)
 		writeError(w, err) //this will be a SCIM error so no need to create again
@@ -291,7 +267,7 @@ func getOpCtxOfAdminSessionOrAbort(w http.ResponseWriter, r *http.Request) *base
 		return nil
 	}
 
-	if opCtx.Session.Domain != srvConf.ControllerDomain {
+	if opCtx.Session.Domain != sp.srvConf.ControllerDomain {
 		err := base.NewForbiddenError("Insufficient access privileges, only users of the control domain are allowed to configure replication")
 		log.Debugf("%#v", err)
 		writeError(w, err)

@@ -128,7 +128,7 @@ func (af *authFlow) IncOtpFailCount() {
 	af.OtpFailCount++
 }
 
-func sendToken(w http.ResponseWriter, r *http.Request) {
+func (sp *Sparrow) sendToken(w http.ResponseWriter, r *http.Request) {
 	atr, err := oauth.ParseAccessTokenReq(r)
 	if err != nil {
 		log.Debugf("Sending error to the oauth client %s", atr.ClientId)
@@ -176,7 +176,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 
 	var cl *oauth.Client
 
-	pr, _ := getPrFromParam(r)
+	pr, _ := getPrFromParam(r, sp)
 	if pr != nil {
 		cl = pr.GetClientById(atr.ClientId)
 	}
@@ -223,7 +223,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	prv := dcPrvMap[ac.DomainCode]
+	prv := sp.dcPrvMap[ac.DomainCode]
 	if prv == nil || (pr.Name != prv.Name) {
 		ep := &oauth.ErrorResp{}
 		ep.Desc = "Invalid code"
@@ -261,8 +261,8 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 	tresp.TokenType = "Bearer"
 
 	if ac.CType == OIDC {
-		idt := createIdToken(session, cl, pr)
-		strIdt := oauth.ToJwt(idt, srvConf.PrivKey)
+		idt := createIdToken(sp, session, cl, pr)
+		strIdt := oauth.ToJwt(idt, sp.srvConf.PrivKey)
 		tresp.IdToken = strIdt
 	}
 
@@ -273,7 +273,7 @@ func sendToken(w http.ResponseWriter, r *http.Request) {
 	w.Write(tresp.Serialize())
 }
 
-func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow, areq *oauth.AuthorizationReq, cl *oauth.Client) {
+func sendOauthCode(sp *Sparrow, w http.ResponseWriter, r *http.Request, af *authFlow, areq *oauth.AuthorizationReq, cl *oauth.Client) {
 	tmpUri := cl.Oauth.RedUri
 	// send code to the redirect URI
 	if cl.Oauth.HasQueryInUri {
@@ -298,7 +298,7 @@ func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow, areq *o
 	}
 
 	// delete the authflow cookie
-	setAuthFlow(nil, w)
+	setAuthFlow(sp, nil, w)
 	http.Redirect(w, r, tmpUri, http.StatusFound)
 
 	// ignore the received redirect URI
@@ -314,13 +314,13 @@ func sendOauthCode(w http.ResponseWriter, r *http.Request, af *authFlow, areq *o
 	*/
 }
 
-func getAuthFlow(r *http.Request) *authFlow {
+func getAuthFlow(r *http.Request, sp *Sparrow) *authFlow {
 	ck, err := r.Cookie(AUTHFLOW_COOKIE)
 	if err != nil {
 		return nil
 	}
 
-	data, err := ckc.Decrypt(ck.Value)
+	data, err := sp.ckc.Decrypt(ck.Value)
 	if err != nil {
 		// todo audit
 		log.Debugf("failed to decrypt authflow cookie [%s]", err.Error())
@@ -366,7 +366,7 @@ func copyParams(r *http.Request) map[string]string {
 	return paramMap
 }
 
-func setAuthFlow(af *authFlow, w http.ResponseWriter) {
+func setAuthFlow(sp *Sparrow, af *authFlow, w http.ResponseWriter) {
 	ck := &http.Cookie{}
 	ck.HttpOnly = true
 	ck.Name = AUTHFLOW_COOKIE
@@ -380,7 +380,7 @@ func setAuthFlow(af *authFlow, w http.ResponseWriter) {
 		enc := gob.NewEncoder(&buf)
 		enc.Encode(af)
 
-		data := ckc.Encrypt(buf.Bytes())
+		data := sp.ckc.Encrypt(buf.Bytes())
 		sessionToken := utils.B64Encode(data)
 
 		ck.Value = sessionToken

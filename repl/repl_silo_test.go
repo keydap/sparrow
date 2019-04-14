@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"net/url"
 	"os"
 	"sparrow/base"
 	"sparrow/utils"
@@ -73,10 +74,10 @@ var _ = Describe("testing replication silo", func() {
 
 	Context("replication peers", func() {
 		It("insert, get and delete", func() {
-			peer := base.ReplicationPeer{}
+			peer := &base.ReplicationPeer{}
 			peer.WebHookToken = "abcd"
 			peer.ServerId = 1
-			peer.Url = "https://localhost:8080"
+			peer.Url, _ = url.Parse("https://localhost:8080")
 			peer.CreatedTime = utils.DateTimeMillis()
 			peer.LastReqSentTime = utils.DateTimeMillis()
 
@@ -84,7 +85,7 @@ var _ = Describe("testing replication silo", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			fetchedPeer := sl.GetReplicationPeer(peer.ServerId)
-			Expect(fetchedPeer).To(Equal(&peer))
+			Expect(fetchedPeer).To(Equal(peer))
 
 			err = sl.DeleteReplicationPeer(peer.ServerId)
 			Expect(err).ToNot(HaveOccurred())
