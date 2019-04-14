@@ -64,7 +64,7 @@ func NewBadRequestError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.code = 400
-	err.Status = err.ScimType
+	err.Status = BadRequest
 	return err
 }
 
@@ -72,7 +72,7 @@ func NewNotFoundError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.code = 404
-	err.Status = err.ScimType
+	err.Status = NotFound
 	return err
 }
 
@@ -80,7 +80,7 @@ func NewConflictError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.code = 409
-	err.Status = err.ScimType
+	err.Status = Conflict
 	return err
 }
 
@@ -88,7 +88,7 @@ func NewInternalserverError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.code = 500
-	err.Status = err.ScimType
+	err.Status = InternalServerErr
 	return err
 }
 
@@ -96,7 +96,7 @@ func NewForbiddenError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.code = 403
-	err.Status = err.ScimType
+	err.Status = Forbidden
 	return err
 }
 
@@ -104,7 +104,7 @@ func NewUnAuthorizedError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.code = 401
-	err.Status = err.ScimType
+	err.Status = UnAuthorized
 	return err
 }
 
@@ -112,7 +112,7 @@ func NewPreCondError(detail string) *ScimError {
 	err := NewError()
 	err.Detail = detail
 	err.code = 412
-	err.Status = err.ScimType
+	err.Status = PreCondFailed
 	return err
 }
 
