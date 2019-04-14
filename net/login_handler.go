@@ -86,7 +86,7 @@ func (sp *Sparrow) verifyPassword(w http.ResponseWriter, r *http.Request) {
 
 	paramMap := copyParams(r)
 
-	domain := sp.defaultDomain
+	domain := sp.srvConf.DefaultDomain
 	var prv *provider.Provider
 
 	username := r.Form.Get("username")

@@ -25,7 +25,7 @@ var enableTls = flag.Bool("tls", true, "Flag to enable or disable TLS")
 func main() {
 	logger.ConfigureLoggers("<root>=debug")
 	//logger.ConfigureLoggers("<root>=debug; sparrow.base=warning; sparrow.net=info; sparrow.schema=warning; sparrow.provider=warning; sparrow.silo=warning")
-	sp := net.NewSparrowServer("/tmp/sparrow")
+	sp := net.NewSparrowServer("/tmp/sparrow", "")
 	go sp.Start()
 
 	sigs := make(chan os.Signal, 1)

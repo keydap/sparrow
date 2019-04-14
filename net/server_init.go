@@ -31,7 +31,7 @@ import (
 )
 
 var DEFAULT_SRV_CONF string = `{
-	"serverId": 0,
+	"serverId": 1,
     "enableHttps" : true,
     "httpPort" : 7090,
     "ldapPort" : 7092,
@@ -40,11 +40,12 @@ var DEFAULT_SRV_CONF string = `{
     "ipAddress" : "0.0.0.0",
     "certificateFile": "default.cer",
     "privatekeyFile": "default.key",
+	"defaultDomain": "example.com",
 	"controllerDomain": "example.com",
 	"skipPeerCertCheck": true
 }`
 
-var COOKIE_LOGIN_NAME string = "SPLCN"
+const COOKIE_LOGIN_NAME string = "SPLCN"
 
 type Sparrow struct {
 	providers map[string]*provider.Provider
@@ -58,14 +59,12 @@ type Sparrow struct {
 
 	homeUrl string
 
-	uiHandler     http.Handler
-	defaultDomain string
-	srvConf       *conf.ServerConf
-	templates     map[string]*template.Template
-	instance      *caddy.Instance
-	homeDir       string
-	replDir       string
-	listener      *net.TCPListener
+	uiHandler http.Handler
+	srvConf   *conf.ServerConf
+	templates map[string]*template.Template
+	instance  *caddy.Instance
+	homeDir   string
+	listener  *net.TCPListener
 
 	rl    *repl.ReplSilo
 	peers map[uint16]*base.ReplicationPeer
@@ -74,28 +73,32 @@ type Sparrow struct {
 	dconfUpdateMutex sync.Mutex
 }
 
-func NewSparrowServer(homeDir string) *Sparrow {
-	sparrow := &Sparrow{}
-	sparrow.homeDir = homeDir
-	sparrow.defaultDomain = "example.com"
-	sparrow.ckc = utils.NewCookieKeyCache()
-	return sparrow
-}
+func NewSparrowServer(homeDir string, overrideConf string) *Sparrow {
+	sc := initHome(homeDir, overrideConf)
 
-func (sp *Sparrow) Start() {
-	log.Debugf("Starting server(s)...")
+	sp := &Sparrow{}
+	sp.homeDir = homeDir
+	sp.srvConf = sc
 
-	sp.initHome()
-	sp.templates = parseTemplates(sp.srvConf.TmplDir)
+	sp.ckc = utils.NewCookieKeyCache()
+	sp.templates = parseTemplates(sc.TmplDir)
+	sp.loadProviders(sc.DomainsDir)
+
+	cwd, _ := os.Getwd()
+	fmt.Println("Current working directory: ", cwd)
+
+	if len(sp.providers) == 0 {
+		sp.createDefaultDomain(sc.DomainsDir)
+	}
 
 	if len(sp.providers) == 1 {
 		for _, pr := range sp.providers {
-			sp.defaultDomain = pr.Name
+			sp.srvConf.DefaultDomain = pr.Name
 		}
 	}
 
 	var err error
-	sp.rl, err = repl.OpenReplSilo(path.Join(sp.replDir, "repl-data.db"))
+	sp.rl, err = repl.OpenReplSilo(path.Join(sc.ReplDir, "repl-data.db"))
 	if err != nil {
 		panic(err)
 	}
@@ -103,6 +106,11 @@ func (sp *Sparrow) Start() {
 	// load the existing peers
 	sp.peers = sp.rl.GetReplicationPeers()
 
+	return sp
+}
+
+func (sp *Sparrow) Start() {
+	log.Debugf("Starting server...")
 	if sp.srvConf.LdapEnabled {
 		err := sp.startLdap()
 		if err != nil {
@@ -120,8 +128,9 @@ func (sp *Sparrow) Stop() {
 	sp.stopHttp()
 }
 
-func (sp *Sparrow) initHome() *conf.ServerConf {
-	srvHome := sp.homeDir
+// Initializes the home directory of the server
+// Optionally uses the overrideConf if not empty as the configuration instead of default configuration
+func initHome(srvHome string, overrideConf string) *conf.ServerConf {
 	log.Debugf("Checking server home directory %s", srvHome)
 	utils.CheckAndCreate(srvHome)
 
@@ -134,20 +143,34 @@ func (sp *Sparrow) initHome() *conf.ServerConf {
 	utils.CheckAndCreate(tmplDir)
 	writeDefaultHtmlTemplates(tmplDir)
 
-	sp.replDir = filepath.Join(srvHome, "replication")
-	log.Debugf("Checking server's repication directory %s", sp.replDir)
-	utils.CheckAndCreate(sp.replDir)
+	replDir := filepath.Join(srvHome, "replication")
+	log.Debugf("Checking server's repication directory %s", replDir)
+	utils.CheckAndCreate(replDir)
 
 	srvConfPath := filepath.Join(srvConfDir, "server.json")
 	_, err := os.Stat(srvConfPath)
 
 	sc := &conf.ServerConf{}
 	sc.TmplDir = tmplDir
+	sc.ReplDir = replDir
 
 	if os.IsNotExist(err) {
 		strConf := DEFAULT_SRV_CONF
-		addr := flag.Lookup("a").Value.(flag.Getter).Get().(string)
-		enableTls := flag.Lookup("tls").Value.(flag.Getter).Get().(bool)
+		if len(overrideConf) > 0 {
+			strConf = overrideConf
+		}
+
+		addr := ""
+		addrFlag := flag.Lookup("a")
+		if addrFlag != nil {
+			addr = addrFlag.Value.(flag.Getter).Get().(string)
+		}
+
+		enableTls := false
+		enableTlsFlag := flag.Lookup("tls")
+		if enableTlsFlag != nil {
+			enableTls = enableTlsFlag.Value.(flag.Getter).Get().(bool)
+		}
 		addr = strings.TrimSpace(addr)
 
 		var tmp conf.ServerConf
@@ -178,7 +201,10 @@ func (sp *Sparrow) initHome() *conf.ServerConf {
 
 		}
 
-		tmp.ServerId = genRandomServerId()
+		// override the server ID only if it is set to <=0
+		if tmp.ServerId <= 0 {
+			tmp.ServerId = genRandomServerId()
+		}
 		data, err := json.MarshalIndent(tmp, "", "  ")
 		if err != nil {
 			panic(err)
@@ -239,9 +265,9 @@ func (sp *Sparrow) initHome() *conf.ServerConf {
 		//TODO support other types of private keys
 	}
 
-	domainsDir := filepath.Join(srvHome, "domains")
-	log.Debugf("Checking server domains directory %s", domainsDir)
-	utils.CheckAndCreate(domainsDir)
+	sc.DomainsDir = filepath.Join(srvHome, "domains")
+	log.Debugf("Checking server domains directory %s", sc.DomainsDir)
+	utils.CheckAndCreate(sc.DomainsDir)
 
 	skipCertCheck := false
 	if sc.SkipPeerCertCheck {
@@ -251,16 +277,6 @@ func (sp *Sparrow) initHome() *conf.ServerConf {
 	}
 	tlsConf := &tls.Config{InsecureSkipVerify: skipCertCheck}
 	sc.ReplTransport = &http.Transport{TLSClientConfig: tlsConf}
-
-	sp.srvConf = sc
-	sp.loadProviders(domainsDir)
-
-	cwd, _ := os.Getwd()
-	fmt.Println("Current working directory: ", cwd)
-
-	if len(sp.providers) == 0 {
-		sp.createDefaultDomain(domainsDir)
-	}
 
 	uiDir := filepath.Join(srvHome, "ui")
 	log.Debugf("Checking server UI directory %s", uiDir)

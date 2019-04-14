@@ -720,7 +720,7 @@ func getPrFromParam(r *http.Request, sp *Sparrow) (pr *provider.Provider, err er
 	domain = strings.ToLower(domain)
 
 	if len(domain) == 0 {
-		domain = sp.defaultDomain
+		domain = sp.srvConf.DefaultDomain
 	}
 
 	pr = sp.providers[domain]
@@ -940,7 +940,7 @@ func (sp *Sparrow) directLogin(w http.ResponseWriter, r *http.Request) {
 	ar.ClientIP = utils.GetRemoteAddr(r)
 	normDomain := strings.ToLower(ar.Domain)
 	if len(normDomain) == 0 {
-		normDomain = sp.defaultDomain
+		normDomain = sp.srvConf.DefaultDomain
 	}
 	pr := sp.providers[normDomain]
 

@@ -31,7 +31,7 @@ func initSilo() {
 	os.Remove(dbFilePath)
 }
 
-func TestRepl(t *testing.T) {
+func TestReplSilo(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Replication silo test suite")
 }

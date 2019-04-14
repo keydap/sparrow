@@ -26,8 +26,11 @@ type ServerConf struct {
 	CertFile          string              `json:"certificateFile"`
 	PrivKeyFile       string              `json:"privatekeyFile"`
 	ControllerDomain  string              `json:"controllerDomain"` // the domain whose admin can manage other domains
+	DefaultDomain     string              `json:"defaultDomain"`    // the domain whose admin can manage other domains
 	SkipPeerCertCheck bool                `json:"skipPeerCertCheck"`
 	TmplDir           string              `json:"-"` // template directory
+	ReplDir           string              `json:"-"` // replication data directory
+	DomainsDir        string              `json:"-"` // domains' data directory
 	CertChain         []*x509.Certificate `json:"-"`
 	PrivKey           crypto.PrivateKey   `json:"-"`
 	PubKey            crypto.PublicKey    `json:"-"`
