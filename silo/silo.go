@@ -194,7 +194,7 @@ func (idx *Index) add(val interface{}, rid string, tx *bolt.Tx) error {
 }
 
 func (idx *Index) remove(val interface{}, rid string, tx *bolt.Tx) error {
-	log.Debugf("removing value %s of resource %s from index %s", val, rid, idx.Name)
+	log.Debugf("removing value %#v of resource %s from index %s", val, rid, idx.Name)
 	vData := idx.convert(val)
 	buck := tx.Bucket(idx.BnameBytes)
 	ridBytes := []byte(rid)
@@ -222,9 +222,10 @@ func (idx *Index) remove(val interface{}, rid string, tx *bolt.Tx) error {
 
 			if dupBuck.Stats().KeyN == 1 { // the count becomes zero *after* the tx gets committed
 				err = buck.DeleteBucket(vData)
-				log.Debugf("Deleting the bucket associated with %s %s", val, err)
 				if err != nil {
 					return err
+				} else {
+					log.Debugf("Deleting the bucket associated with %s", val)
 				}
 			}
 		}
