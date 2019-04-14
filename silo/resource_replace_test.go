@@ -36,7 +36,8 @@ func TestReplace(t *testing.T) {
 
 	reader := bytes.NewReader([]byte(origDevice))
 	originalRs, _ := base.ParseResource(restypes, schemas, reader)
-	originalRs, _ = sl.Insert(originalRs)
+	crOriginalUserCtx := &base.CreateContext{InRes: originalRs}
+	sl.Insert(crOriginalUserCtx)
 
 	reader = bytes.NewReader([]byte(upDevice))
 	upRs, _ := base.ParseResource(restypes, schemas, reader)
@@ -142,7 +143,8 @@ func TestReplaceExtendedObj(t *testing.T) {
 
 	reader := bytes.NewReader([]byte(origUser))
 	originalRs, _ := base.ParseResource(restypes, schemas, reader)
-	originalRs, _ = sl.Insert(originalRs)
+	crOriginalUserCtx := &base.CreateContext{InRes: originalRs}
+	sl.Insert(crOriginalUserCtx)
 
 	reader = bytes.NewReader([]byte(upUser1))
 	upRs, _ := base.ParseResource(restypes, schemas, reader)

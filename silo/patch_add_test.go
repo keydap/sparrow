@@ -372,7 +372,8 @@ func insertRs(json string) *base.Resource {
 		panic(err)
 	}
 
-	rs, err = sl.Insert(rs)
+	crCtx := &base.CreateContext{InRes: rs}
+	err = sl.Insert(crCtx)
 	if err != nil {
 		panic(err)
 	}

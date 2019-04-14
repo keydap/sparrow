@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sparrow/base"
 	"testing"
 	"time"
 )
@@ -18,10 +19,12 @@ func TestCreateJwt(t *testing.T) {
 	initSilo()
 
 	user := createTestUser()
-	user, _ = sl.Insert(user)
+	crUserCtx := &base.CreateContext{InRes: user}
+	sl.Insert(crUserCtx)
 
 	group := prepareGroup(user)
-	sl.Insert(group)
+	crGroupCtx := &base.CreateContext{InRes: group}
+	sl.Insert(crGroupCtx)
 
 	user, _ = sl.Get(user.GetId(), userType)
 

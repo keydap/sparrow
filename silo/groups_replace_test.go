@@ -55,10 +55,12 @@ func TestGroupAddAndDelete(t *testing.T) {
 	initSilo()
 
 	user1 := createTestUser()
-	sl.Insert(user1)
+	crUserCtx := &base.CreateContext{InRes: user1}
+	sl.Insert(crUserCtx)
 
 	user2 := createTestUser()
-	sl.Insert(user2)
+	crUserCtx2 := &base.CreateContext{InRes: user2}
+	sl.Insert(crUserCtx2)
 
 	u1Id := user1.GetId()
 	u2Id := user2.GetId()
@@ -74,7 +76,8 @@ func TestGroupAddAndDelete(t *testing.T) {
 	}
 
 	group := prepareGroup(user1, user2)
-	group, err = sl.Insert(group)
+	crGroupCtx := &base.CreateContext{InRes: group}
+	err = sl.Insert(crGroupCtx)
 	if err != nil {
 		t.Errorf("Failed to insert a group with users %s , %s (%#v)", u1Id, u2Id, err)
 	}
@@ -130,7 +133,8 @@ func TestGroupInsertWithInvalidMember(t *testing.T) {
 	user1.SetId("non-inserted-user")
 
 	group := prepareGroup(user1)
-	group, err := sl.Insert(group)
+	crCtx := &base.CreateContext{InRes: group}
+	err := sl.Insert(crCtx)
 	if err == nil {
 		t.Error("Group creation must fail when the member is not present")
 	}
@@ -140,19 +144,23 @@ func TestGroupReplace(t *testing.T) {
 	initSilo()
 
 	user1 := createTestUser()
-	sl.Insert(user1)
+	crUserCtx1 := &base.CreateContext{InRes: user1}
+	sl.Insert(crUserCtx1)
 
 	user2 := createTestUser()
-	sl.Insert(user2)
+	crUserCtx2 := &base.CreateContext{InRes: user2}
+	sl.Insert(crUserCtx2)
 
 	u1Id := user1.GetId()
 	u2Id := user2.GetId()
 
 	group := prepareGroup(user1, user2)
-	group, err := sl.Insert(group)
+	crGroupCtx := &base.CreateContext{InRes: group}
+	err := sl.Insert(crGroupCtx)
 
 	user3 := createTestUser()
-	sl.Insert(user3)
+	crUserCtx3 := &base.CreateContext{InRes: user3}
+	sl.Insert(crUserCtx3)
 	u3Id := user3.GetId()
 
 	gid := group.GetId()
@@ -190,16 +198,19 @@ func TestPatchAdd(t *testing.T) {
 	initSilo()
 
 	user1 := createTestUser()
-	sl.Insert(user1)
+	crUserCtx1 := &base.CreateContext{InRes: user1}
+	sl.Insert(crUserCtx1)
 
 	user2 := createTestUser()
-	sl.Insert(user2)
+	crUserCtx2 := &base.CreateContext{InRes: user2}
+	sl.Insert(crUserCtx2)
 
 	u1Id := user1.GetId()
 	u2Id := user2.GetId()
 
 	group := prepareGroup(user1)
-	group, _ = sl.Insert(group)
+	crGroupCtx1 := &base.CreateContext{InRes: group}
+	sl.Insert(crGroupCtx1)
 
 	gid := group.GetId()
 
@@ -218,7 +229,8 @@ func TestPatchAdd(t *testing.T) {
 	assertIndexVal(groupType.Name, "members.value", u2Id, true, t)
 
 	user3 := createTestUser()
-	sl.Insert(user3)
+	crUserCtx3 := &base.CreateContext{InRes: user3}
+	sl.Insert(crUserCtx3)
 
 	u3Id := user3.GetId()
 
@@ -244,16 +256,19 @@ func TestPatchReplace(t *testing.T) {
 	initSilo()
 
 	user1 := createTestUser()
-	sl.Insert(user1)
+	crUserCtx1 := &base.CreateContext{InRes: user1}
+	sl.Insert(crUserCtx1)
 
 	user2 := createTestUser()
-	sl.Insert(user2)
+	crUserCtx2 := &base.CreateContext{InRes: user2}
+	sl.Insert(crUserCtx2)
 
 	u1Id := user1.GetId()
 	u2Id := user2.GetId()
 
 	group := prepareGroup(user1)
-	group, _ = sl.Insert(group)
+	crGroupCtx := &base.CreateContext{InRes: group}
+	sl.Insert(crGroupCtx)
 
 	gid := group.GetId()
 
@@ -281,7 +296,8 @@ func TestPatchReplace(t *testing.T) {
 	assertIndexVal(groupType.Name, "members.value", u2Id, true, t)
 
 	user3 := createTestUser()
-	sl.Insert(user3)
+	crUserCtx3 := &base.CreateContext{InRes: user3}
+	sl.Insert(crUserCtx3)
 
 	u3Id := user3.GetId()
 
@@ -312,20 +328,24 @@ func TestPatchRemove(t *testing.T) {
 	initSilo()
 
 	user1 := createTestUser()
-	sl.Insert(user1)
+	crUserCtx1 := &base.CreateContext{InRes: user1}
+	sl.Insert(crUserCtx1)
 
 	user2 := createTestUser()
-	sl.Insert(user2)
+	crUserCtx2 := &base.CreateContext{InRes: user2}
+	sl.Insert(crUserCtx2)
 
 	user3 := createTestUser()
-	sl.Insert(user3)
+	crUserCtx3 := &base.CreateContext{InRes: user3}
+	sl.Insert(crUserCtx3)
 
 	u1Id := user1.GetId()
 	u2Id := user2.GetId()
 	u3Id := user3.GetId()
 
 	group := prepareGroup(user1, user2, user3)
-	group, _ = sl.Insert(group)
+	crGroupCtx := &base.CreateContext{InRes: group}
+	sl.Insert(crGroupCtx)
 
 	gid := group.GetId()
 
