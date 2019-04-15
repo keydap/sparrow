@@ -20,17 +20,7 @@ import (
 	"time"
 )
 
-const baseUrl = "https://localhost:7090/v2"
-const scimContentType = "application/scim+json; charset=UTF-8"
-
-type authRequest struct {
-	Username string `json:"username"`
-	Domain   string `json:"domain"`
-	Password string `json:"password"`
-}
-
-var tlsConf = &tls.Config{InsecureSkipVerify: true}
-var transport = &http.Transport{TLSClientConfig: tlsConf}
+const baseUrl string = "https://localhost:7090/v2"
 
 func TestCreateResourcesPerf(t *testing.T) {
 	if true {
@@ -93,7 +83,7 @@ func TestCreateResourcesPerf(t *testing.T) {
 		if resp.StatusCode == http.StatusCreated {
 			count++
 		} else {
-			panic(fmt.Errorf("Unable to insert %d resource status is %s\n %s\n\n%s", count+1, resp.Status, msg, l))
+			panic(fmt.Errorf("Unable to insert %d resource StatusCode is %s\n %s\n\n%s", count+1, resp.Status, msg, l))
 		}
 
 		if (count > 0) && ((count % 10000) == 0) {
@@ -302,30 +292,4 @@ func BenchmarkTestSingleUserUsingFilter(t *testing.B) {
 
 	dur := time.Now().Sub(start).String()
 	fmt.Printf("BenchmarkTestSingleUserUsingFilter: total number of seconds for %d search iterations %s\n", t.N, dur)
-}
-
-func login() (token string, err error) {
-	// authenticate first
-	ar := authRequest{}
-	ar.Username = "admin"
-	ar.Password = "secret"
-	ar.Domain = "example.com"
-
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.Encode(&ar)
-
-	fmt.Println(string(buf.Bytes()))
-	client := &http.Client{Transport: transport}
-	resp, err := client.Post(baseUrl+"/directLogin", "application/json", &buf)
-	if err != nil {
-		return "", err
-	}
-
-	tokenBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	return string(tokenBytes), nil
 }
