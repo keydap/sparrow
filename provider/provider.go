@@ -120,6 +120,8 @@ func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 	cf := prv.Config
 	cf.Ppolicy.PasswdHashAlgo = strings.ToLower(cf.Ppolicy.PasswdHashAlgo)
 
+	// add the replication interceptor first so that attribute removal or any such side effects
+	// can be eliminated before preserving the modified resource for replication
 	prv.interceptors = make([]base.Interceptor, 3)
 	prv.interceptors[0] = &ApplicationInterceptor{}
 	prv.interceptors[1] = &RemoveNeverAttrInterceptor{}
