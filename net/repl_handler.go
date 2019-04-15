@@ -61,9 +61,13 @@ func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 		rejectJoinRequest(w, r, sp)
 
 	case "sendLeaveReq":
-	//rh.sendLeaveReq(w, r)
+		//sendLeaveReq(w, r, sp)
+
+	case "events":
+		handleEvents(w, r, sp)
 
 	default:
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("received path " + uri + " action " + action))
 	}
 }
