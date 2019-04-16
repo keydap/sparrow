@@ -75,7 +75,7 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 			crCtx := &base.CreateContext{}
 			crCtx.OpContext = &base.OpContext{Repl: true}
 			crCtx.InRes = rs
-			pr.CreateResource(crCtx)
+			err = pr.CreateResource(crCtx)
 		} else {
 			msg := fmt.Sprintf("failed to decode the resource from the data sent from server ID %d [%#v]", serverId, err)
 			log.Debugf(msg)
@@ -88,4 +88,11 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		log.Debugf(msg)
 		writeError(w, base.NewBadRequestError(msg))
 	}
+
+	if err == nil {
+		log.Debugf("saved the replication event with ID %s", event.Csn)
+	} else {
+		log.Debugf("failed to save the replication event with ID %s", event.Csn)
+	}
+
 }

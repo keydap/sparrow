@@ -111,6 +111,9 @@ func NewSparrowServer(homeDir string, overrideConf string) *Sparrow {
 
 func (sp *Sparrow) Start() {
 	log.Debugf("Starting server...")
+	// TODO catch up with the peers first to bring self uptodate
+	// this way no other peer during its startup will get a chance to connect to this server which is still palying catch-up
+
 	if sp.srvConf.LdapEnabled {
 		err := sp.startLdap()
 		if err != nil {

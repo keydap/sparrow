@@ -647,9 +647,11 @@ func (sl *Silo) Insert(crCtx *base.CreateContext) (err error) {
 
 func (sl *Silo) InsertInternal(crCtx *base.CreateContext) (err error) {
 	inRes := crCtx.InRes
-	err = inRes.CheckMissingRequiredAts()
-	if err != nil {
-		return err
+	if !crCtx.Repl {
+		err = inRes.CheckMissingRequiredAts()
+		if err != nil {
+			return err
+		}
 	}
 
 	rid := inRes.GetId()
@@ -692,8 +694,10 @@ func (sl *Silo) InsertInternal(crCtx *base.CreateContext) (err error) {
 		sl.mutex.Unlock()
 	}()
 
-	// now, add meta attribute
-	inRes.AddMeta(sl.cg.NewCsn())
+	if !crCtx.Repl {
+		// now, add meta attribute
+		inRes.AddMeta(sl.cg.NewCsn())
+	}
 
 	//log.Debugf("checking unique attributes %s", rt.UniqueAts)
 	//log.Debugf("indices map %#v", sl.indices[rtName])
@@ -768,7 +772,7 @@ func (sl *Silo) InsertInternal(crCtx *base.CreateContext) (err error) {
 	}
 
 	// for User resource initialize AuthData
-	if rt.Name == "User" {
+	if !crCtx.Repl && rt.Name == "User" {
 		inRes.AuthData = &base.AuthData{}
 	}
 
