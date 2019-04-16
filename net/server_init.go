@@ -82,6 +82,16 @@ func NewSparrowServer(homeDir string, overrideConf string) *Sparrow {
 
 	sp.ckc = utils.NewCookieKeyCache()
 	sp.templates = parseTemplates(sc.TmplDir)
+
+	var err error
+	sp.rl, err = repl.OpenReplSilo(path.Join(sc.ReplDir, "repl-peers.db"))
+	if err != nil {
+		panic(err)
+	}
+
+	// load the existing peers
+	sp.peers = sp.rl.GetReplicationPeers()
+
 	sp.loadProviders(sc.DomainsDir)
 
 	cwd, _ := os.Getwd()
@@ -96,15 +106,6 @@ func NewSparrowServer(homeDir string, overrideConf string) *Sparrow {
 			sp.srvConf.DefaultDomain = pr.Name
 		}
 	}
-
-	var err error
-	sp.rl, err = repl.OpenReplSilo(path.Join(sc.ReplDir, "repl-data.db"))
-	if err != nil {
-		panic(err)
-	}
-
-	// load the existing peers
-	sp.peers = sp.rl.GetReplicationPeers()
 
 	return sp
 }
@@ -341,14 +342,10 @@ func (sp *Sparrow) loadProviders(domainsDir string) {
 					continue
 				}
 
-				prv, err := provider.NewProvider(layout, sc.ServerId)
+				prv, err := provider.NewProvider(layout, sc, sp.peers)
 				if err != nil {
 					log.Infof("Could not create a provider for the domain %s [%s]", layout.Name(), err.Error())
 				} else {
-					prv.Cert = sc.CertChain[0]
-					prv.PrivKey = sc.PrivKey
-					prv.ServerId = sc.ServerId
-					prv.ReplTransport = sc.ReplTransport
 					sp.providers[lName] = prv
 					sp.dcPrvMap[prv.DomainCode()] = prv
 				}
@@ -383,13 +380,11 @@ func (sp *Sparrow) createDefaultDomain(domainsDir string) {
 	ldapGroupTmpl := filepath.Join(layout.LdapTmplDir, "ldap-group.json")
 	writeFile(ldapGroupTmpl, schema.LDAP_Group_Entry)
 
-	prv, err := provider.NewProvider(layout, sc.ServerId)
+	prv, err := provider.NewProvider(layout, sc, sp.peers)
 	if err != nil {
 		panic(err)
 	}
 
-	prv.Cert = sc.CertChain[0]
-	prv.PrivKey = sc.PrivKey
 	sp.providers[layout.Name()] = prv
 	sp.dcPrvMap[prv.DomainCode()] = prv
 }

@@ -53,8 +53,7 @@ func (scl *SparrowClient) Add(rs *base.Resource) Result {
 	req := &http.Request{Method: http.MethodPost}
 	usersUrl, _ := url.Parse(scl.baseUrl + rs.GetType().Endpoint)
 	req.URL = usersUrl
-	req.Header.Add("Content-Type", scimContentType)
-	req.Header.Add(authzHeader, scl.token)
+	scl.addRequiredHeaders(req)
 	req.Body = ioutil.NopCloser(&buf)
 
 	return scl.sendReq(req)
@@ -66,7 +65,7 @@ func (scl *SparrowClient) SendJoinReq(host string, port int) Result {
 	req.URL = joinUrl
 	req.Form.Add("host", host)
 	req.Form.Add("port", strconv.Itoa(port))
-	req.Header.Add(authzHeader, scl.token)
+	scl.addRequiredHeaders(req)
 
 	return scl.sendReq(req)
 }
@@ -76,7 +75,7 @@ func (scl *SparrowClient) ApproveJoinReq(serverId uint16) Result {
 	joinUrl, _ := url.Parse(scl.baseUrl + "/repl/approveJoinReq")
 	req.URL = joinUrl
 	req.Form.Add("serverId", strconv.Itoa(int(serverId)))
-	req.Header.Add(authzHeader, scl.token)
+	scl.addRequiredHeaders(req)
 
 	return scl.sendReq(req)
 }
@@ -95,6 +94,7 @@ func (scl *SparrowClient) DirectLogin(username string, password string, domain s
 	req := &http.Request{Method: http.MethodPost}
 	loginUrl, _ := url.Parse(scl.baseUrl + "/directLogin")
 	req.URL = loginUrl
+	req.Header = make(map[string][]string)
 	req.Header.Add("Content-Type", "application/json")
 	req.Body = ioutil.NopCloser(&buf)
 
@@ -126,4 +126,10 @@ func (scl *SparrowClient) sendReq(req *http.Request) Result {
 	}
 
 	return r
+}
+
+func (scl *SparrowClient) addRequiredHeaders(r *http.Request) {
+	r.Header = make(map[string][]string)
+	r.Header.Add("Content-Type", scimContentType)
+	r.Header.Add(authzHeader, "Bearer "+scl.token)
 }

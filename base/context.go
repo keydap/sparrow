@@ -11,12 +11,12 @@ type OpContext struct {
 	Session        *RbacSession
 	Sso            bool
 	UpdatedSession bool
-	Repl           bool
 	ClientIP       string
 	Endpoint       string
 }
 
 type CreateContext struct {
+	Repl       bool // adding here instead of in OpContext so that creation of OpContext can be avoided
 	InRes      *Resource
 	*OpContext // the operation context
 }

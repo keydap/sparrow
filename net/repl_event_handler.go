@@ -72,8 +72,7 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		if err == nil {
 			// apply the schema
 			rs.SetSchema(pr.RsTypes[rs.TypeName])
-			crCtx := &base.CreateContext{}
-			crCtx.OpContext = &base.OpContext{Repl: true}
+			crCtx := &base.CreateContext{Repl: true}
 			crCtx.InRes = rs
 			err = pr.CreateResource(crCtx)
 		} else {

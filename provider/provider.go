@@ -16,13 +16,13 @@ import (
 	samlTypes "github.com/russellhaering/gosaml2/types"
 	"html/template"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/oauth"
 	_ "sparrow/rbac"
+	"sparrow/repl"
 	"sparrow/schema"
 	"sparrow/silo"
 	"sparrow/utils"
@@ -47,7 +47,6 @@ type Provider struct {
 	interceptors  []base.Interceptor
 	Al            *AuditLogger
 	SamlMdCache   map[string]*samlTypes.SPSSODescriptor
-	ReplTransport *http.Transport
 }
 
 const AdminGroupId = "01000000-0000-4000-4000-000000000000"
@@ -60,15 +59,18 @@ func init() {
 	log = logger.GetLogger("sparrow.provider")
 }
 
-func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
+func NewProvider(layout *Layout, sc *conf.ServerConf, peers map[uint16]*base.ReplicationPeer) (prv *Provider, err error) {
 	schemas, err := base.LoadSchemas(layout.SchemaDir)
 	if err != nil {
 		return nil, err
 	}
 
 	prv = &Provider{}
-	prv.ServerId = serverId
+	prv.ServerId = sc.ServerId
 	prv.Schemas = schemas
+	prv.Cert = sc.CertChain[0]
+	prv.PrivKey = sc.PrivKey
+	prv.ServerId = sc.ServerId
 
 	prv.RsTypes, prv.RtPathMap, err = base.LoadResTypes(layout.ResTypesDir, prv.Schemas)
 	if err != nil {
@@ -96,6 +98,7 @@ func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 	prv.Config.CsnGen = base.NewCsnGenerator(prv.ServerId)
 	prv.layout = layout
 	prv.Name = layout.name
+	prv.domainCode = genDomainCode(prv.Name)
 	prv.immResIds = make(map[string]int)
 	prv.immResIds[AdminGroupId] = 1
 	prv.immResIds[SystemGroupId] = 1
@@ -115,6 +118,17 @@ func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 		return nil, err
 	}
 
+	replDataFilePath := filepath.Join(layout.DataDir, "repl-events.db")
+	replSilo, err := repl.OpenReplProviderSilo(replDataFilePath)
+	if err != nil {
+		return nil, err
+	}
+	replInterceptor := &ReplInterceptor{}
+	replInterceptor.replSilo = replSilo
+	replInterceptor.peers = peers
+	replInterceptor.transport = sc.ReplTransport
+	replInterceptor.domainCode = prv.domainCode
+
 	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
 
 	cf := prv.Config
@@ -122,10 +136,11 @@ func NewProvider(layout *Layout, serverId uint16) (prv *Provider, err error) {
 
 	// add the replication interceptor first so that attribute removal or any such side effects
 	// can be eliminated before preserving the modified resource for replication
-	prv.interceptors = make([]base.Interceptor, 3)
-	prv.interceptors[0] = &ApplicationInterceptor{}
-	prv.interceptors[1] = &RemoveNeverAttrInterceptor{}
-	prv.interceptors[2] = &PpolicyInterceptor{Config: cf.Ppolicy}
+	prv.interceptors = make([]base.Interceptor, 4)
+	prv.interceptors[0] = replInterceptor
+	prv.interceptors[1] = &ApplicationInterceptor{}
+	prv.interceptors[2] = &RemoveNeverAttrInterceptor{}
+	prv.interceptors[3] = &PpolicyInterceptor{Config: cf.Ppolicy}
 
 	var rfc2307i *Rfc2307BisAttrInterceptor
 	if cf.Rfc2307bis.Enabled {
@@ -636,15 +651,6 @@ func (prv *Provider) ModifyGroupsOfUser(autg base.ModifyGroupsOfUserRequest) (us
 }
 
 func (prv *Provider) DomainCode() string {
-	if prv.domainCode != "" {
-		return prv.domainCode
-	}
-
-	sh2 := sha256.New()
-	sh2.Write([]byte(prv.Name))
-	hash := sh2.Sum([]byte{})
-	hexVal := fmt.Sprintf("%x", hash[:])
-	prv.domainCode = hexVal[:8]
 	return prv.domainCode
 }
 
@@ -764,4 +770,12 @@ func (prv *Provider) UpdateTemplate(name string, data []byte) (t *template.Templ
 
 func (prv *Provider) AddAppToSsoSession(jti string, spIssuer string, sas base.SamlAppSession) {
 	prv.osl.AddAppToSsoSession(jti, spIssuer, sas)
+}
+
+func genDomainCode(name string) string {
+	sh2 := sha256.New()
+	sh2.Write([]byte(name))
+	hash := sh2.Sum([]byte{})
+	hexVal := fmt.Sprintf("%x", hash[:])
+	return hexVal[:8]
 }

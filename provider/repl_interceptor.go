@@ -13,7 +13,7 @@ import (
 type ReplInterceptor struct {
 	replSilo   *repl.ReplProviderSilo
 	domainCode string
-	peers      []*base.ReplicationPeer
+	peers      map[uint16]*base.ReplicationPeer
 	transport  *http.Transport
 }
 
@@ -31,6 +31,8 @@ func (ri *ReplInterceptor) PostCreate(crCtx *base.CreateContext) {
 	// send to the peers
 	if err == nil {
 		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the generated replication event [%#v]", err)
 	}
 }
 
@@ -39,7 +41,6 @@ func (ri *ReplInterceptor) PrePatch(patchCtx *base.PatchContext) error {
 }
 
 func (ri *ReplInterceptor) PostPatch(patchedRs *base.Resource, patchCtx *base.PatchContext) {
-	panic("implement me")
 }
 
 func (ri *ReplInterceptor) PreDelete(delCtx *base.DeleteContext) error {
@@ -47,10 +48,9 @@ func (ri *ReplInterceptor) PreDelete(delCtx *base.DeleteContext) error {
 }
 
 func (ri *ReplInterceptor) PostDelete(delCtx *base.DeleteContext) {
-	panic("implement me")
 }
 
-func (ri *ReplInterceptor) sendToPeers(dataBuf *bytes.Buffer, event base.ReplicationEvent, peers []*base.ReplicationPeer) {
+func (ri *ReplInterceptor) sendToPeers(dataBuf *bytes.Buffer, event base.ReplicationEvent, peers map[uint16]*base.ReplicationPeer) {
 	req := &http.Request{}
 	req.Method = http.MethodPost
 	req.Header.Add("Content-Type", "application/octet-stream")
