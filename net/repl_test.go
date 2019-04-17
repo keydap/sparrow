@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"os"
+	"sparrow/client"
 	"testing"
 )
 
@@ -28,6 +29,8 @@ const slaveConf string = `{
 
 var master *Sparrow
 var slave *Sparrow
+var mclient *client.SparrowClient
+var sclient *client.SparrowClient
 
 func initPeers() {
 	os.RemoveAll(masterHome)
@@ -37,7 +40,7 @@ func initPeers() {
 	slave = NewSparrowServer(slaveHome, slaveConf)
 
 	go master.Start()
-	//go slave.Start()
+	go slave.Start()
 }
 
 func TestRepl(t *testing.T) {
@@ -47,14 +50,21 @@ func TestRepl(t *testing.T) {
 }
 
 var _ = Describe("testing replication", func() {
+	BeforeSuite(func() {
+		mclient = client.NewSparrowClient(master.homeUrl + API_BASE)
+		mclient.DirectLogin("admin", "secret", "example.com")
+
+		sclient = client.NewSparrowClient(slave.homeUrl + API_BASE)
+		sclient.DirectLogin("admin", "secret", "example.com")
+	})
 	AfterSuite(func() {
 		master.Stop()
-		//slave.Stop()
+		slave.Stop()
 	})
 	Context("pending replication join", func() {
 		It("join", func() {
-			i := 0
-			Expect(i).To(Equal(0))
+			result := sclient.SendJoinReq("localhost", master.srvConf.HttpPort)
+			Expect(result.StatusCode).To(Equal(200))
 		})
 	})
 })
