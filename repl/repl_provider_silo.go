@@ -3,7 +3,7 @@ package repl
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/coreos/bbolt"
+	bolt "github.com/coreos/bbolt"
 	"sparrow/base"
 )
 
