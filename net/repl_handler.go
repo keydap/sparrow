@@ -33,6 +33,7 @@ func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uri := r.RequestURI
+	log.Debugf(">>>>>>>>>>>>>>>>>>> received replication request %s", uri)
 	if strings.HasSuffix(uri, "/") {
 		uri = uri[:len(uri)-1]
 	}
@@ -114,16 +115,13 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 	joinResp.PeerWebHookToken = sp.rl.WebHookToken
 	joinResp.PeerView = make([]base.ReplicationPeer, 0)
 
-	var buf *bytes.Buffer
-	enc := json.NewEncoder(buf)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	enc.Encode(joinResp)
 
 	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
 
-	approveReq := &http.Request{}
-	approveReq.Method = http.MethodPost
-	approveReq.URL, _ = url.Parse(baseUrl + "/approve")
-	approveReq.Body = ioutil.NopCloser(buf)
+	approveReq, _ := http.NewRequest(http.MethodPost, baseUrl+"/approve", ioutil.NopCloser(&buf))
 	approveReq.Header.Add("Content-Type", "application/json")
 
 	client := &http.Client{Transport: sp.srvConf.ReplTransport}
@@ -142,6 +140,7 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 	}
 
 	_storePeer(joinReq, w, sp)
+	log.Debugf("approved the server at %s to join the replication club", baseUrl)
 }
 
 func _storePeer(joinReq *base.JoinRequest, w http.ResponseWriter, sp *Sparrow) error {
@@ -178,6 +177,7 @@ func rejectJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	err = sp.rl.DeleteReceivedJoinRequest(uint16(serverId))
 	log.Warningf("%#v", err)
 	// TODO send rejected response, but not sure if this is necessary
+	log.Debugf("rejected replication join request from server with ID %d", serverId)
 }
 
 func addJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
@@ -203,6 +203,8 @@ func addJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		writeError(w, base.NewInternalserverError(err.Error()))
 		return
 	}
+
+	log.Debugf("received a join request from the server %s:%d with ID %d by %s", joinReq.Host, joinReq.Port, joinReq.ServerId, joinReq.SentBy)
 }
 
 func sendJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
@@ -229,13 +231,11 @@ func sendJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	joinReq.CreatedTime = utils.DateTimeMillis()
 	joinReq.SentBy = opCtx.Session.Username
 
-	var buf *bytes.Buffer
-	enc := json.NewEncoder(buf)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	enc.Encode(joinReq)
-	httpReq := &http.Request{}
-	httpReq.URL, _ = url.Parse(fmt.Sprintf("https://%s:%d/repl/join", host, port))
-	httpReq.Method = http.MethodPost
-	httpReq.Body = ioutil.NopCloser(buf)
+	location := fmt.Sprintf("https://%s:%d/repl/join", host, port)
+	httpReq, _ := http.NewRequest(http.MethodPost, location, ioutil.NopCloser(&buf))
 	httpReq.Header.Add("Content-Type", "application/json")
 
 	client := &http.Client{Transport: sp.srvConf.ReplTransport}
@@ -254,6 +254,7 @@ func sendJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	}
 
 	sp.rl.AddSentJoinReq(joinReq)
+	log.Debugf("sent a join request from %s:%d to the server at %s:%d", sp.srvConf.IpAddress, sp.srvConf.HttpPort, host, port)
 }
 
 func getOpCtxOfAdminSessionOrAbort(w http.ResponseWriter, r *http.Request, sp *Sparrow) *base.OpContext {

@@ -81,13 +81,14 @@ func (sp *Sparrow) startHttp() {
 	}
 
 	//fmt.Println("registering sparrow plugin")
-	httpserver.RegisterDevDirective("sparrow", "startup")
-	caddy.RegisterPlugin("sparrow", caddy.Plugin{
+	directiveName := "sparrow-" + strings.ToLower(base.RandStr()) // generating a random name so that two caddy instances can be started from replication tests
+	httpserver.RegisterDevDirective(directiveName, "startup")
+	caddy.RegisterPlugin(directiveName, caddy.Plugin{
 		ServerType: "http",
 		Action:     sp.setup,
 	})
 
-	caddyFile := fmt.Sprintf("%s\n%s\n%s", hostAddr, "sparrow", tlsDirective)
+	caddyFile := fmt.Sprintf("%s\n%s\n%s", hostAddr, directiveName, tlsDirective)
 	input := caddy.CaddyfileInput{
 		Contents:       []byte(caddyFile),
 		Filepath:       "sparrow",

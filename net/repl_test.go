@@ -1,11 +1,13 @@
 package net
 
 import (
+	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"os"
 	"sparrow/client"
 	"testing"
+	"time"
 )
 
 // the master and slave words are used just for the sake of better understanding
@@ -51,19 +53,21 @@ func TestRepl(t *testing.T) {
 
 var _ = Describe("testing replication", func() {
 	BeforeSuite(func() {
-		mclient = client.NewSparrowClient(master.homeUrl + API_BASE)
+		time.Sleep(10 * time.Second)
+		mclient = client.NewSparrowClient(master.homeUrl)
 		mclient.DirectLogin("admin", "secret", "example.com")
 
-		sclient = client.NewSparrowClient(slave.homeUrl + API_BASE)
+		sclient = client.NewSparrowClient(slave.homeUrl)
 		sclient.DirectLogin("admin", "secret", "example.com")
 	})
 	AfterSuite(func() {
-		master.Stop()
-		slave.Stop()
+		//master.Stop()
+		//slave.Stop()
 	})
 	Context("pending replication join", func() {
 		It("join", func() {
 			result := sclient.SendJoinReq("localhost", master.srvConf.HttpPort)
+			fmt.Println(result.ErrorMsg)
 			Expect(result.StatusCode).To(Equal(200))
 		})
 	})
