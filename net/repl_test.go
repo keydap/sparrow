@@ -1,7 +1,6 @@
 package net
 
 import (
-	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"os"
@@ -79,11 +78,15 @@ var _ = Describe("testing replication", func() {
 		//master.Stop()
 		//slave.Stop()
 	})
-	Context("pending replication join", func() {
-		It("join", func() {
+	Context("replicate create resource", func() {
+		It("join and approve", func() {
 			result := sclient.SendJoinReq("localhost", master.srvConf.HttpPort)
-			fmt.Println(result.ErrorMsg)
 			Expect(result.StatusCode).To(Equal(200))
+			result = mclient.ApproveJoinReq(slave.srvConf.ServerId)
+			Expect(result.StatusCode).To(Equal(200))
+		})
+		It("create resource and check", func() {
+			//mclient.Add(user)
 		})
 	})
 })
