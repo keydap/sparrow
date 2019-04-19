@@ -17,6 +17,7 @@ import (
 )
 
 const scimContentType = "application/scim+json; charset=UTF-8"
+const formUrlEncodedContentType = "application/x-www-form-urlencoded"
 const authzHeader = "Authorization"
 
 type SparrowClient struct {
@@ -62,7 +63,8 @@ func (scl *SparrowClient) SendJoinReq(host string, port int) Result {
 	form.Add("host", host)
 	form.Add("port", strconv.Itoa(port))
 	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/repl/sendJoinReq", strings.NewReader(form.Encode()))
-	scl.addRequiredHeaders(req)
+	req.Header.Add("Content-Type", formUrlEncodedContentType)
+	req.Header.Add(authzHeader, "Bearer "+scl.token)
 
 	return scl.sendReq(req)
 }
@@ -71,7 +73,8 @@ func (scl *SparrowClient) ApproveJoinReq(serverId uint16) Result {
 	form := url.Values{}
 	form.Add("serverId", strconv.Itoa(int(serverId)))
 	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/repl/approveJoinReq", strings.NewReader(form.Encode()))
-	scl.addRequiredHeaders(req)
+	req.Header.Add("Content-Type", formUrlEncodedContentType)
+	req.Header.Add(authzHeader, "Bearer "+scl.token)
 
 	return scl.sendReq(req)
 }
@@ -87,7 +90,7 @@ func (scl *SparrowClient) DirectLogin(username string, password string, domain s
 	enc := json.NewEncoder(&buf)
 	enc.Encode(&ar)
 
-	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/directLogin", ioutil.NopCloser(&buf))
+	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/v2/directLogin", ioutil.NopCloser(&buf))
 	req.Header.Add("Content-Type", "application/json")
 
 	result := scl.sendReq(req)
@@ -121,7 +124,9 @@ func (scl *SparrowClient) sendReq(req *http.Request) Result {
 }
 
 func (scl *SparrowClient) addRequiredHeaders(r *http.Request) {
-	r.Header = make(map[string][]string)
+	if r.Header == nil {
+		r.Header = make(map[string][]string)
+	}
 	r.Header.Add("Content-Type", scimContentType)
 	r.Header.Add(authzHeader, "Bearer "+scl.token)
 }
