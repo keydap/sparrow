@@ -111,6 +111,7 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 	}
 
 	joinResp := base.JoinResponse{}
+	joinResp.PeerServerId = sp.srvConf.ServerId
 	joinResp.ApprovedBy = opCtx.Session.Username
 	joinResp.PeerWebHookToken = sp.rl.WebHookToken
 	joinResp.PeerView = make([]base.ReplicationPeer, 0)
