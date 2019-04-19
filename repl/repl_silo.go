@@ -42,6 +42,11 @@ func OpenReplSilo(path string) (*ReplSilo, error) {
 			return err
 		}
 
+		_, err = tx.CreateBucketIfNotExists(BUC_RECEIVED_JOIN_REQUESTS)
+		if err != nil {
+			return err
+		}
+
 		_, err = tx.CreateBucketIfNotExists(BUC_PEERS)
 		if err != nil {
 			return err
@@ -293,14 +298,14 @@ func (rl *ReplSilo) _getJoinRequest(serverId uint16, buckName []byte) *base.Join
 
 	buck := tx.Bucket(buckName)
 	data := buck.Get(key)
-	var joinReq *base.JoinRequest
+	var joinReq base.JoinRequest
 	if data != nil {
 		buf := bytes.NewBuffer(data)
 		dec := gob.NewDecoder(buf)
 		dec.Decode(&joinReq)
 	}
 
-	return joinReq
+	return &joinReq
 }
 
 func (rl *ReplSilo) GetReplicationPeers() map[uint16]*base.ReplicationPeer {
