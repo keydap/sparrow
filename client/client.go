@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"sparrow/base"
 	"strconv"
+	"strings"
 )
 
 const scimContentType = "application/scim+json; charset=UTF-8"
@@ -50,31 +51,26 @@ func (scl *SparrowClient) Add(rs *base.Resource) Result {
 	enc := json.NewEncoder(&buf)
 	enc.Encode(rs)
 
-	req := &http.Request{Method: http.MethodPost}
-	usersUrl, _ := url.Parse(scl.baseUrl + rs.GetType().Endpoint)
-	req.URL = usersUrl
+	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/v2"+rs.GetType().Endpoint, ioutil.NopCloser(&buf))
 	scl.addRequiredHeaders(req)
-	req.Body = ioutil.NopCloser(&buf)
 
 	return scl.sendReq(req)
 }
 
 func (scl *SparrowClient) SendJoinReq(host string, port int) Result {
-	req := &http.Request{Method: http.MethodPost}
-	joinUrl, _ := url.Parse(scl.baseUrl + "/repl/sendJoinReq")
-	req.URL = joinUrl
-	req.Form.Add("host", host)
-	req.Form.Add("port", strconv.Itoa(port))
+	form := url.Values{}
+	form.Add("host", host)
+	form.Add("port", strconv.Itoa(port))
+	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/repl/sendJoinReq", strings.NewReader(form.Encode()))
 	scl.addRequiredHeaders(req)
 
 	return scl.sendReq(req)
 }
 
 func (scl *SparrowClient) ApproveJoinReq(serverId uint16) Result {
-	req := &http.Request{Method: http.MethodPost}
-	joinUrl, _ := url.Parse(scl.baseUrl + "/repl/approveJoinReq")
-	req.URL = joinUrl
-	req.Form.Add("serverId", strconv.Itoa(int(serverId)))
+	form := url.Values{}
+	form.Add("serverId", strconv.Itoa(int(serverId)))
+	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/repl/approveJoinReq", strings.NewReader(form.Encode()))
 	scl.addRequiredHeaders(req)
 
 	return scl.sendReq(req)
@@ -91,12 +87,8 @@ func (scl *SparrowClient) DirectLogin(username string, password string, domain s
 	enc := json.NewEncoder(&buf)
 	enc.Encode(&ar)
 
-	req := &http.Request{Method: http.MethodPost}
-	loginUrl, _ := url.Parse(scl.baseUrl + "/directLogin")
-	req.URL = loginUrl
-	req.Header = make(map[string][]string)
+	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/directLogin", ioutil.NopCloser(&buf))
 	req.Header.Add("Content-Type", "application/json")
-	req.Body = ioutil.NopCloser(&buf)
 
 	result := scl.sendReq(req)
 

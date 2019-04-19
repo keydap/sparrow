@@ -14,6 +14,20 @@ import (
 // while following the interaction, in reality they both are peers
 const masterHome string = "/tmp/master"
 const slaveHome string = "/tmp/slave"
+const masterConf string = `{
+	"serverId": 1,
+    "enableHttps" : true,
+    "httpPort" : 7090,
+    "ldapPort" : 7092,
+	"ldapEnabled" : true,
+    "ldapOverTlsOnly" : true,
+    "ipAddress" : "0.0.0.0",
+    "certificateFile": "default.cer",
+    "privatekeyFile": "default.key",
+	"defaultDomain": "example.com",
+	"controllerDomain": "example.com",
+	"skipPeerCertCheck": true
+}`
 const slaveConf string = `{
 	"serverId": 2,
     "enableHttps" : true,
@@ -42,7 +56,9 @@ func initPeers() {
 	slave = NewSparrowServer(slaveHome, slaveConf)
 
 	go master.Start()
+	time.Sleep(2 * time.Second)
 	go slave.Start()
+	time.Sleep(2 * time.Second)
 }
 
 func TestRepl(t *testing.T) {
@@ -53,7 +69,6 @@ func TestRepl(t *testing.T) {
 
 var _ = Describe("testing replication", func() {
 	BeforeSuite(func() {
-		time.Sleep(10 * time.Second)
 		mclient = client.NewSparrowClient(master.homeUrl)
 		mclient.DirectLogin("admin", "secret", "example.com")
 

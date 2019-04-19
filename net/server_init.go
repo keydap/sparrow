@@ -31,7 +31,7 @@ import (
 )
 
 var DEFAULT_SRV_CONF string = `{
-	"serverId": 1,
+	"serverId": 0,
     "enableHttps" : true,
     "httpPort" : 7090,
     "ldapPort" : 7092,
@@ -113,7 +113,7 @@ func NewSparrowServer(homeDir string, overrideConf string) *Sparrow {
 func (sp *Sparrow) Start() {
 	log.Debugf("Starting server...")
 	// TODO catch up with the peers first to bring self uptodate
-	// this way no other peer during its startup will get a chance to connect to this server which is still palying catch-up
+	// this way, no other peer during its startup will get a chance to connect to this server which is still playing catch-up
 
 	if sp.srvConf.LdapEnabled {
 		err := sp.startLdap()
