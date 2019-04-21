@@ -48,6 +48,7 @@ var master *Sparrow
 var slave *Sparrow
 var mclient *client.SparrowClient
 var sclient *client.SparrowClient
+var domainName string
 
 func initPeers() {
 	os.RemoveAll(masterHome)
@@ -55,6 +56,7 @@ func initPeers() {
 
 	master = NewSparrowServer(masterHome, masterConf)
 	slave = NewSparrowServer(slaveHome, slaveConf)
+	domainName = master.srvConf.DefaultDomain
 
 	go master.Start()
 	time.Sleep(2 * time.Second)
@@ -71,11 +73,11 @@ func TestRepl(t *testing.T) {
 var _ = Describe("testing replication", func() {
 	BeforeSuite(func() {
 		mclient = client.NewSparrowClient(master.homeUrl)
-		mclient.DirectLogin("admin", "secret", "example.com")
+		mclient.DirectLogin("admin", "secret", domainName)
 		err := mclient.MakeSchemaAware()
 		Expect(err).ToNot(HaveOccurred())
 		sclient = client.NewSparrowClient(slave.homeUrl)
-		sclient.DirectLogin("admin", "secret", "example.com")
+		sclient.DirectLogin("admin", "secret", domainName)
 		err = sclient.MakeSchemaAware()
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -90,7 +92,8 @@ var _ = Describe("testing replication", func() {
 			result = mclient.ApproveJoinReq(slave.srvConf.ServerId)
 			Expect(result.StatusCode).To(Equal(200))
 		})
-		It("create resource and check", func() {
+		It("create resource on both master and slave and check", func() {
+			// create on master and check on slave
 			userJson := createRandomUser()
 			result := mclient.AddUser(userJson)
 			Expect(result.StatusCode).To(Equal(201))
@@ -98,6 +101,36 @@ var _ = Describe("testing replication", func() {
 			id := result.Rs.GetId()
 			replResult := sclient.GetUser(id)
 			Expect(replResult.StatusCode).To(Equal(200))
+
+			// create on slave and check on master
+			userJson = createRandomUser()
+			result = sclient.AddUser(userJson)
+			Expect(result.StatusCode).To(Equal(201))
+			time.Sleep(1 * time.Second)
+			id = result.Rs.GetId()
+			replResult = mclient.GetUser(id)
+			Expect(replResult.StatusCode).To(Equal(200))
+		})
+		It("create resource on master and login on slave", func() {
+			// create on master and check on slave
+			userJson := createRandomUser()
+			rs, _ := mclient.ParseResource([]byte(userJson))
+			username := rs.GetAttr("username").GetSimpleAt().GetStringVal()
+			password := rs.GetAttr("password").GetSimpleAt().GetStringVal()
+
+			result := mclient.AddUser(userJson)
+			Expect(result.StatusCode).To(Equal(201))
+			time.Sleep(1 * time.Second)
+			tclient := client.NewSparrowClient(slave.homeUrl)
+			err := tclient.DirectLogin(username, password, domainName)
+			Expect(err).ToNot(HaveOccurred())
+			err = tclient.MakeSchemaAware()
+			Expect(err).ToNot(HaveOccurred())
+			// then fetch using this new client
+			//TODO this requires fixing permission issue
+			//id := result.Rs.GetId()
+			//replResult := tclient.GetUser(id)
+			//Expect(replResult.StatusCode).To(Equal(200))
 		})
 	})
 })
@@ -107,6 +140,7 @@ func createRandomUser() string {
                    "userName":"%s",
                    "displayName":"%s",
 				   "active": true,
+                   "password": "%s",
                    "emails":[
                        {
                          "value":"%s@%s",
@@ -118,7 +152,8 @@ func createRandomUser() string {
 
 	username := base.RandStr()
 	displayname := username
+	password := username
 	domain := master.srvConf.DefaultDomain
 
-	return fmt.Sprintf(tmpl, username, displayname, username, domain)
+	return fmt.Sprintf(tmpl, username, displayname, password, username, domain)
 }
