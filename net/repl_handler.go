@@ -237,7 +237,7 @@ func sendJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	joinReq.Host = sp.srvConf.IpAddress
 	joinReq.Port = sp.srvConf.HttpPort
 	joinReq.Domain = opCtx.Session.Domain
-	joinReq.WebHookToken = utils.NewRandShaStr()
+	joinReq.WebHookToken = sp.srvConf.ReplWebHookToken
 	joinReq.CreatedTime = utils.DateTimeMillis()
 	joinReq.SentBy = opCtx.Session.Username
 	joinReq.RequestId = utils.GenUUID()
