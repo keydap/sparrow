@@ -80,7 +80,15 @@ func receivedApproval(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		return // error was already handled
 	}
 
-	sentReq := sp.rl.GetSentJoinRequest(joinResp.PeerServerId)
+	var sentReq *base.JoinRequest
+	sent := sp.rl.GetSentJoinRequests()
+	for _, v := range sent {
+		if v.RequestId == joinResp.RequestId {
+			sentReq = &v
+			break
+		}
+	}
+
 	if sentReq == nil {
 		msg := fmt.Sprintf("no join request was sent to server with ID %d", joinResp.PeerServerId)
 		log.Debugf(msg)
@@ -88,7 +96,7 @@ func receivedApproval(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		return
 	}
 
-	_storePeer(sentReq, w, sp)
+	_storePeerAfterReceivingApproval(sentReq, &joinResp, w, sp)
 }
 
 func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
@@ -114,6 +122,7 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 	joinResp.PeerServerId = sp.srvConf.ServerId
 	joinResp.ApprovedBy = opCtx.Session.Username
 	joinResp.PeerWebHookToken = sp.rl.WebHookToken
+	joinResp.RequestId = joinReq.RequestId
 	joinResp.PeerView = make([]base.ReplicationPeer, 0)
 
 	var buf bytes.Buffer
@@ -140,19 +149,20 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 		return
 	}
 
-	_storePeer(joinReq, w, sp)
+	err = _storePeer(joinReq, w, sp, opCtx)
 	log.Debugf("approved the server at %s to join the replication club", baseUrl)
 }
 
-func _storePeer(joinReq *base.JoinRequest, w http.ResponseWriter, sp *Sparrow) error {
+func _storePeer(joinReq *base.JoinRequest, w http.ResponseWriter, sp *Sparrow, opCtx *base.OpContext) error {
 	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
-	log.Debugf("storing replication peer %s", baseUrl)
+	log.Debugf("[%d] storing replication peer %s after sending approval", sp.srvConf.ServerId, baseUrl)
 	rp := &base.ReplicationPeer{}
 	rp.ServerId = joinReq.ServerId
-	rp.SentBy = joinReq.SentBy
+	rp.ApprovedBy = opCtx.Session.Username
 	rp.Domain = joinReq.Domain
 	rp.Url, _ = url.Parse(baseUrl + "/events")
 	rp.CreatedTime = utils.DateTimeMillis()
+	rp.WebHookToken = joinReq.WebHookToken
 	err := sp.rl.AddReplicationPeer(rp)
 	if err != nil {
 		log.Warningf("%#v", err)
@@ -160,8 +170,7 @@ func _storePeer(joinReq *base.JoinRequest, w http.ResponseWriter, sp *Sparrow) e
 		return err
 	}
 
-	sp.peers[rp.ServerId] = rp
-
+	sp.peers[joinReq.ServerId] = rp
 	return nil
 }
 
@@ -231,6 +240,9 @@ func sendJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	joinReq.WebHookToken = utils.NewRandShaStr()
 	joinReq.CreatedTime = utils.DateTimeMillis()
 	joinReq.SentBy = opCtx.Session.Username
+	joinReq.RequestId = utils.GenUUID()
+	joinReq.PeerHost = host
+	joinReq.PeerPort = port
 
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -323,5 +335,26 @@ func parseJsonBody(w http.ResponseWriter, r *http.Request, v interface{}) error 
 		return err
 	}
 
+	return nil
+}
+
+func _storePeerAfterReceivingApproval(joinReq *base.JoinRequest, joinResp *base.JoinResponse, w http.ResponseWriter, sp *Sparrow) error {
+	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.PeerHost, joinReq.PeerPort)
+	log.Debugf("storing replication peer %s after receiving approval from server with Id %d ", baseUrl, joinResp.PeerServerId)
+	rp := &base.ReplicationPeer{}
+	rp.ServerId = joinResp.PeerServerId
+	rp.ApprovedBy = joinResp.ApprovedBy
+	rp.Domain = joinReq.Domain
+	rp.Url, _ = url.Parse(baseUrl + "/events")
+	rp.CreatedTime = utils.DateTimeMillis()
+	rp.WebHookToken = joinResp.PeerWebHookToken
+	err := sp.rl.AddReplicationPeer(rp)
+	if err != nil {
+		log.Warningf("%#v", err)
+		writeError(w, base.NewInternalserverError(err.Error()))
+		return err
+	}
+
+	sp.peers[joinResp.PeerServerId] = rp
 	return nil
 }

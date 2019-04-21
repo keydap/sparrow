@@ -61,7 +61,7 @@ func (rpl *ReplProviderSilo) StoreEvent(event base.ReplicationEvent) (*bytes.Buf
 	}
 
 	buck := tx.Bucket(BUC_REPL_EVENTS)
-	err = buck.Put([]byte(event.Csn), buf.Bytes())
+	err = buck.Put([]byte(event.Version), buf.Bytes())
 	if err != nil {
 		tx.Rollback()
 		return nil, err

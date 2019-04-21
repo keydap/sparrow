@@ -128,6 +128,8 @@ func NewProvider(layout *Layout, sc *conf.ServerConf, peers map[uint16]*base.Rep
 	replInterceptor.peers = peers
 	replInterceptor.transport = sc.ReplTransport
 	replInterceptor.domainCode = prv.domainCode
+	replInterceptor.serverId = sc.ServerId
+	replInterceptor.webhookToken = sc.ReplWebHookToken
 
 	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
 

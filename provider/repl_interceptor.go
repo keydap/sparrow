@@ -7,14 +7,17 @@ import (
 	"sparrow/base"
 	"sparrow/repl"
 	"sparrow/utils"
+	"strconv"
 	"time"
 )
 
 type ReplInterceptor struct {
-	replSilo   *repl.ReplProviderSilo
-	domainCode string
-	peers      map[uint16]*base.ReplicationPeer
-	transport  *http.Transport
+	replSilo     *repl.ReplProviderSilo
+	domainCode   string
+	peers        map[uint16]*base.ReplicationPeer
+	transport    *http.Transport
+	serverId     uint16
+	webhookToken string
 }
 
 func (ri *ReplInterceptor) PreCreate(crCtx *base.CreateContext) error {
@@ -23,7 +26,7 @@ func (ri *ReplInterceptor) PreCreate(crCtx *base.CreateContext) error {
 
 func (ri *ReplInterceptor) PostCreate(crCtx *base.CreateContext) {
 	event := base.ReplicationEvent{}
-	event.Csn = crCtx.InRes.GetMeta().GetValue("csn").(string)
+	event.Version = crCtx.InRes.GetMeta().GetValue("version").(string)
 	event.Res = crCtx.InRes
 	event.DomainCode = ri.domainCode
 	event.Type = base.RESOURCE_CREATE
@@ -53,7 +56,11 @@ func (ri *ReplInterceptor) PostDelete(delCtx *base.DeleteContext) {
 func (ri *ReplInterceptor) sendToPeers(dataBuf *bytes.Buffer, event base.ReplicationEvent, peers map[uint16]*base.ReplicationPeer) {
 	req := &http.Request{}
 	req.Method = http.MethodPost
+	req.Header = http.Header{}
 	req.Header.Add("Content-Type", "application/octet-stream")
+	req.Header.Add(base.HEADER_X_FROM_PEER_ID, strconv.Itoa(int(ri.serverId)))
+	req.Header.Add(base.HEADER_X_WEBHOOK_TOKEN, ri.webhookToken)
+
 	for _, v := range peers {
 		req.Body = ioutil.NopCloser(dataBuf)
 		req.URL = v.Url
@@ -65,8 +72,8 @@ func (ri *ReplInterceptor) sendToPeers(dataBuf *bytes.Buffer, event base.Replica
 		}
 
 		if resp.StatusCode == 200 {
-			log.Debugf("successfully sent event with csn %s to peer %d %s", event.Csn, v.ServerId, v.Url)
-			v.LastCsn = event.Csn
+			log.Debugf("successfully sent event with version %s to peer %d %s", event.Version, v.ServerId, v.Url)
+			v.LastVersion = event.Version
 			v.LastReqSentTime = utils.DateTimeMillis()
 		}
 	}

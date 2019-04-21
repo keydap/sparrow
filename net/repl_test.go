@@ -1,9 +1,11 @@
 package net
 
 import (
+	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"os"
+	"sparrow/base"
 	"sparrow/client"
 	"testing"
 	"time"
@@ -51,7 +53,7 @@ func initPeers() {
 	os.RemoveAll(masterHome)
 	os.RemoveAll(slaveHome)
 
-	master = NewSparrowServer(masterHome, "")
+	master = NewSparrowServer(masterHome, masterConf)
 	slave = NewSparrowServer(slaveHome, slaveConf)
 
 	go master.Start()
@@ -70,13 +72,16 @@ var _ = Describe("testing replication", func() {
 	BeforeSuite(func() {
 		mclient = client.NewSparrowClient(master.homeUrl)
 		mclient.DirectLogin("admin", "secret", "example.com")
-
+		err := mclient.MakeSchemaAware()
+		Expect(err).ToNot(HaveOccurred())
 		sclient = client.NewSparrowClient(slave.homeUrl)
 		sclient.DirectLogin("admin", "secret", "example.com")
+		err = sclient.MakeSchemaAware()
+		Expect(err).ToNot(HaveOccurred())
 	})
 	AfterSuite(func() {
-		//master.Stop()
-		//slave.Stop()
+		go master.Stop()
+		slave.Stop()
 	})
 	Context("replicate create resource", func() {
 		It("join and approve", func() {
@@ -86,7 +91,34 @@ var _ = Describe("testing replication", func() {
 			Expect(result.StatusCode).To(Equal(200))
 		})
 		It("create resource and check", func() {
-			//mclient.Add(user)
+			userJson := createRandomUser()
+			result := mclient.AddUser(userJson)
+			Expect(result.StatusCode).To(Equal(201))
+			time.Sleep(1 * time.Second)
+			id := result.Rs.GetId()
+			replResult := sclient.GetUser(id)
+			Expect(replResult.StatusCode).To(Equal(200))
 		})
 	})
 })
+
+func createRandomUser() string {
+	tmpl := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+                   "userName":"%s",
+                   "displayName":"%s",
+				   "active": true,
+                   "emails":[
+                       {
+                         "value":"%s@%s",
+                         "type":"work",
+                         "primary":true
+                       }
+                     ]
+                   }`
+
+	username := base.RandStr()
+	displayname := username
+	domain := master.srvConf.DefaultDomain
+
+	return fmt.Sprintf(tmpl, username, displayname, username, domain)
+}

@@ -7,6 +7,9 @@ import "net/url"
 
 type DataType uint8
 
+const HEADER_X_FROM_PEER_ID = "X-From-Peer-Id"
+const HEADER_X_WEBHOOK_TOKEN = "X-Webhook-Token"
+
 const (
 	SERVER_CONFIG DataType = iota
 	PROVIDER_CONFIG
@@ -17,7 +20,7 @@ const (
 )
 
 type ReplicationEvent struct {
-	Csn        string
+	Version    string
 	DomainCode string
 	Type       DataType
 	Data       []byte
@@ -32,16 +35,19 @@ type JoinRequest struct {
 	SentBy       string `json:"sentBy" valid:"required"`
 	Domain       string `json:"domain" valid:"required"`
 	CreatedTime  int64  `json:"createdTime"`
+	RequestId    string `json:"requestId" valid:"required"` // this is for correlation during approval phase
+	PeerHost     string // no need to send to the peer
+	PeerPort     int    // no need to send to the peer
 }
 
 type ReplicationPeer struct {
 	ServerId        uint16
 	Url             *url.URL
 	WebHookToken    string
-	SentBy          string
+	ApprovedBy      string
 	Domain          string
 	CreatedTime     int64
-	LastCsn         string
+	LastVersion     string
 	LastReqSentTime int64
 }
 
@@ -49,5 +55,6 @@ type JoinResponse struct {
 	PeerServerId     uint16            `json:"peerServerId" valid:"range(0|65535),required"`
 	ApprovedBy       string            `json:"approvedBy" valid:"required"`
 	PeerWebHookToken string            `json:"peerWebHookToken" valid:"required"`
+	RequestId        string            `json:"requestId" valid:"required"` // this is for correlation during approval phase
 	PeerView         []ReplicationPeer `json:"peerView"`
 }

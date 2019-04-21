@@ -35,6 +35,7 @@ type ServerConf struct {
 	PrivKey           crypto.PrivateKey   `json:"-"`
 	PubKey            crypto.PublicKey    `json:"-"`
 	ReplTransport     *http.Transport     `json:"-"`
+	ReplWebHookToken  string              `json:"-"`
 }
 
 type AuthenticationScheme struct {

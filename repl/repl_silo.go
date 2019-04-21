@@ -277,10 +277,6 @@ func (rl *ReplSilo) GetReceivedJoinRequest(serverId uint16) *base.JoinRequest {
 	return rl._getJoinRequest(serverId, BUC_RECEIVED_JOIN_REQUESTS)
 }
 
-func (rl *ReplSilo) GetSentJoinRequest(serverId uint16) *base.JoinRequest {
-	return rl._getJoinRequest(serverId, BUC_SENT_JOIN_REQUESTS)
-}
-
 func (rl *ReplSilo) _getJoinRequest(serverId uint16, buckName []byte) *base.JoinRequest {
 	key := utils.Uint16tob(serverId)
 	tx, err := rl.db.Begin(false)

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"sparrow/base"
+	"sparrow/schema"
 	"strconv"
 	"strings"
 )
@@ -21,9 +22,12 @@ const formUrlEncodedContentType = "application/x-www-form-urlencoded"
 const authzHeader = "Authorization"
 
 type SparrowClient struct {
-	transport *http.Transport
-	baseUrl   string
-	token     string
+	transport   *http.Transport
+	baseUrl     string
+	token       string
+	schemaAware bool
+	Schemas     map[string]*schema.Schema
+	ResTypes    map[string]*schema.ResourceType
 }
 
 type authRequest struct {
@@ -36,6 +40,7 @@ type Result struct {
 	StatusCode int
 	ErrorMsg   string
 	Data       []byte
+	Rs         *base.Resource
 }
 
 func NewSparrowClient(baseUrl string) *SparrowClient {
@@ -47,15 +52,50 @@ func NewSparrowClient(baseUrl string) *SparrowClient {
 	return client
 }
 
-func (scl *SparrowClient) Add(rs *base.Resource) Result {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.Encode(rs)
+func (scl *SparrowClient) AddUser(userJson string) Result {
+	return scl._addResource([]byte(userJson), scl.ResTypes["User"])
+}
 
-	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/v2"+rs.GetType().Endpoint, ioutil.NopCloser(&buf))
+func (scl *SparrowClient) GetUser(id string) Result {
+	return scl.GetResource(id, scl.ResTypes["User"])
+}
+
+func (scl *SparrowClient) AddGroup(groupJson string) Result {
+	return scl._addResource([]byte(groupJson), scl.ResTypes["Group"])
+}
+
+func (scl *SparrowClient) GetGroup(id string) Result {
+	return scl.GetResource(id, scl.ResTypes["Group"])
+}
+
+func (scl *SparrowClient) GetResource(id string, rt *schema.ResourceType) Result {
+	req, _ := http.NewRequest(http.MethodGet, scl.baseUrl+"/v2"+rt.Endpoint+"/"+id, nil)
 	scl.addRequiredHeaders(req)
 
-	return scl.sendReq(req)
+	result := scl.sendReq(req)
+	if result.StatusCode == http.StatusOK {
+		result.Rs, _ = scl.ParseResource(result.Data)
+	}
+
+	return result
+
+}
+
+func (scl *SparrowClient) Add(rs *base.Resource) Result {
+	data := rs.Serialize()
+	return scl._addResource(data, rs.GetType())
+}
+
+func (scl *SparrowClient) _addResource(data []byte, rt *schema.ResourceType) Result {
+	req, _ := http.NewRequest(http.MethodPost, scl.baseUrl+"/v2"+rt.Endpoint, ioutil.NopCloser(bytes.NewBuffer(data)))
+	scl.addRequiredHeaders(req)
+
+	result := scl.sendReq(req)
+	if result.StatusCode == http.StatusCreated {
+		result.Rs, _ = scl.ParseResource(result.Data)
+	}
+
+	return result
 }
 
 func (scl *SparrowClient) SendJoinReq(host string, port int) Result {
@@ -103,6 +143,16 @@ func (scl *SparrowClient) DirectLogin(username string, password string, domain s
 	return nil
 }
 
+func (scl *SparrowClient) MakeSchemaAware() error {
+	err := scl.loadSchemas()
+	if err == nil {
+		err = scl.loadResTypes()
+	}
+
+	scl.schemaAware = (err == nil)
+	return err
+}
+
 func (scl *SparrowClient) sendReq(req *http.Request) Result {
 	client := &http.Client{Transport: scl.transport}
 	r := Result{}
@@ -129,4 +179,82 @@ func (scl *SparrowClient) addRequiredHeaders(r *http.Request) {
 	}
 	r.Header.Add("Content-Type", scimContentType)
 	r.Header.Add(authzHeader, "Bearer "+scl.token)
+}
+
+func (scl *SparrowClient) loadSchemas() error {
+	req, _ := http.NewRequest(http.MethodGet, scl.baseUrl+"/v2/Schemas", nil)
+	req.Header.Add(authzHeader, "Bearer "+scl.token)
+
+	result := scl.sendReq(req)
+
+	if result.StatusCode != 200 {
+		return fmt.Errorf("%d - %s", result.StatusCode, result.ErrorMsg)
+	}
+
+	var arr []interface{}
+	err := json.Unmarshal(result.Data, &arr)
+	if err != nil {
+		return err
+	}
+
+	sm := make(map[string]*schema.Schema)
+
+	for _, v := range arr {
+		singleSchemaData, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+
+		sc, err := schema.NewSchema(singleSchemaData)
+		if err != nil {
+			return err
+		}
+		sm[sc.Id] = sc
+	}
+
+	scl.Schemas = sm
+	return nil
+}
+
+func (scl *SparrowClient) loadResTypes() error {
+	req, _ := http.NewRequest(http.MethodGet, scl.baseUrl+"/v2/ResourceTypes", nil)
+	req.Header.Add(authzHeader, "Bearer "+scl.token)
+
+	result := scl.sendReq(req)
+
+	if result.StatusCode != 200 {
+		return fmt.Errorf("%d - %s", result.StatusCode, result.ErrorMsg)
+	}
+
+	var arr []interface{}
+	err := json.Unmarshal(result.Data, &arr)
+	if err != nil {
+		return err
+	}
+
+	rts := make(map[string]*schema.ResourceType)
+
+	for _, v := range arr {
+		singleRtData, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+
+		rt, err := schema.NewResourceType(singleRtData, scl.Schemas)
+		if err != nil {
+			return err
+		}
+		rts[rt.Name] = rt
+	}
+
+	scl.ResTypes = rts
+	return nil
+}
+
+func (scl *SparrowClient) ParseResource(data []byte) (*base.Resource, error) {
+	if !scl.schemaAware {
+		return nil, fmt.Errorf("client is not aware of schema")
+	}
+
+	return base.ParseResource(scl.ResTypes, scl.Schemas, ioutil.NopCloser(bytes.NewBuffer(data)))
 }

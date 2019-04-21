@@ -11,7 +11,7 @@ import (
 )
 
 func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
-	serverId, err := strconv.Atoi(r.Header.Get("X-From-Peer-Id"))
+	serverId, err := strconv.Atoi(r.Header.Get(base.HEADER_X_FROM_PEER_ID))
 	if err != nil {
 		msg := "missing server ID header, ignoring the events"
 		log.Debugf(msg)
@@ -27,7 +27,7 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		return
 	}
 
-	webhookToken := r.Header.Get("X-Webhook-Token")
+	webhookToken := r.Header.Get(base.HEADER_X_WEBHOOK_TOKEN)
 	if peer.WebHookToken != webhookToken {
 		msg := fmt.Sprintf("missing or invalid webhook token (request sent from server with ID %d), ignoring the events", serverId)
 		log.Debugf(msg)
@@ -64,23 +64,11 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 			writeError(w, base.NewNotFoundError(msg))
 			return
 		}
-		// reuse the buffer
-		buf.Reset()
-		buf.Write(event.Data)
-		var rs *base.Resource
-		err = dec.Decode(rs)
-		if err == nil {
-			// apply the schema
-			rs.SetSchema(pr.RsTypes[rs.TypeName])
-			crCtx := &base.CreateContext{Repl: true}
-			crCtx.InRes = rs
-			err = pr.CreateResource(crCtx)
-		} else {
-			msg := fmt.Sprintf("failed to decode the resource from the data sent from server ID %d [%#v]", serverId, err)
-			log.Debugf(msg)
-			writeError(w, base.NewBadRequestError(msg))
-			return
-		}
+		rs := event.Res
+		rs.SetSchema(pr.RsTypes[rs.TypeName])
+		crCtx := &base.CreateContext{Repl: true}
+		crCtx.InRes = rs
+		err = pr.CreateResource(crCtx)
 
 	default:
 		msg := fmt.Sprintf("unknown event type %d (server ID %d)", event.Type, serverId)
@@ -89,9 +77,9 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	}
 
 	if err == nil {
-		log.Debugf("saved the replication event with ID %s", event.Csn)
+		log.Debugf("saved the replication event with ID %s", event.Version)
 	} else {
-		log.Debugf("failed to save the replication event with ID %s", event.Csn)
+		log.Debugf("failed to save the replication event with ID %s", event.Version)
 	}
 
 }

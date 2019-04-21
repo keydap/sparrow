@@ -89,6 +89,8 @@ func NewSparrowServer(homeDir string, overrideConf string) *Sparrow {
 		panic(err)
 	}
 
+	sp.srvConf.ReplWebHookToken = sp.rl.WebHookToken
+
 	// load the existing peers
 	sp.peers = sp.rl.GetReplicationPeers()
 
