@@ -44,6 +44,7 @@ func (ri *ReplInterceptor) PrePatch(patchCtx *base.PatchContext) error {
 }
 
 func (ri *ReplInterceptor) PostPatch(patchedRs *base.Resource, patchCtx *base.PatchContext) {
+
 }
 
 func (ri *ReplInterceptor) PreDelete(delCtx *base.DeleteContext) error {

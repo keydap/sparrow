@@ -45,6 +45,7 @@ type ReplaceContext struct {
 }
 
 type PatchContext struct {
+	Repl       bool
 	Rid        string
 	Pr         *PatchReq
 	Rt         *schema.ResourceType

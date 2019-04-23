@@ -498,6 +498,10 @@ func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resourc
 }
 
 func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err error) {
+	if patchCtx.Repl {
+		//prv.sl.Patch()
+		return
+	}
 	defer func() {
 		prv.Al.Log(patchCtx, res, err)
 	}()
