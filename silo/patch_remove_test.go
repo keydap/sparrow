@@ -15,12 +15,13 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 
 	rs := insertRs(patchDevice)
 	pr := getPr(`{"Operations":[{"op":"remove", "path": "installedDate"}]}`, deviceType, rs.GetVersion())
-
-	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	updatedRs := patchCtx.Res
 	if updatedRs.GetAttr("installedDate") != nil {
 		t.Errorf("installedDate attribute should be removed, but it is still present")
 	}
@@ -29,11 +30,13 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 
 	// apply the same patch on the already updated resource, resource should not get modified
 	pr.IfMatch = updatedRs.GetVersion()
-	notUpdatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx2 := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx2)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	notUpdatedRs := patchCtx2.Res
 	originalMeta := updatedRs.GetMeta().GetFirstSubAt()
 	newMeta := notUpdatedRs.GetMeta().GetFirstSubAt()
 
@@ -44,21 +47,23 @@ func TestPatchRemoveSimpleAts(t *testing.T) {
 	}
 
 	pr = getPr(`{"Operations":[{"op":"remove", "path": "location.LatiTude"}]}`, deviceType, updatedRs.GetVersion())
-
-	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx3 := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx3)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	updatedRs = patchCtx3.Res
 	assertIndexVal(deviceType.Name, "location.latitude", "19°10'45.4\"N", false, t)
 
 	pr = getPr(`{"Operations":[{"op":"remove", "path": "photos[value eq \"abc.jpg\"].value"}]}`, deviceType, updatedRs.GetVersion())
-
-	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx4 := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx4)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	updatedRs = patchCtx4.Res
 	assertIndexVal(deviceType.Name, "photos.value", "abc.jpg", false, t)
 	assertIndexVal(deviceType.Name, "photos.value", "xyz.jpg", true, t)
 
@@ -73,12 +78,13 @@ func TestPatchRemoveComplexAt(t *testing.T) {
 
 	rs := insertRs(patchDevice)
 	pr := getPr(`{"Operations":[{"op":"remove", "path": "repairDates"}]}`, deviceType, rs.GetVersion())
-
-	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	updatedRs := patchCtx.Res
 	if updatedRs.GetAttr("repairDates") != nil {
 		t.Errorf("repairDates attribute should be removed, but it is still present")
 	}
@@ -88,12 +94,13 @@ func TestPatchRemoveComplexAt(t *testing.T) {
 
 	// multi-valued CA
 	pr = getPr(`{"Operations":[{"op":"remove", "path": "photos[primary eq true]"}]}`, deviceType, updatedRs.GetVersion())
-
-	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx2 := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx2)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	updatedRs = patchCtx2.Res
 	assertIndexVal(deviceType.Name, "photos.value", "abc.jpg", false, t)
 	assertIndexVal(deviceType.Name, "photos.value", "xyz.jpg", true, t)
 
@@ -108,12 +115,13 @@ func TestPatchRemoveMultipleVals(t *testing.T) {
 
 	rs := insertRs(patchDevice)
 	pr := getPr(`{"Operations":[{"op":"remove", "path": "photos.value"}]}`, deviceType, rs.GetVersion())
-
-	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: rs.GetType()}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	updatedRs := patchCtx.Res
 	assertIndexVal(deviceType.Name, "photos.value", "abc.jpg", false, t)
 	assertIndexVal(deviceType.Name, "photos.value", "xyz.jpg", false, t)
 
@@ -142,21 +150,23 @@ func TestPatchRemoveExtensionAts(t *testing.T) {
 	rs := insertRs(patchUser)
 	pr := getPr(`{"Operations":[{"op":"add", "value":
 	               {"urn:keydap:params:scim:schemas:extension:authentication:2.0:User": {"twofactortype": "totp"}}}]}`, userType, rs.GetVersion())
-
-	updatedRs, err := sl.Patch(rs.GetId(), pr, userType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: rs.GetType()}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with extended object")
 	}
+	updatedRs := patchCtx.Res
 	assertEquals(t, "twofactortype", updatedRs, "totp")
 
 	// patch user with a new extension's data while using the URN as path
 	pr = getPr(`{"Operations":[{"op":"remove","path":"urn:keydap:params:scim:schemas:extension:authentication:2.0:User:twofactortype"}]}`, userType, updatedRs.GetVersion())
-
-	updatedRs, err = sl.Patch(rs.GetId(), pr, userType)
+	patchCtx2 := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: rs.GetType()}
+	err = sl.Patch(patchCtx2)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with extended object")
 	}
 
+	updatedRs = patchCtx2.Res
 	twofactortypeAt := updatedRs.GetAttr("twofactortype")
 	if twofactortypeAt != nil {
 		t.Errorf("Failed to delete the twofactortype attribute from an extension schema")
@@ -172,7 +182,8 @@ func TestPatchRemoveExtensionAts(t *testing.T) {
 
 func checkRemoveFailure(t *testing.T, rid string, patchJson string, rs *base.Resource) {
 	pr := getPr(patchJson, deviceType, rs.GetVersion())
-	_, err := sl.Patch(rid, pr, deviceType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err := sl.Patch(patchCtx)
 	se := err.(*base.ScimError)
 	if se == nil {
 		msg := fmt.Sprintf("Failed to return error when attempted to delete path %s", pr.Operations[0].Path)

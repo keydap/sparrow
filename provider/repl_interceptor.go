@@ -43,7 +43,7 @@ func (ri *ReplInterceptor) PrePatch(patchCtx *base.PatchContext) error {
 	return nil
 }
 
-func (ri *ReplInterceptor) PostPatch(patchedRs *base.Resource, patchCtx *base.PatchContext) {
+func (ri *ReplInterceptor) PostPatch(patchCtx *base.PatchContext) {
 
 }
 

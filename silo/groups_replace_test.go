@@ -216,11 +216,13 @@ func TestPatchAdd(t *testing.T) {
 
 	// now patch the group
 	pr := getPr(`{"Operations":[{"op":"add", "value":{"members":[{"value": "`+u2Id+`"}]}}]}`, groupType, group.GetVersion())
-	group, err := sl.Patch(gid, pr, groupType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: gid, Rt: groupType}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	group = patchCtx.Res
 	if !group.HasMember(u2Id) {
 		t.Error("User2 is not a member of the group")
 	}
@@ -236,12 +238,13 @@ func TestPatchAdd(t *testing.T) {
 
 	// now patch the group with path set to members
 	pr = getPr(`{"Operations":[{"op":"add", "path": "members", "value":{"value": "`+u3Id+`"}}]}`, groupType, group.GetVersion())
-	group, err = sl.Patch(gid, pr, groupType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: gid, Rt: groupType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch add req with path")
 	}
 
-	if !group.HasMember(u3Id) {
+	if !patchCtx.Res.HasMember(u3Id) {
 		t.Error("User3 is not a member of the group")
 	}
 
@@ -276,11 +279,13 @@ func TestPatchReplace(t *testing.T) {
 
 	// now patch the group
 	pr := getPr(`{"Operations":[{"op":"replace", "value":{"members":[{"value": "`+u2Id+`"}]}}]}`, groupType, group.GetVersion())
-	group, err := sl.Patch(gid, pr, groupType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: gid, Rt: groupType}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	group = patchCtx.Res
 	if !group.HasMember(u2Id) {
 		t.Error("User2 is not a member of the group")
 	}
@@ -303,11 +308,13 @@ func TestPatchReplace(t *testing.T) {
 
 	// now patch the group with path set to members
 	pr = getPr(`{"Operations":[{"op":"replace", "path": "members", "value":[{"value": "`+u3Id+`"}, {"value": "`+u1Id+`"}]}]}`, groupType, group.GetVersion())
-	group, err = sl.Patch(gid, pr, groupType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: gid, Rt: groupType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch add req with path")
 	}
 
+	group = patchCtx.Res
 	if !group.HasMember(u3Id) || !group.HasMember(u1Id) {
 		t.Error("User3 is not a member of the group")
 	}
@@ -353,11 +360,13 @@ func TestPatchRemove(t *testing.T) {
 
 	// now patch the group with path set to members
 	pr := getPr(`{"Operations":[{"op":"remove", "path": "members[value eq `+u3Id+`]"}]}`, groupType, group.GetVersion())
-	group, err := sl.Patch(gid, pr, groupType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: gid, Rt: groupType}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch add req with path")
 	}
 
+	group = patchCtx.Res
 	if !group.HasMember(u1Id) || !group.HasMember(u2Id) {
 		t.Error("User3 is not a member of the group")
 	}

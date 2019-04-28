@@ -13,17 +13,21 @@ import (
 	"strings"
 )
 
-func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (res *base.Resource, err error) {
+func (sl *Silo) Patch(patchCtx *base.PatchContext) (err error) {
 	tx, err := sl.db.Begin(true)
 
 	if err != nil {
 		detail := fmt.Sprintf("Could not begin a transaction for modifying the resource [%s]", err.Error())
 		log.Criticalf(detail)
 		err = base.NewInternalserverError(detail)
-		return nil, err
+		return err
 	}
 
 	sl.mutex.Lock()
+
+	rt := patchCtx.Rt
+	rid := patchCtx.Rid
+	pr := patchCtx.Pr
 
 	defer func() {
 		e := recover()
@@ -33,7 +37,7 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 
 		if err != nil {
 			tx.Rollback()
-			res = nil
+			patchCtx.Res = nil
 			if log.IsDebugEnabled() {
 				log.Debugf("failed to modify %s resource [%s]", rt.Name, err)
 				debug.PrintStack()
@@ -42,7 +46,7 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 			tx.Commit()
 
 			if rt.Name == "Group" {
-				sl.Engine.UpsertRole(res, sl.resTypes)
+				sl.Engine.UpsertRole(patchCtx.Res, sl.resTypes)
 			}
 
 			log.Debugf("Successfully modified resource with id %s", rid)
@@ -51,19 +55,22 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 		sl.mutex.Unlock()
 	}()
 
-	res, err = sl.getUsingTx(rid, rt, tx)
+	patchCtx.Res, err = sl.getUsingTx(rid, rt, tx)
 
 	if err != nil {
-		return nil, err
+		patchCtx.Res = nil
+		return err
 	}
 
-	if strings.Compare(res.GetVersion(), pr.IfMatch) != 0 {
+	if strings.Compare(patchCtx.Res.GetVersion(), pr.IfMatch) != 0 {
 		msg := fmt.Sprintf("The given version %s of the resource to be patched %s doesn't match with stored version", pr.IfMatch, rid)
 		log.Debugf(msg)
-		return nil, base.NewPreCondError(msg)
+		patchCtx.Res = nil
+		return base.NewPreCondError(msg)
 	}
 
 	mh := &modifyHints{}
+	res := patchCtx.Res
 
 	for _, po := range pr.Operations {
 		log.Debugf("Patch %s operation on resource %s", po.Op, rid)
@@ -92,11 +99,15 @@ func (sl *Silo) Patch(rid string, pr *base.PatchReq, rt *schema.ResourceType) (r
 		if updateSchemas {
 			res.UpdateSchemas()
 		}
-		res.UpdateLastModTime(sl.cg.NewCsn())
+
+		if !patchCtx.Repl {
+			res.UpdateLastModTime(sl.cg.NewCsn())
+		}
+
 		sl.storeResource(tx, res)
 	}
 
-	return res, nil
+	return nil
 }
 
 func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, mh *modifyHints, tx *bolt.Tx) {

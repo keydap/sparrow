@@ -624,12 +624,13 @@ func patchResource(hc *httpContext) {
 
 	patchReq.IfMatch = hc.r.Header.Get("If-Match")
 	patchCtx := base.PatchContext{Rid: rid, Rt: rtByPath, Pr: patchReq, OpContext: hc.OpContext}
-	patchedRes, err := hc.pr.Patch(&patchCtx)
+	err = hc.pr.Patch(&patchCtx)
 	if err != nil {
 		writeError(hc.w, err)
 		return
 	}
 
+	patchedRes := patchCtx.Res
 	writeCommonHeaders(hc.w)
 	header := hc.w.Header()
 	header.Add("Location", hc.r.RequestURI+"/"+rid)

@@ -7,7 +7,7 @@ type Interceptor interface {
 	PostCreate(crCtx *CreateContext)
 
 	PrePatch(patchCtx *PatchContext) error
-	PostPatch(patchedRs *Resource, patchCtx *PatchContext)
+	PostPatch(patchCtx *PatchContext)
 
 	PreDelete(delCtx *DeleteContext) error
 	PostDelete(delCtx *DeleteContext)

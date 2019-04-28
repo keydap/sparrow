@@ -31,11 +31,12 @@ func TestPatchAddSimpleAts(t *testing.T) {
 
 	rs := insertRs(patchDevice)
 	pr := getPr(`{"Operations":[{"op":"add", "value":{"price": 9.2, "rating": 1}}]}`, deviceType, rs.GetVersion())
-
-	updatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
+	updatedRs := patchCtx.Res
 	assertEquals(t, "price", updatedRs, float64(9.2))
 	assertIndexVal(deviceType.Name, "price", float64(7.2), false, t)
 	assertIndexVal(deviceType.Name, "price", float64(9.2), true, t)
@@ -45,11 +46,12 @@ func TestPatchAddSimpleAts(t *testing.T) {
 
 	// apply the same patch on the already updated resource, resource should not get modified
 	pr.IfMatch = updatedRs.GetVersion()
-	notUpdatedRs, err := sl.Patch(rs.GetId(), pr, deviceType)
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
+	notUpdatedRs := patchCtx.Res
 	originalMeta := updatedRs.GetMeta().GetFirstSubAt()
 	newMeta := notUpdatedRs.GetMeta().GetFirstSubAt()
 
@@ -64,7 +66,8 @@ func TestPatchAddSimpleAts(t *testing.T) {
 
 	// without path, give Value an array instead of a map
 	pr = getPr(`{"Operations":[{"op":"add", "value":[{"price": 9.2, "rating": 1}]}]}`, deviceType, updatedRs.GetVersion())
-	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err == nil {
 		t.Errorf("Patch operation must fail when path is not given and Value is an array instead of an object")
 	}
@@ -74,12 +77,13 @@ func TestPatchAddSimpleAts(t *testing.T) {
 
 	rs = insertRs(patchDevice)
 	pr = getPr(`{"Operations":[{"op":"add", "path":"price", "value":10.6}]}`, deviceType, rs.GetVersion())
-
-	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with path")
 	}
 
+	updatedRs = patchCtx.Res
 	assertEquals(t, "price", updatedRs, float64(10.6))
 	assertIndexVal(deviceType.Name, "price", float64(7.2), false, t)
 	assertIndexVal(deviceType.Name, "price", float64(9.2), false, t) // just to ensure the old value is not lingering even after deleting the resource
@@ -87,21 +91,25 @@ func TestPatchAddSimpleAts(t *testing.T) {
 
 	// test multi-valued simple attribute with path
 	pr = getPr(`{"Operations":[{"op":"add", "path":"repairDates", "value":"2016-05-28T14:19:14Z"}]}`, deviceType, updatedRs.GetVersion())
-	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with path on a multivalued simple attribute %s", err)
 	}
 
+	updatedRs = patchCtx.Res
 	millis := utils.GetTimeMillis("2016-05-28T14:19:14Z")
 	assertEquals(t, "repairDates", updatedRs, millis)
 	assertIndexVal(deviceType.Name, "repairDates", millis, true, t)
 
 	pr = getPr(`{"Operations":[{"op":"add", "path":"repairDates", "value":["2016-05-29T14:19:14Z"]}]}`, deviceType, updatedRs.GetVersion())
-	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with path on a multivalued simple attribute %s", err)
 	}
 
+	updatedRs = patchCtx.Res
 	millis = utils.GetTimeMillis("2016-05-29T14:19:14Z")
 	assertEquals(t, "repairDates", updatedRs, millis)
 	assertIndexVal(deviceType.Name, "repairDates", millis, true, t)
@@ -110,11 +118,13 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	prevVersion := updatedRs.GetVersion()
 
 	pr = getPr(`{"Operations":[{"op":"add", "path":"photos", "value":[{"value": "yet-another-pic.jpg", "primary": false}]}]}`, deviceType, updatedRs.GetVersion())
-	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with path on a multivalued photos attribute %s", err)
 	}
 
+	updatedRs = patchCtx.Res
 	assertIndexVal(deviceType.Name, "photos.value", "yet-another-pic.jpg", true, t)
 	assertIndexVal(deviceType.Name, "photos.value", "abc.jpg", true, t)
 	assertIndexVal(deviceType.Name, "photos.value", "xyz.jpg", true, t)
@@ -129,12 +139,13 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	prevVersion = curVersion
 
 	pr = getPr(`{"Operations":[{"op":"add", "path":"photos", "value":[{}]}]}`, deviceType, updatedRs.GetVersion())
-	updatedRs, err = sl.Patch(rs.GetId(), pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with path on a multivalued photos attribute and empty value %s", err)
 	}
 
-	curVersion = updatedRs.GetVersion()
+	curVersion = patchCtx.Res.GetVersion()
 	if prevVersion != curVersion {
 		panic("Version should NOT have been modified cause the patch operation didn't have any meaningful values")
 	}
@@ -156,7 +167,7 @@ func TestModifyUniqueSimpleAt(t *testing.T) {
 	// insert device1 first
 	insertRs(device1)
 
-	// next device to be patched
+	// next device to be patchedTestPatchAddSimpleAts
 	rs := insertRs(patchDevice)
 	rid := rs.GetId()
 
@@ -164,7 +175,8 @@ func TestModifyUniqueSimpleAt(t *testing.T) {
 	pr := getPr(`{"Operations":[{"op":"add", "value":{"serialNumber": "20"}}]}`, deviceType, rs.GetVersion())
 
 	// it must fail
-	_, err := sl.Patch(rid, pr, deviceType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rid, Rt: deviceType}
+	err := sl.Patch(patchCtx)
 	if err == nil {
 		t.Errorf("Patch operation must fail due to uniqueness violation")
 	}
@@ -185,12 +197,13 @@ func TestPatchAddComplexAT(t *testing.T) {
 	rs := insertRs(patchDevice)
 	rid := rs.GetId()
 	pr := getPr(`{"Operations":[{"op":"add", "value":{"location": {"latitude": "1.0", "longitude": "2.0"}}}]}`, deviceType, rs.GetVersion())
-
-	updatedRs, err := sl.Patch(rid, pr, deviceType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rid, Rt: deviceType}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with complex attribute")
 	}
 
+	updatedRs := patchCtx.Res
 	assertEquals(t, "location.latitude", updatedRs, "1.0")
 	assertIndexVal(deviceType.Name, "location.latitude", "1.1", false, t)
 	assertIndexVal(deviceType.Name, "location.latitude", "1.0", true, t)
@@ -199,11 +212,12 @@ func TestPatchAddComplexAT(t *testing.T) {
 
 	// apply the same patch on the already updated resource, resource should not get modified
 	pr.IfMatch = updatedRs.GetVersion()
-	notUpdatedRs, err := sl.Patch(rid, pr, deviceType)
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req on the already updated resource")
 	}
 
+	notUpdatedRs := patchCtx.Res
 	originalMeta := updatedRs.GetMeta().GetFirstSubAt()
 	newMeta := notUpdatedRs.GetMeta().GetFirstSubAt()
 
@@ -215,32 +229,34 @@ func TestPatchAddComplexAT(t *testing.T) {
 
 	//with path now
 	pr = getPr(`{"Operations":[{"op":"add", "path":"location.latitude", "value":"5.0"}]}`, deviceType, updatedRs.GetVersion())
-
-	updatedRs, err = sl.Patch(rid, pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with path of complex attribute")
 	}
 
+	updatedRs = patchCtx.Res
 	assertEquals(t, "location.latitude", updatedRs, "5.0")
 	assertIndexVal(deviceType.Name, "location.latitude", "1.1", false, t)
 	assertIndexVal(deviceType.Name, "location.latitude", "5.0", true, t)
 
 	//path with a selector
 	pr = getPr(`{"Operations":[{"op":"add", "path":"location[longitude eq \"2.0\"].latitude", "value":"7.0"}]}`, deviceType, updatedRs.GetVersion())
-
-	updatedRs, err = sl.Patch(rid, pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with path of complex attribute")
 	}
 
+	updatedRs = patchCtx.Res
 	assertEquals(t, "location.latitude", updatedRs, "7.0")
 	assertIndexVal(deviceType.Name, "location.latitude", "5.0", false, t)
 	assertIndexVal(deviceType.Name, "location.latitude", "7.0", true, t)
 
 	//path with a selector
 	pr = getPr(`{"Operations":[{"op":"add", "path":"location[longitude eq \"non-existing-val\"].latitude", "value":"9.0"}]}`, deviceType, updatedRs.GetVersion())
-
-	updatedRs, err = sl.Patch(rid, pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err == nil {
 		t.Errorf("Modify operation must fail due to non-matching selector")
 	}
@@ -255,19 +271,20 @@ func TestPatchAddMultiValComplexAT(t *testing.T) {
 	rs := insertRs(patchDevice)
 	rid := rs.GetId()
 	pr := getPr(`{"Operations":[{"op":"add", "value":{"photos": [{"value": "123.jpg", "primary": true}, {"value": "456.jpg", "primary": true}]}}]}`, deviceType, rs.GetVersion())
-
-	updatedRs, err := sl.Patch(rid, pr, deviceType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err := sl.Patch(patchCtx)
 	if err == nil {
 		t.Errorf("Patch request should fail cause multiple primary flags were set")
 	}
 
 	pr = getPr(`{"Operations":[{"op":"add", "value":{"photos": [{"value": "123.jpg", "primary": true}, {"value": "456.jpg", "primary": false}]}}]}`, deviceType, rs.GetVersion())
-
-	updatedRs, err = sl.Patch(rid, pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to add multivalued complex attribute to the resource")
 	}
 
+	updatedRs := patchCtx.Res
 	photos := updatedRs.GetAttr("photos").GetComplexAt()
 	for _, subAtMap := range photos.SubAts {
 		if subAtMap["value"].Values[0].(string) == "123.jpg" {
@@ -291,12 +308,13 @@ func TestPatchAddMultiValComplexAT(t *testing.T) {
 	rs = insertRs(patchDevice)
 	rid = rs.GetId()
 	pr = getPr(`{"Operations":[{"op":"add", "path": "photos[value eq \"xyz.jpg\"].primary", "value":true}]}`, deviceType, rs.GetVersion())
-
-	updatedRs, err = sl.Patch(rid, pr, deviceType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Patch request failed on a complex multi-valued attribute %#v", err)
 	}
 
+	updatedRs = patchCtx.Res
 	photos = updatedRs.GetAttr("photos").GetComplexAt()
 	for _, subAtMap := range photos.SubAts {
 		if subAtMap["value"].Values[0].(string) == "abc.jpg" {
@@ -321,28 +339,33 @@ func TestPatchAddExtensionAts(t *testing.T) {
 	               {"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {"employeeNumber": "1", "organization": "keydap" }}
     		     }]}`, userType, rs.GetVersion())
 
-	updatedRs, err := sl.Patch(rs.GetId(), pr, userType)
+	patchCtx := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: rs.GetType()}
+	err := sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with extended object")
 	}
 
 	// patch user with a new extension's data while using the URN as path
+	updatedRs := patchCtx.Res
 	pr = getPr(`{"Operations":[{"op":"add", "path": "urn:keydap:params:scim:schemas:extension:authentication:2.0:User", "value":
 	               {"twofactorType": "Totp"}
     		     }]}`, userType, updatedRs.GetVersion())
 
-	updatedRs, err = sl.Patch(rs.GetId(), pr, userType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: rs.GetType()}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with extended object")
 	}
 
+	updatedRs = patchCtx.Res
 	// add one more attribute to the container, this time individually instead of as an object
 	pr = getPr(`{"Operations":[{"op":"add", "path": "urn:keydap:params:scim:schemas:extension:authentication:2.0:User:changepassword", "value":true}]}`, userType, updatedRs.GetVersion())
-
-	updatedRs, err = sl.Patch(rs.GetId(), pr, userType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: rs.GetType()}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with new attribute in container")
 	}
+	updatedRs = patchCtx.Res
 	assertEquals(t, "changepassword", updatedRs, true)
 
 	scIds := updatedRs.GetAttr("schemas").GetSimpleAt()
@@ -357,12 +380,13 @@ func TestPatchAddExtensionAts(t *testing.T) {
 
 	// add a sub-attribute when parent is not present
 	pr = getPr(`{"Operations":[{"op":"add", "path": "name.familyNamE", "value": "Mantha"}]}`, userType, updatedRs.GetVersion())
-	updatedRs, err = sl.Patch(rs.GetId(), pr, userType)
+	patchCtx = &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: rs.GetType()}
+	err = sl.Patch(patchCtx)
 	if err != nil {
 		t.Errorf("Failed to apply patch req with sub-attribute")
 	}
 
-	assertEquals(t, "name.FamilyNamE", updatedRs, "Mantha")
+	assertEquals(t, "name.FamilyNamE", patchCtx.Res, "Mantha")
 }
 
 func insertRs(json string) *base.Resource {

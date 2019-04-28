@@ -497,49 +497,49 @@ func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resourc
 	return prv.sl.Replace(replaceCtx.InRes, replaceCtx.IfMatch)
 }
 
-func (prv *Provider) Patch(patchCtx *base.PatchContext) (res *base.Resource, err error) {
+func (prv *Provider) Patch(patchCtx *base.PatchContext) (err error) {
 	if patchCtx.Repl {
 		//prv.sl.Patch()
-		return
+		return nil
 	}
 	defer func() {
-		prv.Al.Log(patchCtx, res, err)
+		prv.Al.Log(patchCtx, patchCtx.Res, err)
 	}()
 
 	od := patchCtx.GetDecision()
 	if od.Deny {
-		return nil, base.NewForbiddenError("insufficent privileges to update the resource")
+		return base.NewForbiddenError("insufficent privileges to update the resource")
 	}
 
 	if od.EvalFilter {
-		res, err = prv.sl.Get(patchCtx.Rid, patchCtx.Rt)
+		res, err := prv.sl.Get(patchCtx.Rid, patchCtx.Rt)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if !patchCtx.EvalPatch(res) {
-			return nil, base.NewForbiddenError("insufficent privileges to update the resource")
+			return base.NewForbiddenError("insufficent privileges to update the resource")
 		}
 	} else if od.EvalWithoutFetch {
 		if !patchCtx.EvalPatch(nil) {
-			return nil, base.NewForbiddenError("insufficent privileges to update the resource")
+			return base.NewForbiddenError("insufficent privileges to update the resource")
 		}
 	}
 
 	err = prv.firePreInterceptors(patchCtx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	res, err = prv.sl.Patch(patchCtx.Rid, patchCtx.Pr, patchCtx.Rt)
+	err = prv.sl.Patch(patchCtx)
 
 	if err == nil {
 		for _, intrcptr := range prv.interceptors {
-			intrcptr.PostPatch(res, patchCtx)
+			intrcptr.PostPatch(patchCtx)
 		}
 	}
 
-	return res, err
+	return err
 }
 
 func (prv *Provider) StoreTotpSecret(rid string, totpSecret string, clientIP string) (err error) {

@@ -21,8 +21,8 @@ func (ri *RemoveNeverAttrInterceptor) PrePatch(patchCtx *base.PatchContext) erro
 	return nil
 }
 
-func (ri *RemoveNeverAttrInterceptor) PostPatch(patchedRs *base.Resource, patchCtx *base.PatchContext) {
-	removeNeverAttrs(patchedRs)
+func (ri *RemoveNeverAttrInterceptor) PostPatch(patchCtx *base.PatchContext) {
+	removeNeverAttrs(patchCtx.Res)
 }
 
 func removeNeverAttrs(rs *base.Resource) {

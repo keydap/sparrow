@@ -37,7 +37,7 @@ func (ai *ApplicationInterceptor) PrePatch(patchCtx *base.PatchContext) error {
 	return nil
 }
 
-func (ai *ApplicationInterceptor) PostPatch(patchedRs *base.Resource, patchCtx *base.PatchContext) {
+func (ai *ApplicationInterceptor) PostPatch(patchCtx *base.PatchContext) {
 }
 
 func validateClient(rs *base.Resource, opCtx *base.OpContext) error {

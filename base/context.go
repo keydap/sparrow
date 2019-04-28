@@ -49,6 +49,7 @@ type PatchContext struct {
 	Rid        string
 	Pr         *PatchReq
 	Rt         *schema.ResourceType
+	Res        *Resource
 	*OpContext // the operation context
 }
 
