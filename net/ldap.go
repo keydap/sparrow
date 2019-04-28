@@ -1094,7 +1094,7 @@ func modifyPassword(sp *Sparrow, messageId int, extReqValPacket *ber.Packet, ls 
 	patchReq.IfMatch = user.GetVersion()
 	patchReq.Operations = append(patchReq.Operations, replace)
 	patchCtx.Pr = patchReq
-	_, err := pr.Patch(patchCtx)
+	err := pr.Patch(patchCtx)
 	if err != nil {
 		// throw other error
 		log.Debugf("Failed to update the password %s", err)

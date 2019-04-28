@@ -100,7 +100,11 @@ func (sl *Silo) Patch(patchCtx *base.PatchContext) (err error) {
 			res.UpdateSchemas()
 		}
 
-		if !patchCtx.Repl {
+		if patchCtx.Repl {
+			// update the version with the given value
+			meta := res.GetMeta().GetFirstSubAt()
+			meta["version"].Values[0] = patchCtx.ResplVersion
+		} else {
 			res.UpdateLastModTime(sl.cg.NewCsn())
 		}
 

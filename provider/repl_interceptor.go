@@ -44,7 +44,21 @@ func (ri *ReplInterceptor) PrePatch(patchCtx *base.PatchContext) error {
 }
 
 func (ri *ReplInterceptor) PostPatch(patchCtx *base.PatchContext) {
-
+	event := base.ReplicationEvent{}
+	event.Version = patchCtx.Res.GetMeta().GetValue("version").(string)
+	event.DomainCode = ri.domainCode
+	event.Type = base.RESOURCE_PATCH
+	event.Data = patchCtx.Pr.RawReq
+	event.PatchIfMatch = patchCtx.Pr.IfMatch
+	event.PatchRid = patchCtx.Rid
+	event.PatchRtName = patchCtx.Rt.Name
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the generated replication event [%#v]", err)
+	}
 }
 
 func (ri *ReplInterceptor) PreDelete(delCtx *base.DeleteContext) error {

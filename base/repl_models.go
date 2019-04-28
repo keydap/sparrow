@@ -25,6 +25,10 @@ type ReplicationEvent struct {
 	Type       DataType
 	Data       []byte
 	Res        *Resource
+
+	PatchIfMatch string
+	PatchRid     string
+	PatchRtName  string
 }
 
 type JoinRequest struct {

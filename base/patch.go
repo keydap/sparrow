@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"sparrow/schema"
 	"strings"
 )
@@ -15,6 +16,7 @@ type PatchReq struct {
 	Schemas    []string
 	IfMatch    string
 	Operations []*PatchOp
+	RawReq     []byte // the raw request that gets sent for replication
 }
 
 type PatchOp struct {
@@ -48,14 +50,19 @@ func ParsePatchReq(body io.Reader, rt *schema.ResourceType) (*PatchReq, error) {
 	}
 
 	var pr PatchReq
-	dec := json.NewDecoder(body)
-	err := dec.Decode(&pr)
+	data, err := ioutil.ReadAll(body)
+	if err != nil {
+		log.Debugf("Failed to read the body of patch request %#v", err)
+		return nil, NewBadRequestError(err.Error())
+	}
 
+	err = json.Unmarshal(data, &pr)
 	if err != nil {
 		log.Debugf("Failed to parse the patch request %#v", err)
 		return nil, NewBadRequestError(err.Error())
 	}
 
+	pr.RawReq = data
 	if len(pr.Operations) == 0 {
 		detail := "Invalid patch request, one or more operations must be present"
 		log.Debugf(detail)

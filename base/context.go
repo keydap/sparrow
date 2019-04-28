@@ -45,12 +45,13 @@ type ReplaceContext struct {
 }
 
 type PatchContext struct {
-	Repl       bool
-	Rid        string
-	Pr         *PatchReq
-	Rt         *schema.ResourceType
-	Res        *Resource
-	*OpContext // the operation context
+	Repl         bool
+	ResplVersion string // to be used only by a replication event
+	Rid          string
+	Pr           *PatchReq
+	Rt           *schema.ResourceType
+	Res          *Resource
+	*OpContext   // the operation context
 }
 
 type SearchContext struct {

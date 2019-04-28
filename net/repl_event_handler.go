@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sparrow/base"
 	"strconv"
+	"strings"
 )
 
 func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
@@ -54,22 +55,30 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		return
 	}
 
+	pr := sp.dcPrvMap[event.DomainCode]
+	// the provider might have been de-activated on this server
+	if pr == nil {
+		msg := fmt.Sprintf("provider with domain code %s is not active", event.DomainCode)
+		log.Debugf(msg)
+		writeError(w, base.NewNotFoundError(msg))
+		return
+	}
+
 	switch event.Type {
 	case base.RESOURCE_CREATE:
-		pr := sp.dcPrvMap[event.DomainCode]
-		// the provider might have been de-activated on this server
-		if pr == nil {
-			msg := fmt.Sprintf("provider with domain code %s is not active", event.DomainCode)
-			log.Debugf(msg)
-			writeError(w, base.NewNotFoundError(msg))
-			return
-		}
 		rs := event.Res
 		rs.SetSchema(pr.RsTypes[rs.TypeName])
 		crCtx := &base.CreateContext{Repl: true}
 		crCtx.InRes = rs
 		err = pr.CreateResource(crCtx)
 
+	case base.RESOURCE_PATCH:
+		rt := pr.RsTypes[event.PatchRtName]
+		patchReq, err := base.ParsePatchReq(strings.NewReader(string(event.Data)), rt)
+		if err == nil {
+			patchCtx := &base.PatchContext{Pr: patchReq, Rid: event.PatchRid, Rt: rt, Repl: true, ResplVersion: event.Version}
+			err = pr.Patch(patchCtx)
+		}
 	default:
 		msg := fmt.Sprintf("unknown event type %d (server ID %d)", event.Type, serverId)
 		log.Debugf(msg)
