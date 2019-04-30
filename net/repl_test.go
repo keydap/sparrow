@@ -132,6 +132,31 @@ var _ = Describe("testing replication", func() {
 			//replResult := tclient.GetUser(id)
 			//Expect(replResult.StatusCode).To(Equal(200))
 		})
+		It("patch resource on master and check on slave", func() {
+			// create on master and check on slave
+			userJson := createRandomUser()
+			result := mclient.AddUser(userJson)
+			Expect(result.StatusCode).To(Equal(201))
+			time.Sleep(1 * time.Second)
+			id := result.Rs.GetId()
+			replResult := sclient.GetUser(id)
+			Expect(replResult.StatusCode).To(Equal(200))
+
+			// patch the resource on master
+			rsVersion := result.Rs.GetVersion()
+			nickName := "patchedNick"
+			displayName := "patchedDisplay"
+			pr := fmt.Sprintf(`{"Operations":[{"op":"add", "path": "nickName", value":"%s"}, {"op":"replace", "path": "displayName", value":"%s"}]}`, nickName, displayName)
+			patchResult := mclient.Patch(pr, id, result.Rs.GetType(), rsVersion)
+			Expect(patchResult.StatusCode).To(Equal(200))
+			// create on slave and check on master
+			time.Sleep(1 * time.Second)
+			replResult = sclient.GetUser(id)
+			rs := replResult.Rs
+			Expect(replResult.StatusCode).To(Equal(200))
+			Expect(rs.GetAttr("nickname").GetSimpleAt().GetStringVal()).To(Equal(nickName))
+			Expect(rs.GetAttr("displayName").GetSimpleAt().GetStringVal()).To(Equal(displayName))
+		})
 	})
 })
 

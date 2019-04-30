@@ -68,6 +68,18 @@ func (scl *SparrowClient) GetGroup(id string) Result {
 	return scl.GetResource(id, scl.ResTypes["Group"])
 }
 
+func (scl *SparrowClient) Patch(patchReq string, rid string, rt *schema.ResourceType, rsVersion string) Result {
+	req, _ := http.NewRequest(http.MethodPatch, scl.baseUrl+"/v2"+rt.Endpoint+"/"+rid, nil)
+	scl.addRequiredHeaders(req)
+
+	result := scl.sendReq(req)
+	if result.StatusCode == http.StatusOK {
+		result.Rs, _ = scl.ParseResource(result.Data)
+	}
+
+	return result
+}
+
 func (scl *SparrowClient) GetResource(id string, rt *schema.ResourceType) Result {
 	req, _ := http.NewRequest(http.MethodGet, scl.baseUrl+"/v2"+rt.Endpoint+"/"+id, nil)
 	scl.addRequiredHeaders(req)
@@ -78,7 +90,6 @@ func (scl *SparrowClient) GetResource(id string, rt *schema.ResourceType) Result
 	}
 
 	return result
-
 }
 
 func (scl *SparrowClient) Add(rs *base.Resource) Result {
