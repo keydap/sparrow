@@ -146,8 +146,8 @@ var _ = Describe("testing replication", func() {
 			rsVersion := result.Rs.GetVersion()
 			nickName := "patchedNick"
 			displayName := "patchedDisplay"
-			pr := fmt.Sprintf(`{"Operations":[{"op":"add", "path": "nickName", value":"%s"}, {"op":"replace", "path": "displayName", value":"%s"}]}`, nickName, displayName)
-			patchResult := mclient.Patch(pr, id, result.Rs.GetType(), rsVersion)
+			pr := fmt.Sprintf(`{"Operations":[{"op":"add", "path": "nickName", "value":"%s"}, {"op":"replace", "path": "displayName", "value":"%s"}]}`, nickName, displayName)
+			patchResult := mclient.Patch(pr, id, result.Rs.GetType(), rsVersion, "*")
 			Expect(patchResult.StatusCode).To(Equal(200))
 			// create on slave and check on master
 			time.Sleep(1 * time.Second)
@@ -156,6 +156,7 @@ var _ = Describe("testing replication", func() {
 			Expect(replResult.StatusCode).To(Equal(200))
 			Expect(rs.GetAttr("nickname").GetSimpleAt().GetStringVal()).To(Equal(nickName))
 			Expect(rs.GetAttr("displayName").GetSimpleAt().GetStringVal()).To(Equal(displayName))
+			Expect(rs.GetVersion()).To(Equal(patchResult.Rs.GetVersion()))
 		})
 	})
 })

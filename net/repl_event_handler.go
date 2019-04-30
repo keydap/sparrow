@@ -74,7 +74,9 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 
 	case base.RESOURCE_PATCH:
 		rt := pr.RsTypes[event.PatchRtName]
-		patchReq, err := base.ParsePatchReq(strings.NewReader(string(event.Data)), rt)
+		patchReqJson := string(event.Data)
+		log.Debugf("%s", patchReqJson)
+		patchReq, err := base.ParsePatchReq(strings.NewReader(patchReqJson), rt)
 		if err == nil {
 			patchCtx := &base.PatchContext{Pr: patchReq, Rid: event.PatchRid, Rt: rt, Repl: true, ReplVersion: event.Version}
 			err = pr.Patch(patchCtx)
