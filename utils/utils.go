@@ -19,8 +19,6 @@ const DIR_PERM os.FileMode = 0744 //rwxr--r--
 
 const FILE_PERM os.FileMode = 0644 //rw-r--r--
 
-const ReservedRFC4122 byte = 0x40 // UUID v4
-
 var log logger.Logger
 
 var urlEncoder = base64.URLEncoding.WithPadding(base64.StdPadding)
@@ -38,8 +36,8 @@ func GenUUID() string {
 
 	// set version
 	b[6] = (b[6] & 0xF) | (4 << 4)
-	// set variant
-	b[8] = (b[8] | ReservedRFC4122) & 0x7F
+	// set variant to 10
+	b[8] = (b[8] & 0x3F) | 0x80
 
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
