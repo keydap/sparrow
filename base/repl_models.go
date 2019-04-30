@@ -16,16 +16,16 @@ const (
 	TEMPLATES
 	RESOURCE_CREATE
 	RESOURCE_PATCH
+	RESOURCE_REPLACE
 	RESOURCE_DELETE
 )
 
 type ReplicationEvent struct {
-	Version    string
-	DomainCode string
-	Type       DataType
-	Data       []byte
-	Res        *Resource
-
+	Version      string
+	DomainCode   string
+	Type         DataType
+	Data         []byte
+	CreatedRes   *Resource
 	PatchIfMatch string
 	PatchRid     string
 	PatchRtName  string

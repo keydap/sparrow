@@ -66,7 +66,7 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 
 	switch event.Type {
 	case base.RESOURCE_CREATE:
-		rs := event.Res
+		rs := event.CreatedRes
 		rs.SetSchema(pr.RsTypes[rs.TypeName])
 		crCtx := &base.CreateContext{Repl: true}
 		crCtx.InRes = rs
@@ -76,7 +76,7 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		rt := pr.RsTypes[event.PatchRtName]
 		patchReq, err := base.ParsePatchReq(strings.NewReader(string(event.Data)), rt)
 		if err == nil {
-			patchCtx := &base.PatchContext{Pr: patchReq, Rid: event.PatchRid, Rt: rt, Repl: true, ResplVersion: event.Version}
+			patchCtx := &base.PatchContext{Pr: patchReq, Rid: event.PatchRid, Rt: rt, Repl: true, ReplVersion: event.Version}
 			err = pr.Patch(patchCtx)
 		}
 	default:

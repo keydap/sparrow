@@ -62,7 +62,14 @@ func (sl *Silo) Patch(patchCtx *base.PatchContext) (err error) {
 		return err
 	}
 
-	if strings.Compare(patchCtx.Res.GetVersion(), pr.IfMatch) != 0 {
+	res := patchCtx.Res
+
+	if patchCtx.Repl {
+		curVersion := res.GetVersion()
+		if strings.Compare(curVersion, patchCtx.ReplVersion) > 0 {
+			return fmt.Errorf("replication event is older than the current version %s of the target resource %s, aborting patch", curVersion, rid)
+		}
+	} else if strings.Compare(res.GetVersion(), pr.IfMatch) != 0 {
 		msg := fmt.Sprintf("The given version %s of the resource to be patched %s doesn't match with stored version", pr.IfMatch, rid)
 		log.Debugf(msg)
 		patchCtx.Res = nil
@@ -70,7 +77,6 @@ func (sl *Silo) Patch(patchCtx *base.PatchContext) (err error) {
 	}
 
 	mh := &modifyHints{}
-	res := patchCtx.Res
 
 	for _, po := range pr.Operations {
 		log.Debugf("Patch %s operation on resource %s", po.Op, rid)
@@ -103,7 +109,7 @@ func (sl *Silo) Patch(patchCtx *base.PatchContext) (err error) {
 		if patchCtx.Repl {
 			// update the version with the given value
 			meta := res.GetMeta().GetFirstSubAt()
-			meta["version"].Values[0] = patchCtx.ResplVersion
+			meta["version"].Values[0] = patchCtx.ReplVersion
 		} else {
 			res.UpdateLastModTime(sl.cg.NewCsn())
 		}

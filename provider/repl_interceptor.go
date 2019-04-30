@@ -27,7 +27,7 @@ func (ri *ReplInterceptor) PreCreate(crCtx *base.CreateContext) error {
 func (ri *ReplInterceptor) PostCreate(crCtx *base.CreateContext) {
 	event := base.ReplicationEvent{}
 	event.Version = crCtx.InRes.GetMeta().GetValue("version").(string)
-	event.Res = crCtx.InRes
+	event.CreatedRes = crCtx.InRes
 	event.DomainCode = ri.domainCode
 	event.Type = base.RESOURCE_CREATE
 	dataBuf, err := ri.replSilo.StoreEvent(event)
