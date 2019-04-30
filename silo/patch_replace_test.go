@@ -10,11 +10,11 @@ import (
 	"testing"
 )
 
-func estPatchReplaceSimpleAts(t *testing.T) {
+func TestPatchReplaceSimpleAts(t *testing.T) {
 	initSilo()
 
 	rs := insertRs(patchDevice)
-	pr := getPr(`{"Operations":[{"op":"rplace", "value":{"installedDate": "2016-06-18T14:19:14Z"}}]}`, deviceType, rs.GetVersion())
+	pr := getPr(`{"Operations":[{"op":"replace", "value":{"installedDate": "2016-06-18T14:19:14Z"}}]}`, deviceType, rs.GetVersion())
 	patchCtx := &base.PatchContext{Pr: pr, Rid: rs.GetId(), Rt: deviceType}
 	err := sl.Patch(patchCtx)
 	if err != nil {
