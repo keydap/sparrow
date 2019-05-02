@@ -4,7 +4,6 @@
 package silo
 
 import (
-	"fmt"
 	"sparrow/base"
 	"sparrow/utils"
 	"testing"
@@ -27,16 +26,16 @@ func TestPatchReplaceSimpleAts(t *testing.T) {
 
 	// apply the same patch on the already updated resource, resource should not get modified
 	err = sl.Patch(patchCtx)
-	if err != nil {
+	if err == nil {
 		t.Errorf("Failed to apply patch req")
 	}
 
-	notUpdatedRs := patchCtx.Res
+	notUpdatedRs, _ := sl.Get(rs.GetId(), deviceType)
 	originalMeta := updatedRs.GetMeta().GetFirstSubAt()
 	newMeta := notUpdatedRs.GetMeta().GetFirstSubAt()
 
 	assertEquals(t, "meta.created", notUpdatedRs, originalMeta["created"].Values[0])
-	assertEquals(t, "meta.version", notUpdatedRs, fmt.Sprint(originalMeta["lastmodified"].Values[0]))
+	assertEquals(t, "meta.version", notUpdatedRs, originalMeta["version"].Values[0])
 	if originalMeta["lastmodified"].Values[0] != newMeta["lastmodified"].Values[0] {
 		t.Errorf("Patch operation modified though the attribute data is unchanged")
 	}
