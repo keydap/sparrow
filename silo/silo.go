@@ -822,7 +822,7 @@ func (sl *Silo) addGroupMembers(members *base.ComplexAttribute, groupRid string,
 				updated := sl.addGroupToUser(refRes, groupRid, displayName)
 				if updated {
 					ugroupIdx.add(groupRid, refId, tx)
-					refRes.UpdateLastModTime(sl.cg.NewCsn())
+					//refRes.UpdateLastModTime(sl.cg.NewCsn())
 					sl.storeResource(tx, refRes)
 				}
 			}
@@ -1035,7 +1035,7 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 								if ugroupIdx != nil {
 									ugroupIdx.remove(val, refId, tx)
 								}
-								res.UpdateLastModTime(sl.cg.NewCsn())
+								//res.UpdateLastModTime(sl.cg.NewCsn())
 								sl.storeResource(tx, res)
 								break
 							}
@@ -1063,7 +1063,7 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 							// removing
 							gmemberIdx.remove(rid, gid, tx)
 						}
-						res.UpdateLastModTime(sl.cg.NewCsn())
+						//res.UpdateLastModTime(sl.cg.NewCsn())
 						sl.storeResource(tx, res)
 						break
 					}
@@ -1278,7 +1278,7 @@ func (sl *Silo) _deleteGroupMembers(memberSubAtMap map[string]*base.SimpleAttrib
 				if len(groups.SubAts) == 0 {
 					user.DeleteAttr("groups")
 				}
-				user.UpdateLastModTime(sl.cg.NewCsn())
+				//user.UpdateLastModTime(sl.cg.NewCsn())
 				sl.storeResource(tx, user)
 				return updated
 			}
@@ -1873,7 +1873,9 @@ func (sl *Silo) VerifyOtp(rid string, totpCode string) (lr base.LoginResult, err
 		ad.FLoginCount++
 	}
 
-	user.UpdateLastModTime(sl.cg.NewCsn())
+	// TODO should we update the last mod when OTP gets updated
+	// I don't think so, commenting it out
+	//user.UpdateLastModTime(sl.cg.NewCsn())
 	sl.storeResource(tx, user)
 
 	return lr, nil
@@ -1938,7 +1940,7 @@ func (sl *Silo) ModifyGroupsOfUser(mgur base.ModifyGroupsOfUserRequest) (res *ba
 	if added || removed {
 		for _, group := range fetchedGroups {
 			// now persist group immediately and user at the end of the loop
-			group.UpdateLastModTime(sl.cg.NewCsn())
+			//group.UpdateLastModTime(sl.cg.NewCsn())
 			sl.storeResource(tx, group)
 		}
 

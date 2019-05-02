@@ -55,14 +55,14 @@ func (sl *Silo) Patch(patchCtx *base.PatchContext) (err error) {
 		sl.mutex.Unlock()
 	}()
 
-	patchCtx.Res, err = sl.getUsingTx(rid, rt, tx)
+	res, err := sl.getUsingTx(rid, rt, tx)
 
 	if err != nil {
 		patchCtx.Res = nil
 		return err
 	}
 
-	res := patchCtx.Res
+	patchCtx.Res = res
 
 	if patchCtx.Repl {
 		curVersion := res.GetVersion()

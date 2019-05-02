@@ -158,6 +158,36 @@ var _ = Describe("testing replication", func() {
 			Expect(rs.GetAttr("displayName").GetSimpleAt().GetStringVal()).To(Equal(displayName))
 			Expect(rs.GetVersion()).To(Equal(patchResult.Rs.GetVersion()))
 		})
+		It("patch a group on master and check its members on slave", func() {
+			// create on master and check on slave
+			userJson := createRandomUser()
+			mUserResult := mclient.AddUser(userJson)
+			Expect(mUserResult.StatusCode).To(Equal(201))
+
+			uid := mUserResult.Rs.GetId()
+			mGroupResult := mclient.AddGroup(createRandomGroup())
+			Expect(mGroupResult.StatusCode).To(Equal(201))
+			gid := mGroupResult.Rs.GetId()
+			groupVersion := mGroupResult.Rs.GetVersion()
+			// now patch the group to add the new user
+			pr := fmt.Sprintf(`{"Operations":[{"op":"add", "path": "members", "value":"{"value": "%s"}"}]}`, uid)
+			patchResult := mclient.Patch(pr, gid, mGroupResult.Rs.GetType(), groupVersion, "*")
+			Expect(patchResult.StatusCode).To(Equal(200))
+
+			time.Sleep(1 * time.Second)
+
+			// check on slave that the patched group was replicated and the user has the correct group membership
+			replUserResult := sclient.GetUser(uid)
+			replGroupResult := sclient.GetGroup(uid)
+			Expect(replUserResult.StatusCode).To(Equal(200))
+			Expect(replGroupResult.StatusCode).To(Equal(200))
+			Expect(replGroupResult.Rs.GetAttr("members").GetComplexAt().HasValue(uid)).To(BeTrue())
+			Expect(replUserResult.Rs.GetAttr("groups").GetComplexAt().HasValue(gid)).To(BeTrue())
+			// the version of user MUST not get updated when the group membership changes
+			Expect(replUserResult.Rs.GetVersion()).To(Equal(mUserResult.Rs.GetVersion()))
+			// and the group's version remains same
+			Expect(replGroupResult.Rs.GetVersion()).To(Equal(mGroupResult.Rs.GetVersion()))
+		})
 	})
 })
 
@@ -182,4 +212,31 @@ func createRandomUser() string {
 	domain := master.srvConf.DefaultDomain
 
 	return fmt.Sprintf(tmpl, username, displayname, password, username, domain)
+}
+
+func createRandomGroup(members ...string) string {
+	tmpl := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+				    "displayName": "%s",
+				    "permissions": [{"resName": "*", "opsArr" : "[{\"op\":\"read\",\"allowAttrs\": \"*\",\"filter\":\"ANY\"}]"}],
+                    "members": [ %s ]
+
+             }`
+
+	mTmpl := `"{
+                 "value": "%s"
+               },"`
+
+	memberAt := ""
+
+	for _, v := range members {
+		memberAt += fmt.Sprintf(mTmpl, v)
+	}
+	mlen := len(memberAt)
+
+	if mlen > 0 {
+		memberAt = memberAt[0 : mlen-1]
+	}
+
+	groupname := base.RandStr()
+	return fmt.Sprintf(tmpl, groupname, memberAt)
 }
