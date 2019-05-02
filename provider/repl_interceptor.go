@@ -35,7 +35,7 @@ func (ri *ReplInterceptor) PostCreate(crCtx *base.CreateContext) {
 	if err == nil {
 		go ri.sendToPeers(dataBuf, event, ri.peers)
 	} else {
-		log.Debugf("failed to store the generated replication event [%#v]", err)
+		log.Debugf("failed to store the generated create replication event [%#v]", err)
 	}
 }
 
@@ -51,13 +51,13 @@ func (ri *ReplInterceptor) PostPatch(patchCtx *base.PatchContext) {
 	event.Data = patchCtx.Pr.RawReq
 	event.PatchIfMatch = patchCtx.Pr.IfMatch
 	event.PatchRid = patchCtx.Rid
-	event.PatchRtName = patchCtx.Rt.Name
+	event.RtName = patchCtx.Rt.Name
 	dataBuf, err := ri.replSilo.StoreEvent(event)
 	// send to the peers
 	if err == nil {
 		go ri.sendToPeers(dataBuf, event, ri.peers)
 	} else {
-		log.Debugf("failed to store the generated replication event [%#v]", err)
+		log.Debugf("failed to store the generated patch replication event [%#v]", err)
 	}
 }
 
@@ -66,6 +66,37 @@ func (ri *ReplInterceptor) PreDelete(delCtx *base.DeleteContext) error {
 }
 
 func (ri *ReplInterceptor) PostDelete(delCtx *base.DeleteContext) {
+	event := base.ReplicationEvent{}
+	event.DelRid = delCtx.Rid
+	event.DomainCode = ri.domainCode
+	event.Type = base.RESOURCE_DELETE
+	event.RtName = delCtx.Rt.Name
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the generated delete replication event [%#v]", err)
+	}
+}
+
+func (ri *ReplInterceptor) PreReplace(replaceCtx *base.ReplaceContext) error {
+	return nil
+}
+
+func (ri *ReplInterceptor) PostReplace(replaceCtx *base.ReplaceContext) {
+	event := base.ReplicationEvent{}
+	event.Version = replaceCtx.Res.GetMeta().GetValue("version").(string)
+	event.ResToReplace = replaceCtx.InRes
+	event.DomainCode = ri.domainCode
+	event.Type = base.RESOURCE_REPLACE
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the generated create replication event [%#v]", err)
+	}
 }
 
 func (ri *ReplInterceptor) sendToPeers(dataBuf *bytes.Buffer, event base.ReplicationEvent, peers map[uint16]*base.ReplicationPeer) {

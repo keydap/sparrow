@@ -73,14 +73,26 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		err = pr.CreateResource(crCtx)
 
 	case base.RESOURCE_PATCH:
-		rt := pr.RsTypes[event.PatchRtName]
+		rt := pr.RsTypes[event.RtName]
 		patchReqJson := string(event.Data)
-		log.Debugf("%s", patchReqJson)
 		patchReq, err := base.ParsePatchReq(strings.NewReader(patchReqJson), rt)
 		if err == nil {
 			patchCtx := &base.PatchContext{Pr: patchReq, Rid: event.PatchRid, Rt: rt, Repl: true, ReplVersion: event.Version}
 			err = pr.Patch(patchCtx)
 		}
+
+	case base.RESOURCE_REPLACE:
+		rt := pr.RsTypes[event.RtName]
+		rs := event.ResToReplace
+		rs.SetSchema(rt)
+		replaceCtx := &base.ReplaceContext{InRes: rs, Rt: rt, Repl: true, ReplVersion: event.Version}
+		err = pr.Replace(replaceCtx)
+
+	case base.RESOURCE_DELETE:
+		rt := pr.RsTypes[event.RtName]
+		delCtx := &base.DeleteContext{Rid: event.DelRid, Rt: rt, Repl: true}
+		err = pr.DeleteResource(delCtx)
+
 	default:
 		msg := fmt.Sprintf("unknown event type %d (server ID %d)", event.Type, serverId)
 		log.Debugf(msg)

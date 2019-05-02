@@ -928,8 +928,9 @@ func (sl *Silo) getUsingTx(rid string, rt *schema.ResourceType, tx *bolt.Tx) (re
 	return resource, err
 }
 
-func (sl *Silo) Delete(rid string, rt *schema.ResourceType) (err error) {
-
+func (sl *Silo) Delete(delCtx *base.DeleteContext) (err error) {
+	rid := delCtx.Rid
+	rt := delCtx.Rt
 	tx, err := sl.db.Begin(true)
 	if err != nil {
 		return err
@@ -1099,10 +1100,12 @@ func (sl *Silo) storeResource(tx *bolt.Tx, res *base.Resource) {
 	}
 }
 
-func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resource, err error) {
+func (sl *Silo) Replace(replaceCtx *base.ReplaceContext) (err error) {
+	inRes := replaceCtx.InRes
+	version := replaceCtx.IfMatch
 	err = inRes.CheckMissingRequiredAts()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	//inRes.RemoveReadOnlyAt()
@@ -1110,7 +1113,7 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 	rid := inRes.GetId()
 
 	if len(rid) == 0 {
-		return nil, base.NewBadRequestError("id attribute is missing")
+		return base.NewBadRequestError("id attribute is missing")
 	}
 
 	// validate the uniqueness constraints based on the schema
@@ -1124,7 +1127,7 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 		detail := fmt.Sprintf("Could not begin a transaction for replacing the resource [%s]", err.Error())
 		log.Criticalf(detail)
 		err = base.NewInternalserverError(detail)
-		return nil, err
+		return err
 	}
 
 	sl.mutex.Lock()
@@ -1137,7 +1140,7 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 
 		if err != nil {
 			tx.Rollback()
-			res = nil
+			replaceCtx.Res = nil
 			log.Debugf("failed to replace %s resource [%s]", rt.Name, err)
 		} else {
 			tx.Commit()
@@ -1154,13 +1157,18 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 	existing, err := sl.getUsingTx(rid, rt, tx)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if strings.Compare(existing.GetVersion(), version) != 0 {
+	if replaceCtx.Repl {
+		curVersion := existing.GetVersion()
+		if strings.Compare(curVersion, replaceCtx.ReplVersion) > 0 {
+			return fmt.Errorf("replication event is older than the current version %s of the target resource %s, aborting replace", curVersion, rid)
+		}
+	} else if strings.Compare(existing.GetVersion(), version) != 0 {
 		msg := fmt.Sprintf("The given version %s of the resource %s doesn't match with stored version", version, rid)
 		log.Debugf(msg)
-		return nil, base.NewPreCondError(msg)
+		return base.NewPreCondError(msg)
 	}
 
 	prIdx := sl.getSysIndex(rt.Name, "presence")
@@ -1222,12 +1230,19 @@ func (sl *Silo) Replace(inRes *base.Resource, version string) (res *base.Resourc
 	// delete the non-asserted Core attributes
 	sl.deleteFromAtGroup(rt.Name, rid, tx, prIdx, inRes.Core, existing.Core)
 
-	// update last modified time
-	existing.UpdateLastModTime(sl.cg.NewCsn())
+	if replaceCtx.Repl {
+		// update the version with the given value
+		meta := existing.GetMeta().GetFirstSubAt()
+		meta["version"].Values[0] = replaceCtx.ReplVersion
+	} else {
+		// update last modified time
+		existing.UpdateLastModTime(sl.cg.NewCsn())
+	}
 	existing.UpdateSchemas()
 
 	sl.storeResource(tx, existing)
-	return existing, nil
+	replaceCtx.Res = existing
+	return nil
 }
 
 func (sl *Silo) deleteGroupMembers(existingMembers *base.ComplexAttribute, groupRid string, tx *bolt.Tx) bool {

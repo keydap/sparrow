@@ -11,4 +11,7 @@ type Interceptor interface {
 
 	PreDelete(delCtx *DeleteContext) error
 	PostDelete(delCtx *DeleteContext)
+
+	PreReplace(replaceCtx *ReplaceContext) error
+	PostReplace(replaceCtx *ReplaceContext)
 }

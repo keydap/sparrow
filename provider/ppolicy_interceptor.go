@@ -86,3 +86,10 @@ func (pi *PpolicyInterceptor) PreDelete(delCtx *base.DeleteContext) error {
 
 func (pi *PpolicyInterceptor) PostDelete(delCtx *base.DeleteContext) {
 }
+
+func (pi *PpolicyInterceptor) PreReplace(replaceCtx *base.ReplaceContext) error {
+	return nil
+}
+
+func (pi *PpolicyInterceptor) PostReplace(replaceCtx *base.ReplaceContext) {
+}

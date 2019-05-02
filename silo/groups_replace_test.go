@@ -100,7 +100,7 @@ func TestGroupAddAndDelete(t *testing.T) {
 	assertIndexVal(userType.Name, "groups.value", gid, true, t)
 
 	// remove the second user, after which he shouldn't be part of the group
-	sl.Delete(u2Id, userType)
+	sl.Delete(&base.DeleteContext{Rid: u2Id, Rt: userType})
 
 	// check index after removing User2
 	assertIndexVal(groupType.Name, "members.value", u1Id, true, t)  // U1 should be present
@@ -111,7 +111,7 @@ func TestGroupAddAndDelete(t *testing.T) {
 		t.Errorf("Deleted user %s is still a member of the group %s", u2Id, gid)
 	}
 
-	err = sl.Delete(gid, groupType)
+	err = sl.Delete(&base.DeleteContext{Rid: gid, Rt: groupType})
 	if err != nil {
 		t.Errorf("Failed to delete the group %s", gid)
 	}
@@ -174,13 +174,14 @@ func TestGroupReplace(t *testing.T) {
 	subAtMap["value"] = u3Id
 	ca.AddSubAts(subAtMap)
 
-	group, err = sl.Replace(group, group.GetVersion())
+	replaceCtx := &base.ReplaceContext{InRes: group, IfMatch: group.GetVersion()}
+	err = sl.Replace(replaceCtx)
 	if err != nil {
 		t.Error("Failed to replace the group")
 	}
 
 	// now the group should have u1Id and u3Id
-	group, _ = sl.Get(gid, groupType)
+	group = replaceCtx.Res
 	if !group.HasMember(u1Id) || !group.HasMember(u3Id) {
 		t.Error("Expected users are not present in the group after replace operation")
 	}

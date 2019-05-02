@@ -144,3 +144,10 @@ func (ri *Rfc2307BisAttrInterceptor) PreDelete(delCtx *base.DeleteContext) error
 
 func (ri *Rfc2307BisAttrInterceptor) PostDelete(delCtx *base.DeleteContext) {
 }
+
+func (ri *Rfc2307BisAttrInterceptor) PreReplace(replaceCtx *base.ReplaceContext) error {
+	return nil
+}
+
+func (ri *Rfc2307BisAttrInterceptor) PostReplace(replaceCtx *base.ReplaceContext) {
+}

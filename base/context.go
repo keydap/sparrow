@@ -32,16 +32,19 @@ type GetContext struct {
 
 type DeleteContext struct {
 	Rid        string
+	Repl       bool
 	Rt         *schema.ResourceType
 	*OpContext // the operation context
 }
 
 type ReplaceContext struct {
-	Rid        string
-	InRes      *Resource
-	IfMatch    string
-	Rt         *schema.ResourceType
-	*OpContext // the operation context
+	InRes       *Resource
+	IfMatch     string
+	Rt          *schema.ResourceType
+	Res         *Resource // the resource after replacing
+	Repl        bool
+	ReplVersion string
+	*OpContext  // the operation context
 }
 
 type PatchContext struct {

@@ -324,8 +324,8 @@ func TestIndexOps(t *testing.T) {
 	}
 
 	// now delete the resources
-	sl.Delete(rid1, rs.GetType())
-	sl.Delete(rid2, rs.GetType())
+	sl.Delete(&base.DeleteContext{Rid: rid1, Rt: rs.GetType()})
+	sl.Delete(&base.DeleteContext{Rid: rid2, Rt: rs.GetType()})
 
 	readTx, _ = sl.db.Begin(false)
 	rids = emailIdx.GetRids(emailBytes, readTx)

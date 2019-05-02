@@ -567,10 +567,9 @@ func replaceResource(hc *httpContext) {
 	// set the ID on the resource first (even if the resource contains an ID it is safe to overwrite it)
 	rs.SetId(rid)
 	replaceCtx := base.ReplaceContext{InRes: rs, OpContext: hc.OpContext}
-	replaceCtx.Rid = rid
 	replaceCtx.Rt = rsType
 	replaceCtx.IfMatch = hc.r.Header.Get("If-Match")
-	replacedRs, err := hc.pr.Replace(&replaceCtx)
+	err = hc.pr.Replace(&replaceCtx)
 	if err != nil {
 		writeError(hc.w, err)
 		return
@@ -579,9 +578,9 @@ func replaceResource(hc *httpContext) {
 	writeCommonHeaders(hc.w)
 	header := hc.w.Header()
 	header.Add("Location", hc.r.RequestURI+"/"+rid)
-	header.Add("Etag", replacedRs.GetVersion())
+	header.Add("Etag", replaceCtx.Res.GetVersion())
 	hc.w.WriteHeader(http.StatusOK)
-	hc.w.Write(replacedRs.Serialize())
+	hc.w.Write(replaceCtx.Res.Serialize())
 	log.Debugf("Successfully replaced the resource with ID %s", rid)
 }
 

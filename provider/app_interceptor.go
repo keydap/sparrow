@@ -116,3 +116,10 @@ func (ai *ApplicationInterceptor) PreDelete(delCtx *base.DeleteContext) error {
 
 func (ai *ApplicationInterceptor) PostDelete(delCtx *base.DeleteContext) {
 }
+
+func (ai *ApplicationInterceptor) PreReplace(replaceCtx *base.ReplaceContext) error {
+	return nil
+}
+
+func (ai *ApplicationInterceptor) PostReplace(replaceCtx *base.ReplaceContext) {
+}

@@ -385,6 +385,10 @@ func (prv *Provider) CreateResource(crCtx *base.CreateContext) (err error) {
 }
 
 func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {
+	if delCtx.Repl {
+		return prv.sl.Delete(delCtx)
+	}
+
 	defer func() {
 		prv.Al.Log(delCtx, nil, err)
 	}()
@@ -420,7 +424,7 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {
 		return err
 	}
 
-	return prv.sl.Delete(delCtx.Rid, delCtx.Rt)
+	return prv.sl.Delete(delCtx)
 }
 
 func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, err error) {
@@ -485,16 +489,20 @@ func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource)
 	return nil
 }
 
-func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (res *base.Resource, err error) {
+func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (err error) {
+	if replaceCtx.Repl {
+		return prv.sl.Replace(replaceCtx)
+	}
+
 	defer func() {
-		prv.Al.Log(replaceCtx, res, err)
+		prv.Al.Log(replaceCtx, replaceCtx.Res, err)
 	}()
 
 	if !replaceCtx.AllowOp() {
-		return nil, base.NewForbiddenError("insufficent privileges to replace the resource")
+		return base.NewForbiddenError("insufficent privileges to replace the resource")
 	}
 
-	return prv.sl.Replace(replaceCtx.InRes, replaceCtx.IfMatch)
+	return prv.sl.Replace(replaceCtx)
 }
 
 func (prv *Provider) Patch(patchCtx *base.PatchContext) (err error) {

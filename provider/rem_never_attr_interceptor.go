@@ -37,3 +37,10 @@ func (ri *RemoveNeverAttrInterceptor) PreDelete(delCtx *base.DeleteContext) erro
 
 func (ri *RemoveNeverAttrInterceptor) PostDelete(delCtx *base.DeleteContext) {
 }
+
+func (ri *RemoveNeverAttrInterceptor) PreReplace(replaceCtx *base.ReplaceContext) error {
+	return nil
+}
+
+func (ri *RemoveNeverAttrInterceptor) PostReplace(replaceCtx *base.ReplaceContext) {
+}

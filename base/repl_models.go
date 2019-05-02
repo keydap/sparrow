@@ -28,7 +28,9 @@ type ReplicationEvent struct {
 	CreatedRes   *Resource
 	PatchIfMatch string
 	PatchRid     string
-	PatchRtName  string
+	RtName       string
+	DelRid       string
+	ResToReplace *Resource
 }
 
 type JoinRequest struct {

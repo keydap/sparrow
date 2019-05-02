@@ -73,7 +73,7 @@ func TestPatchAddSimpleAts(t *testing.T) {
 	}
 
 	// with path now
-	sl.Delete(rs.GetId(), deviceType)
+	sl.Delete(&base.DeleteContext{Rid: rs.GetId(), Rt: deviceType})
 
 	rs = insertRs(patchDevice)
 	pr = getPr(`{"Operations":[{"op":"add", "path":"price", "value":10.6}]}`, deviceType, rs.GetVersion())
@@ -304,7 +304,7 @@ func TestPatchAddMultiValComplexAT(t *testing.T) {
 	assertIndexVal(deviceType.Name, "photos.value", "456.jpg", true, t)
 
 	// with path now
-	sl.Delete(rid, deviceType)
+	sl.Delete(&base.DeleteContext{Rid: rid, Rt: deviceType})
 	rs = insertRs(patchDevice)
 	rid = rs.GetId()
 	pr = getPr(`{"Operations":[{"op":"add", "path": "photos[value eq \"xyz.jpg\"].primary", "value":true}]}`, deviceType, rs.GetVersion())
@@ -369,7 +369,7 @@ func TestPatchAddExtensionAts(t *testing.T) {
 	assertEquals(t, "changepassword", updatedRs, true)
 
 	scIds := updatedRs.GetAttr("schemas").GetSimpleAt()
-	t.Log(scIds.Values)
+	//t.Log(scIds.Values)
 	if len(scIds.Values) != 3 {
 		t.Errorf("Failed to include the extension schema's URN in the schemas array of updated resource")
 	}
