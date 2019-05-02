@@ -69,7 +69,7 @@ func (scl *SparrowClient) GetGroup(id string) Result {
 }
 
 func (scl *SparrowClient) Patch(patchReq string, rid string, rt *schema.ResourceType, rsVersion string, returnAttrs string) Result {
-	location := scl.baseUrl+"/v2"+rt.Endpoint+"/"+rid
+	location := scl.baseUrl + "/v2" + rt.Endpoint + "/" + rid
 	returnAttrs = strings.TrimSpace(returnAttrs)
 	if len(returnAttrs) > 0 {
 		location = location + "?attributes=" + returnAttrs
