@@ -170,7 +170,7 @@ var _ = Describe("testing replication", func() {
 			gid := mGroupResult.Rs.GetId()
 			groupVersion := mGroupResult.Rs.GetVersion()
 			// now patch the group to add the new user
-			pr := fmt.Sprintf(`{"Operations":[{"op":"add", "path": "members", "value":"{"value": "%s"}"}]}`, uid)
+			pr := fmt.Sprintf(`{"Operations":[{"op":"add", "path": "members", "value":[{"value": "%s"}]}]}`, uid)
 			patchResult := mclient.Patch(pr, gid, mGroupResult.Rs.GetType(), groupVersion, "*")
 			Expect(patchResult.StatusCode).To(Equal(200))
 
