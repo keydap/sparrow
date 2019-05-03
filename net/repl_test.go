@@ -188,6 +188,18 @@ var _ = Describe("testing replication", func() {
 			// and the group's version remains same
 			Expect(replGroupResult.Rs.GetVersion()).To(Equal(patchResult.Rs.GetVersion()))
 		})
+		It("delete resource on master and check on slave", func() {
+			// create on master
+			userJson := createRandomUser()
+			createResult := mclient.AddUser(userJson)
+			Expect(createResult.StatusCode).To(Equal(201))
+			uid := createResult.Rs.GetId()
+			delResult := mclient.Delete(uid, createResult.Rs.GetType())
+			Expect(delResult.StatusCode).To(Equal(204))
+			time.Sleep(1 * time.Second)
+			getResult := sclient.GetUser(uid)
+			Expect(getResult.StatusCode).To(Equal(404))
+		})
 	})
 })
 

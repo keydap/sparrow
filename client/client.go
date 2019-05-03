@@ -68,6 +68,14 @@ func (scl *SparrowClient) GetGroup(id string) Result {
 	return scl.GetResource(id, scl.ResTypes["Group"])
 }
 
+func (scl *SparrowClient) Delete(rid string, rt *schema.ResourceType) Result {
+	req, _ := http.NewRequest(http.MethodDelete, scl.baseUrl+"/v2"+rt.Endpoint+"/"+rid, nil)
+	scl.addRequiredHeaders(req)
+
+	result := scl.sendReq(req)
+	return result
+}
+
 func (scl *SparrowClient) Patch(patchReq string, rid string, rt *schema.ResourceType, rsVersion string, returnAttrs string) Result {
 	location := scl.baseUrl + "/v2" + rt.Endpoint + "/" + rid
 	returnAttrs = strings.TrimSpace(returnAttrs)

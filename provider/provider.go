@@ -424,7 +424,14 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {
 		return err
 	}
 
-	return prv.sl.Delete(delCtx)
+	err = prv.sl.Delete(delCtx)
+	if err == nil {
+		for _, intrcptr := range prv.interceptors {
+			intrcptr.PostDelete(delCtx)
+		}
+	}
+
+	return err
 }
 
 func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, err error) {

@@ -67,6 +67,7 @@ func (ri *ReplInterceptor) PreDelete(delCtx *base.DeleteContext) error {
 
 func (ri *ReplInterceptor) PostDelete(delCtx *base.DeleteContext) {
 	event := base.ReplicationEvent{}
+	event.Version = delCtx.DeleteCsn
 	event.DelRid = delCtx.Rid
 	event.DomainCode = ri.domainCode
 	event.Type = base.RESOURCE_DELETE

@@ -962,6 +962,10 @@ func (sl *Silo) Delete(delCtx *base.DeleteContext) (err error) {
 
 	err = sl._removeResource(rid, rt, tx)
 
+	if err == nil {
+		delCtx.DeleteCsn = sl.cg.NewCsn().String()
+	}
+
 	return err
 }
 

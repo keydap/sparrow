@@ -34,7 +34,8 @@ type DeleteContext struct {
 	Rid        string
 	Repl       bool
 	Rt         *schema.ResourceType
-	*OpContext // the operation context
+	DeleteCsn  string // a new CSN generated during delete operation, this helps in ordering replication event
+	*OpContext        // the operation context
 }
 
 type ReplaceContext struct {
