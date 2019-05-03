@@ -178,7 +178,7 @@ var _ = Describe("testing replication", func() {
 
 			// check on slave that the patched group was replicated and the user has the correct group membership
 			replUserResult := sclient.GetUser(uid)
-			replGroupResult := sclient.GetGroup(uid)
+			replGroupResult := sclient.GetGroup(gid)
 			Expect(replUserResult.StatusCode).To(Equal(200))
 			Expect(replGroupResult.StatusCode).To(Equal(200))
 			Expect(replGroupResult.Rs.GetAttr("members").GetComplexAt().HasValue(uid)).To(BeTrue())
@@ -186,7 +186,7 @@ var _ = Describe("testing replication", func() {
 			// the version of user MUST not get updated when the group membership changes
 			Expect(replUserResult.Rs.GetVersion()).To(Equal(mUserResult.Rs.GetVersion()))
 			// and the group's version remains same
-			Expect(replGroupResult.Rs.GetVersion()).To(Equal(mGroupResult.Rs.GetVersion()))
+			Expect(replGroupResult.Rs.GetVersion()).To(Equal(patchResult.Rs.GetVersion()))
 		})
 	})
 })
