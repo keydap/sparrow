@@ -43,4 +43,5 @@ func (ri *RemoveNeverAttrInterceptor) PreReplace(replaceCtx *base.ReplaceContext
 }
 
 func (ri *RemoveNeverAttrInterceptor) PostReplace(replaceCtx *base.ReplaceContext) {
+	removeNeverAttrs(replaceCtx.Res)
 }

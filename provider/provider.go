@@ -509,7 +509,15 @@ func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (err error) {
 		return base.NewForbiddenError("insufficent privileges to replace the resource")
 	}
 
-	return prv.sl.Replace(replaceCtx)
+	err = prv.sl.Replace(replaceCtx)
+
+	if err == nil {
+		for _, intrcptr := range prv.interceptors {
+			intrcptr.PostReplace(replaceCtx)
+		}
+	}
+
+	return err
 }
 
 func (prv *Provider) Patch(patchCtx *base.PatchContext) (err error) {

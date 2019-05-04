@@ -5,7 +5,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"os"
-	"sparrow/base"
 	"sparrow/client"
 	"sparrow/utils"
 	"testing"
@@ -215,7 +214,7 @@ var _ = Describe("testing replication", func() {
 
 			getResult := sclient.GetUser(uid)
 			Expect(getResult.StatusCode).To(Equal(200))
-			//assertResEqual(replaceResult.Rs, getResult.Rs)
+			Expect(true).To(Equal(replaceResult.Rs.Equals(getResult.Rs)))
 		})
 	})
 })
@@ -268,8 +267,4 @@ func createRandomGroup(members ...string) string {
 
 	groupname := utils.NewRandShaStr()[0:7]
 	return fmt.Sprintf(tmpl, groupname, memberAt)
-}
-
-func assertResEqual(src *base.Resource, target *base.Resource) {
-
 }

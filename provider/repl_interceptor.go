@@ -91,6 +91,7 @@ func (ri *ReplInterceptor) PostReplace(replaceCtx *base.ReplaceContext) {
 	event.ResToReplace = replaceCtx.InRes
 	event.DomainCode = ri.domainCode
 	event.Type = base.RESOURCE_REPLACE
+	event.RtName = replaceCtx.Rt.Name
 	dataBuf, err := ri.replSilo.StoreEvent(event)
 	// send to the peers
 	if err == nil {
