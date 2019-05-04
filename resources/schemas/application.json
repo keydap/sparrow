@@ -121,7 +121,7 @@
             "required":false,
             "subAttributes":[
                 {
-                    "name":"name",
+                    "name":"value",
                     "type":"string",
                     "multiValued":false,
                     "description":"Name of the scope",
@@ -155,7 +155,7 @@
             "required":false,
             "subAttributes":[
                 {
-                    "name":"name",
+                    "name":"value",
                     "type":"string",
                     "multiValued":false,
                     "description":"Name to be used",
@@ -266,7 +266,7 @@
             "required":false,
             "subAttributes":[
                 {
-                    "name":"name",
+                    "name":"value",
                     "type":"string",
                     "multiValued":false,
                     "description":"Name to be used",

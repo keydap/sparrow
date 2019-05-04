@@ -145,7 +145,9 @@ func parseSsoAttributes(tmpResAt base.Attribute) map[string]*base.SsoAttr {
 			ssoAt := &base.SsoAttr{}
 			for _, at := range subAt {
 				switch at.GetType().NormName {
-				case "name":
+				// here the attribute name is stored in the value attribute -- confusing, but
+				// "value" attribute is needed for equality in multi-valued complex attributes
+				case "value":
 					ssoAt.Name = at.GetStringVal()
 					ssoAt.NormName = strings.ToLower(ssoAt.Name)
 
