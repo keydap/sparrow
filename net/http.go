@@ -81,7 +81,7 @@ func (sp *Sparrow) startHttp() {
 	}
 
 	//fmt.Println("registering sparrow plugin")
-	directiveName := "sparrow-" + strings.ToLower(base.RandStr()) // generating a random name so that two caddy instances can be started from replication tests
+	directiveName := "sparrow-" + strings.ToLower(utils.NewRandShaStr()[0:7]) // generating a random name so that two caddy instances can be started from replication tests
 	httpserver.RegisterDevDirective(directiveName, "startup")
 	caddy.RegisterPlugin(directiveName, caddy.Plugin{
 		ServerType: "http",

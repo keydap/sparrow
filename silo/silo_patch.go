@@ -232,7 +232,8 @@ func (sl *Silo) handleReplace(po *base.PatchOp, res *base.Resource, rid string, 
 							}
 						}
 
-						ca.SubAts[base.RandStr()] = subAtMap
+						key := base.GenKeyForSubAtMap(subAtMap)
+						ca.SubAts[key] = subAtMap
 					}
 
 					sl.dropCAtFromIndex(tCa, prIdx, rt.Name, rid, tx)
@@ -580,6 +581,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 							}
 						}
 
+						key := base.GenKeyForSubAtMap(subAtMap)
 						if isMembers {
 							incomingVal := subAtMap["value"]
 							if incomingVal != nil {
@@ -589,16 +591,16 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 								}
 							}
 							// the ca should hold only one subAtMap so keeping the key as a constant
-							ca.SubAts["1"] = subAtMap
+							ca.SubAts[key] = subAtMap
 							// check if the attribute already exists
 							// only values of 'value'attribute are considered for equality
 
 							sl.addGroupMembers(ca, rid, displayName, tx)
 							// the $ref and type values will be updated in the subAtMap when addGroupMembers is called
 							// so use this updated subAtMap
-							tCa.SubAts[base.RandStr()] = subAtMap
+							tCa.SubAts[key] = subAtMap
 						} else {
-							tCa.SubAts[base.RandStr()] = subAtMap
+							tCa.SubAts[key] = subAtMap
 						}
 
 						sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
@@ -611,15 +613,16 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 						tCa.UnsetPrimaryFlag()
 					}
 
+					key := base.GenKeyForSubAtMap(subAtMap)
 					if isMembers {
 						// the ca should hold only one subAtMap so keeping the key as a constant
-						ca.SubAts["1"] = subAtMap
+						ca.SubAts[key] = subAtMap
 						sl.addGroupMembers(ca, rid, displayName, tx)
 						// the $ref and type values will be updated in the subAtMap when addGroupMembers is called
 						// so use this updated subAtMap
-						tCa.SubAts[base.RandStr()] = subAtMap
+						tCa.SubAts[key] = subAtMap
 					} else {
-						tCa.SubAts[base.RandStr()] = subAtMap
+						tCa.SubAts[key] = subAtMap
 					}
 
 					// index the subAtMap
@@ -636,6 +639,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 	} else { // handle SimpleAttributes
 		if pp.ParentType != nil {
 			var offsets []string
+			tCaJustAdded := false
 			var tCa *base.ComplexAttribute
 
 			tAt := res.GetAttr(pp.ParentType.NormName)
@@ -645,6 +649,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 			if tAt == nil {
 				tCa = base.NewComplexAt(pp.ParentType)
 				res.AddComplexAt(tCa)
+				tCaJustAdded = true
 			} else {
 				tCa = tAt.GetComplexAt()
 			}
@@ -653,10 +658,7 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 				offsets = findSelectedObj(po, tCa)
 			} else {
 				_, key := tCa.GetFirstSubAtAndKey()
-				// only initialize if the key is not empty
-				if key != "" {
-					offsets = []string{key}
-				}
+				offsets = []string{key}
 			}
 
 			sa := base.ParseSimpleAttr(pp.AtType, convertSaValueBeforeParsing(pp.AtType, po.Value))
@@ -674,9 +676,9 @@ func (sl *Silo) handleAdd(po *base.PatchOp, res *base.Resource, rid string, mh *
 			atPath := pp.ParentType.NormName + "." + sa.Name
 
 			// a new CA was just added above
-			if offsets == nil {
+			if tCaJustAdded {
 				atMap := make(map[string]*base.SimpleAttribute)
-				key := base.RandStr()
+				key := base.GenKeyForSubAtMap(atMap)
 				tCa.SubAts[key] = atMap
 
 				atMap[pp.AtType.NormName] = sa
@@ -788,7 +790,8 @@ func (sl *Silo) addAttrTo(target *base.Resource, attr base.Attribute, tx *bolt.T
 					for _, subAtMap := range ca.SubAts {
 						// the old key might have been regenerated so do not use the key
 						// from the above loop, instead generate a new random key
-						tCa.SubAts[base.RandStr()] = subAtMap
+						key := base.GenKeyForSubAtMap(subAtMap)
+						tCa.SubAts[key] = subAtMap
 						sl.addSubAtMapToIndex(tCa.Name, subAtMap, prIdx, rt.Name, rid, tx)
 					}
 					mh.markDirty()

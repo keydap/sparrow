@@ -140,14 +140,15 @@ func (ca *ComplexAttribute) AddSubAts(subAtMap map[string]interface{}) {
 		created = true
 	}
 
+	key := GenKeyForSubAtMap(subAt)
 	if ca.atType.MultiValued {
-		ca.SubAts[RandStr()] = subAt
+		ca.SubAts[key] = subAt
 	} else {
 		if !created && (len(ca.SubAts) > 0) {
 			ca.SubAts = make(map[string]map[string]*SimpleAttribute, 1)
 		}
 
-		ca.SubAts[RandStr()] = subAt
+		ca.SubAts[key] = subAt
 	}
 }
 
@@ -469,9 +470,10 @@ func (rs *Resource) AddMeta(csn Csn) *ComplexAttribute {
 	ca.SubAts = make(map[string]map[string]*SimpleAttribute, 1)
 	rs.Core.ComplexAts[ca.Name] = ca
 
+	csnStrVal := csn.String()
 	parentAt := sc.AttrMap[ca.Name]
 	atMap := make(map[string]*SimpleAttribute)
-	ca.SubAts[RandStr()] = atMap
+	ca.SubAts[csnStrVal] = atMap
 
 	resTypeAt := &SimpleAttribute{Name: "resourcetype"}
 	resTypeAt.atType = parentAt.SubAttrMap[resTypeAt.Name]
@@ -500,7 +502,7 @@ func (rs *Resource) AddMeta(csn Csn) *ComplexAttribute {
 	versionAt := &SimpleAttribute{Name: "version"}
 	versionAt.atType = parentAt.SubAttrMap[versionAt.Name]
 	versionAt.Values = make([]interface{}, 1)
-	versionAt.Values[0] = csn.String()
+	versionAt.Values[0] = csnStrVal
 	atMap[versionAt.Name] = versionAt
 
 	return ca
@@ -1277,7 +1279,8 @@ func ParseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 					primaryAlreadySet = true
 				}
 			}
-			subAtArrMap[RandStr()] = simpleAtMap
+			key := GenKeyForSubAtMap(simpleAtMap)
+			subAtArrMap[key] = simpleAtMap
 		}
 
 		ca.SubAts = subAtArrMap
@@ -1291,7 +1294,8 @@ func ParseComplexAttr(attrType *schema.AttrType, iVal interface{}) *ComplexAttri
 	}
 
 	ca.SubAts = make(map[string]map[string]*SimpleAttribute)
-	ca.SubAts[RandStr()] = simpleAtMap
+	key := GenKeyForSubAtMap(simpleAtMap)
+	ca.SubAts[key] = simpleAtMap
 
 	return ca
 }
@@ -1555,4 +1559,84 @@ func (res *Resource) IsTfaEnabled() bool {
 
 func (res *Resource) IsTfaSetupComplete() bool {
 	return res.AuthData.TotpSecret != ""
+}
+
+func (res *Resource) Equals(other *Resource) bool {
+	if other == nil {
+		return false
+	}
+
+	if res.resType.Name != other.resType.Name {
+		return false
+	}
+
+	if res.Core != nil && other.Core != nil {
+		if !res.Core.equals(other.Core) {
+			return false
+		}
+	} else {
+		return false
+	}
+	return true
+}
+
+func (atg *AtGroup) equals(other *AtGroup) bool {
+	if atg.SimpleAts != nil && other.SimpleAts != nil {
+		for k, v1 := range atg.SimpleAts {
+			v2, ok := other.SimpleAts[k]
+			if !ok {
+				return false
+			}
+
+			if !v1.Equals(v2) {
+				return false
+			}
+		}
+	} else {
+		return false
+	}
+
+	if atg.ComplexAts != nil && other.ComplexAts != nil {
+
+		for name, _ := range atg.ComplexAts {
+			var otherCa *ComplexAttribute
+
+			for otherName, v := range other.ComplexAts {
+				if otherName == name {
+					otherCa = v
+					break
+				}
+			}
+			if otherCa == nil {
+				return false
+			}
+
+			//otherCaSubAtMap := otherCa.SubAts
+			//for _, caSubAtMap := range ca.SubAts {
+			//
+			//}
+		}
+	} else {
+		return false
+	}
+
+	return true
+}
+
+func GenKeyForSubAtMap(subAtMap map[string]*SimpleAttribute) string {
+	valAt := subAtMap["value"]
+	key := ""
+	if valAt != nil {
+		//panic(fmt.Errorf("value attribute is missing from the list of sub-ats to be added to complex attribute"))
+		key = fmt.Sprint(valAt.Values[0])
+	} else {
+		return key
+	}
+
+	typeAt := subAtMap["type"]
+	if typeAt != nil {
+		key += fmt.Sprint(typeAt.Values[0])
+	}
+
+	return strings.ToLower(key)
 }
