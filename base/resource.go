@@ -599,7 +599,7 @@ func (sa *SimpleAttribute) Equals(other *SimpleAttribute) bool {
 		return false
 	}
 
-	if sa.atType != other.atType {
+	if sa.atType.NormName != other.atType.NormName {
 		return false
 	}
 
@@ -1598,7 +1598,7 @@ func (atg *AtGroup) equals(other *AtGroup) bool {
 
 	if atg.ComplexAts != nil && other.ComplexAts != nil {
 
-		for name, _ := range atg.ComplexAts {
+		for name, ca := range atg.ComplexAts {
 			var otherCa *ComplexAttribute
 
 			for otherName, v := range other.ComplexAts {
@@ -1611,10 +1611,21 @@ func (atg *AtGroup) equals(other *AtGroup) bool {
 				return false
 			}
 
-			//otherCaSubAtMap := otherCa.SubAts
-			//for _, caSubAtMap := range ca.SubAts {
-			//
-			//}
+			for k, caSubAtMap := range ca.SubAts {
+				otherCaSubAtMap, ok := otherCa.SubAts[k]
+				if !ok {
+					return false
+				}
+				for saName, sa := range caSubAtMap {
+					otherSa, ok := otherCaSubAtMap[saName]
+					if !ok {
+						return false
+					}
+					if !sa.Equals(otherSa) {
+						return false
+					}
+				}
+			}
 		}
 	} else {
 		return false

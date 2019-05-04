@@ -146,25 +146,25 @@ func TestInsert(t *testing.T) {
 	crCtx := &base.CreateContext{}
 	crCtx.InRes = user
 	err := sl.Insert(crCtx)
-	rs := crCtx.InRes
-
-	//fmt.Println(rs.ToJSON())
-
-	rid := rs.GetId()
-
 	if err != nil {
 		t.Error("Failed to insert the resource")
 	}
 
+	rs := crCtx.InRes
 	if rs == nil {
 		t.Error("Failed to insert the resource")
 		return
 	}
+	rid := rs.GetId()
 
 	if len(rid) == 0 {
 		t.Error("Invalid insert operation, no generated ID found for the inserted resource")
 	}
 
+	// just testing the Equals() operation
+	if !rs.Equals(rs) {
+		t.Error("equality of resources failed")
+	}
 	idx := sl.getIndex(userResName, "username")
 	tx, _ := sl.db.Begin(true)
 	cnt := idx.getCount(tx)
