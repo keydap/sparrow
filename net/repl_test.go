@@ -7,6 +7,7 @@ import (
 	"os"
 	"sparrow/base"
 	"sparrow/client"
+	"sparrow/utils"
 	"testing"
 	"time"
 )
@@ -200,6 +201,22 @@ var _ = Describe("testing replication", func() {
 			getResult := sclient.GetUser(uid)
 			Expect(getResult.StatusCode).To(Equal(404))
 		})
+		It("replace resource on master and check on slave", func() {
+			// create on master
+			userJson := createRandomUser()
+			createResult := mclient.AddUser(userJson)
+			Expect(createResult.StatusCode).To(Equal(201))
+			uid := createResult.Rs.GetId()
+			replaceUserJson := createRandomUser()
+			// the username is also getting replaced, which may not work if the new name is already taken
+			replaceResult := mclient.Replace(uid, replaceUserJson, createResult.Rs.GetType(), createResult.Rs.GetVersion())
+			Expect(replaceResult.StatusCode).To(Equal(200))
+			time.Sleep(1 * time.Second)
+
+			getResult := sclient.GetUser(uid)
+			Expect(getResult.StatusCode).To(Equal(200))
+			//assertResEqual(replaceResult.Rs, getResult.Rs)
+		})
 	})
 })
 
@@ -218,7 +235,7 @@ func createRandomUser() string {
                      ]
                    }`
 
-	username := base.RandStr()
+	username := utils.NewRandShaStr()[0:7]
 	displayname := username
 	password := username
 	domain := master.srvConf.DefaultDomain
@@ -249,6 +266,10 @@ func createRandomGroup(members ...string) string {
 		memberAt = memberAt[0 : mlen-1]
 	}
 
-	groupname := base.RandStr()
+	groupname := utils.NewRandShaStr()[0:7]
 	return fmt.Sprintf(tmpl, groupname, memberAt)
+}
+
+func assertResEqual(src *base.Resource, target *base.Resource) {
+
 }

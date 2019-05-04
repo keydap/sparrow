@@ -76,6 +76,18 @@ func (scl *SparrowClient) Delete(rid string, rt *schema.ResourceType) Result {
 	return result
 }
 
+func (scl *SparrowClient) Replace(rid string, replaceJson string, rt *schema.ResourceType, rsVersion string) Result {
+	req, _ := http.NewRequest(http.MethodPut, scl.baseUrl+"/v2"+rt.Endpoint+"/"+rid, strings.NewReader(replaceJson))
+	scl.addRequiredHeaders(req)
+	req.Header.Add("If-Match", rsVersion)
+
+	result := scl.sendReq(req)
+	if result.StatusCode == http.StatusOK {
+		result.Rs, _ = scl.ParseResource(result.Data)
+	}
+	return result
+}
+
 func (scl *SparrowClient) Patch(patchReq string, rid string, rt *schema.ResourceType, rsVersion string, returnAttrs string) Result {
 	location := scl.baseUrl + "/v2" + rt.Endpoint + "/" + rid
 	returnAttrs = strings.TrimSpace(returnAttrs)
