@@ -2048,18 +2048,19 @@ func (sl *Silo) removeUserFromGroups(user *base.Resource, gids []string, fetched
 	return updated
 }
 
-func (sl *Silo) ChangePassword(rid string, newPassword string, hashingAlgo string) (user *base.Resource, err error) {
+func (sl *Silo) ChangePassword(cpContext *base.ChangePasswordContext) (err error) {
 	tx, err := sl.db.Begin(true)
 
 	if err != nil {
 		detail := fmt.Sprintf("Could not begin a transaction for changing user's password [%s]", err.Error())
 		log.Criticalf(detail)
 		err = base.NewInternalserverError(detail)
-		return nil, err
+		return err
 	}
 
 	sl.mutex.Lock()
 
+	rid := cpContext.Rid
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -2077,10 +2078,13 @@ func (sl *Silo) ChangePassword(rid string, newPassword string, hashingAlgo strin
 		sl.mutex.Unlock()
 	}()
 
+	newPassword := cpContext.NewPassword
+	hashingAlgo := cpContext.HashAlgo
+
 	rtUser := sl.resTypes["User"]
-	user, err = sl.getUsingTx(rid, rtUser, tx)
+	user, err := sl.getUsingTx(rid, rtUser, tx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	newPassword = utils.HashPassword(newPassword, hashingAlgo)
@@ -2101,7 +2105,8 @@ func (sl *Silo) ChangePassword(rid string, newPassword string, hashingAlgo strin
 	user.UpdateLastModTime(sl.cg.NewCsn())
 	sl.storeResource(tx, user)
 
-	return user, nil
+	cpContext.Res = user
+	return nil
 }
 
 func isChangePassword(user *base.Resource) bool {

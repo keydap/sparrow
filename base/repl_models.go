@@ -18,19 +18,28 @@ const (
 	RESOURCE_PATCH
 	RESOURCE_REPLACE
 	RESOURCE_DELETE
+	NEW_SESSION
+	REVOKE_SESSION
+	DELETE_SESSION
 )
 
 type ReplicationEvent struct {
-	Version      string
-	DomainCode   string
-	Type         DataType
-	Data         []byte
-	CreatedRes   *Resource
-	PatchIfMatch string
-	PatchRid     string
-	RtName       string
-	DelRid       string
-	ResToReplace *Resource
+	Version          string
+	DomainCode       string
+	Type             DataType
+	Data             []byte
+	CreatedRes       *Resource
+	PatchIfMatch     string
+	PatchRid         string
+	RtName           string
+	Rid              string
+	ResToReplace     *Resource
+	NewSession       *RbacSession
+	SsoSession       bool
+	RevokedSessionId string
+	DeletedSessionId string
+	NewPassword      string
+	HashAlgo         string
 }
 
 type JoinRequest struct {

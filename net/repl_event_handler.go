@@ -90,8 +90,18 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 
 	case base.RESOURCE_DELETE:
 		rt := pr.RsTypes[event.RtName]
-		delCtx := &base.DeleteContext{Rid: event.DelRid, Rt: rt, Repl: true}
+		delCtx := &base.DeleteContext{Rid: event.Rid, Rt: rt, Repl: true}
 		err = pr.DeleteResource(delCtx)
+
+	case base.NEW_SESSION:
+		pr.StoreReplSession(event.NewSession, event.SsoSession)
+
+	case base.REVOKE_SESSION:
+		pr.RevokeReplSession(event.RevokedSessionId, event.SsoSession)
+
+	case base.DELETE_SESSION:
+		// nil context is interpreted as replication context, a special case unlike all other events
+		pr.DeleteReplSsoSessionById(event.DeletedSessionId, event.SsoSession, true)
 
 	default:
 		msg := fmt.Sprintf("unknown event type %d (server ID %d)", event.Type, serverId)
@@ -100,7 +110,7 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	}
 
 	if err == nil {
-		log.Debugf("saved the replication event with ID %s", event.Version)
+		log.Debugf("saved the replication event of type %d with ID %s", event.Type, event.Version)
 	} else {
 		log.Debugf("failed to save the replication event with ID %s", event.Version)
 	}

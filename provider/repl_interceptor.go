@@ -2,6 +2,7 @@ package provider
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sparrow/base"
@@ -26,7 +27,7 @@ func (ri *ReplInterceptor) PreCreate(crCtx *base.CreateContext) error {
 
 func (ri *ReplInterceptor) PostCreate(crCtx *base.CreateContext) {
 	event := base.ReplicationEvent{}
-	event.Version = crCtx.InRes.GetMeta().GetValue("version").(string)
+	event.Version = crCtx.InRes.GetVersion()
 	event.CreatedRes = crCtx.InRes
 	event.DomainCode = ri.domainCode
 	event.Type = base.RESOURCE_CREATE
@@ -45,11 +46,10 @@ func (ri *ReplInterceptor) PrePatch(patchCtx *base.PatchContext) error {
 
 func (ri *ReplInterceptor) PostPatch(patchCtx *base.PatchContext) {
 	event := base.ReplicationEvent{}
-	event.Version = patchCtx.Res.GetMeta().GetValue("version").(string)
+	event.Version = patchCtx.Res.GetVersion()
 	event.DomainCode = ri.domainCode
 	event.Type = base.RESOURCE_PATCH
 	event.Data = patchCtx.Pr.RawReq
-	event.PatchIfMatch = patchCtx.Pr.IfMatch
 	event.PatchRid = patchCtx.Rid
 	event.RtName = patchCtx.Rt.Name
 	dataBuf, err := ri.replSilo.StoreEvent(event)
@@ -68,7 +68,7 @@ func (ri *ReplInterceptor) PreDelete(delCtx *base.DeleteContext) error {
 func (ri *ReplInterceptor) PostDelete(delCtx *base.DeleteContext) {
 	event := base.ReplicationEvent{}
 	event.Version = delCtx.DeleteCsn
-	event.DelRid = delCtx.Rid
+	event.Rid = delCtx.Rid
 	event.DomainCode = ri.domainCode
 	event.Type = base.RESOURCE_DELETE
 	event.RtName = delCtx.Rt.Name
@@ -87,7 +87,7 @@ func (ri *ReplInterceptor) PreReplace(replaceCtx *base.ReplaceContext) error {
 
 func (ri *ReplInterceptor) PostReplace(replaceCtx *base.ReplaceContext) {
 	event := base.ReplicationEvent{}
-	event.Version = replaceCtx.Res.GetMeta().GetValue("version").(string)
+	event.Version = replaceCtx.Res.GetVersion()
 	event.ResToReplace = replaceCtx.InRes
 	event.DomainCode = ri.domainCode
 	event.Type = base.RESOURCE_REPLACE
@@ -98,6 +98,75 @@ func (ri *ReplInterceptor) PostReplace(replaceCtx *base.ReplaceContext) {
 		go ri.sendToPeers(dataBuf, event, ri.peers)
 	} else {
 		log.Debugf("failed to store the generated create replication event [%#v]", err)
+	}
+}
+
+func (ri *ReplInterceptor) PostStoreSession(session *base.RbacSession, ssoSession bool, version string) {
+	event := base.ReplicationEvent{}
+	event.Version = version
+	event.DomainCode = ri.domainCode
+	event.Type = base.NEW_SESSION
+	event.NewSession = session
+	event.SsoSession = ssoSession
+
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the generated new session replication event [%#v]", err)
+	}
+}
+
+func (ri *ReplInterceptor) PostRevokeSession(jti string, version string) {
+	event := base.ReplicationEvent{}
+	event.Version = version
+	event.DomainCode = ri.domainCode
+	event.Type = base.REVOKE_SESSION
+	event.RevokedSessionId = jti
+
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the generated new session replication event [%#v]", err)
+	}
+}
+
+func (ri *ReplInterceptor) PostChangePassword(cpContext *base.ChangePasswordContext) {
+	// send the changed password hash as patch to avoid storing and transmitting the plaintext value
+	event := base.ReplicationEvent{}
+	event.Version = cpContext.Res.GetVersion()
+	event.DomainCode = ri.domainCode
+	event.Type = base.RESOURCE_PATCH
+	pr := fmt.Sprintf(`{"Operations":[{"op":"replace", "path": "password", "value":"%s"}]}`, cpContext.Res.GetAttr("password").GetSimpleAt().GetStringVal())
+	event.Data = []byte(pr)
+	event.PatchRid = cpContext.Rid
+	event.RtName = cpContext.Res.GetType().Name
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the generated changepassword replication event [%#v]", err)
+	}
+}
+
+func (ri *ReplInterceptor) PostDeleteSession(jti string, ssoSession bool, version string) {
+	event := base.ReplicationEvent{}
+	event.Version = version
+	event.DomainCode = ri.domainCode
+	event.Type = base.DELETE_SESSION
+	event.DeletedSessionId = jti
+	event.SsoSession = ssoSession
+
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the generated new session replication event [%#v]", err)
 	}
 }
 

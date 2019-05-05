@@ -164,16 +164,16 @@ func (osl *OauthSilo) _storeSessionUsingTx(bucketName []byte, idxBuckName []byte
 	idxBuck.Put(key, expTime)
 }
 
-func (osl *OauthSilo) RevokeOauthSession(session *base.RbacSession) {
+func (osl *OauthSilo) RevokeOauthSession(jti string) {
 	err := osl.db.Update(func(tx *bolt.Tx) error {
 		tBucket := tx.Bucket(BUC_REVOKED_OAUTH_SESSIONS)
 		now := time.Now().Unix()
-		key := []byte(session.Jti)
+		key := []byte(jti)
 
 		existing := tBucket.Get(key)
 		if len(existing) == 0 { // only revoke if it wasn't already
 			// AUDIT
-			osl.rvTokens[session.Jti] = true
+			osl.rvTokens[jti] = true
 			return tBucket.Put(key, utils.Itob(now))
 		}
 
@@ -184,10 +184,12 @@ func (osl *OauthSilo) RevokeOauthSession(session *base.RbacSession) {
 		log.Warningf("Failed to save revoked oauth session %s", err)
 		panic(err)
 	}
+
+	log.Debugf("successfully revoked the oauth session %s", jti)
 }
 
-func (osl *OauthSilo) IsRevokedSession(session *base.RbacSession) bool {
-	_, ok := osl.rvTokens[session.Jti]
+func (osl *OauthSilo) IsRevokedSession(jti string) bool {
+	_, ok := osl.rvTokens[jti]
 
 	return ok
 }

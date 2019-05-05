@@ -30,23 +30,24 @@ import (
 )
 
 type Provider struct {
-	ServerId      uint16
-	Schemas       map[string]*schema.Schema       // a map of Schema ID to Schema
-	RsTypes       map[string]*schema.ResourceType // a map of Name to ResourceTye
-	RtPathMap     map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
-	LdapTemplates map[string]*schema.LdapEntryTemplate
-	Config        *conf.DomainConfig
-	sl            *silo.Silo
-	layout        *Layout
-	Name          string // the domain name
-	Cert          *x509.Certificate
-	PrivKey       crypto.PrivateKey
-	immResIds     map[string]int // map of IDs of resources that cannot be deleted
-	domainCode    string
-	osl           *oauth.OauthSilo
-	interceptors  []base.Interceptor
-	Al            *AuditLogger
-	SamlMdCache   map[string]*samlTypes.SPSSODescriptor
+	ServerId        uint16
+	Schemas         map[string]*schema.Schema       // a map of Schema ID to Schema
+	RsTypes         map[string]*schema.ResourceType // a map of Name to ResourceTye
+	RtPathMap       map[string]*schema.ResourceType // a map of EndPoint to ResourceTye
+	LdapTemplates   map[string]*schema.LdapEntryTemplate
+	Config          *conf.DomainConfig
+	sl              *silo.Silo
+	layout          *Layout
+	Name            string // the domain name
+	Cert            *x509.Certificate
+	PrivKey         crypto.PrivateKey
+	immResIds       map[string]int // map of IDs of resources that cannot be deleted
+	domainCode      string
+	osl             *oauth.OauthSilo
+	interceptors    []base.Interceptor
+	Al              *AuditLogger
+	SamlMdCache     map[string]*samlTypes.SPSSODescriptor
+	replInterceptor *ReplInterceptor
 }
 
 const AdminGroupId = "01000000-0000-4000-4000-000000000000"
@@ -130,6 +131,7 @@ func NewProvider(layout *Layout, sc *conf.ServerConf, peers map[uint16]*base.Rep
 	replInterceptor.domainCode = prv.domainCode
 	replInterceptor.serverId = sc.ServerId
 	replInterceptor.webhookToken = sc.ReplWebHookToken
+	prv.replInterceptor = replInterceptor
 
 	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
 
@@ -617,18 +619,19 @@ func (prv *Provider) VerifyOtp(rid string, totpCode string, clientIP string) (lr
 	return lr
 }
 
-func (prv *Provider) ChangePassword(rid string, newPassword string, clientIP string) (user *base.Resource, err error) {
+func (prv *Provider) ChangePassword(cpContext *base.ChangePasswordContext) (err error) {
+	cpContext.HashAlgo = prv.Config.Ppolicy.PasswdHashAlgo
 	defer func() {
-		prv.Al.LogChangePasswd(rid, clientIP, user)
+		prv.Al.LogChangePasswd(cpContext.Rid, cpContext.ClientIP, cpContext.Res)
 	}()
 
-	user, err = prv.sl.ChangePassword(rid, newPassword, prv.Config.Ppolicy.PasswdHashAlgo)
+	err = prv.sl.ChangePassword(cpContext)
 
-	if err != nil {
-		log.Debugf("%s", err)
+	if err == nil {
+		prv.replInterceptor.PostChangePassword(cpContext)
 	}
 
-	return user, err
+	return err
 }
 
 func (prv *Provider) GetUserByName(username string) (res *base.Resource) {

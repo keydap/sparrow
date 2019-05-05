@@ -5,6 +5,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"os"
+	"sparrow/base"
 	"sparrow/client"
 	"sparrow/utils"
 	"testing"
@@ -215,6 +216,55 @@ var _ = Describe("testing replication", func() {
 			getResult := sclient.GetUser(uid)
 			Expect(getResult.StatusCode).To(Equal(200))
 			Expect(true).To(Equal(replaceResult.Rs.Equals(getResult.Rs)))
+		})
+		It("change password on master and check on slave", func() {
+			// this scenario can't be tested using client, http layer needs
+			// to be bypassed to invoke changepassword directly
+			userJson := createRandomUser()
+			result := mclient.AddUser(userJson)
+			username := result.Rs.GetAttr("username").GetSimpleAt().GetStringVal()
+			newPassword := "abcdefghijk"
+			mPr := master.providers[domainName]
+			cpCtx := &base.ChangePasswordContext{}
+			cpCtx.OpContext = &base.OpContext{ClientIP: "localhost"}
+			cpCtx.Rid = result.Rs.GetId()
+			cpCtx.NewPassword = newPassword
+			err := mPr.ChangePassword(cpCtx)
+			Expect(err).ToNot(HaveOccurred())
+			time.Sleep(1 * time.Second)
+			// login on the client with the new password to verify that changed password was replicated
+			tclient := client.NewSparrowClient(slave.homeUrl)
+			err = tclient.DirectLogin(username, newPassword, domainName)
+			Expect(err).ToNot(HaveOccurred())
+		})
+		It("create a new SSO session on master and check on slave", func() {
+			mPr := master.providers[domainName]
+			userJson := createRandomUser()
+			result := mclient.AddUser(userJson)
+			ssoSession, err := mPr.GenSessionForUserId(result.Rs.GetId())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ssoSession).ToNot(Equal(nil))
+			mPr.StoreSsoSession(ssoSession)
+			oauthSession, err := mPr.GenSessionForUserId(result.Rs.GetId())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(oauthSession).ToNot(Equal(nil))
+			mPr.StoreOauthSession(oauthSession)
+			time.Sleep(1 * time.Second)
+			sPr := slave.providers[domainName]
+			slaveSsoSession := sPr.GetSsoSession(ssoSession.Jti)
+			Expect(ssoSession.Jti).To(Equal(slaveSsoSession.Jti))
+			slaveOauthSession := sPr.GetOauthSession(oauthSession.Jti)
+			Expect(oauthSession.Jti).To(Equal(slaveOauthSession.Jti))
+
+			// revoke the oauth session and check on slave
+			mPr.RevokeOauthSession(&base.OpContext{}, oauthSession.Jti)
+			deletedSsoSessionResult := mPr.DeleteSsoSession(&base.OpContext{Session: ssoSession})
+			Expect(deletedSsoSessionResult).To(Equal(true))
+			time.Sleep(1 * time.Second)
+			revokedSessionStatus := sPr.IsRevokedSession(&base.OpContext{}, oauthSession.Jti)
+			Expect(revokedSessionStatus).To(Equal(true))
+			slaveSsoSession = sPr.GetSsoSession(ssoSession.Jti)
+			Expect(slaveSsoSession).To(BeNil())
 		})
 	})
 })

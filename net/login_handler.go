@@ -160,7 +160,12 @@ func (sp *Sparrow) verifyPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err := prv.ChangePassword(af.UserId, newPassword, utils.GetRemoteAddr(r))
+		cpCtx := &base.ChangePasswordContext{}
+		cpCtx.Rid = af.UserId
+		cpCtx.NewPassword = newPassword
+		cpCtx.OpContext = &base.OpContext{}
+		cpCtx.ClientIP = utils.GetRemoteAddr(r)
+		err := prv.ChangePassword(cpCtx)
 		if err != nil {
 			showChangePasswordPage(sp, w, paramMap)
 			return

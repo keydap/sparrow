@@ -172,18 +172,37 @@ func parseSsoAttributes(tmpResAt base.Attribute) map[string]*base.SsoAttr {
 }
 func (pr *Provider) StoreOauthSession(session *base.RbacSession) {
 	pr.osl.StoreOauthSession(session)
+	pr.replInterceptor.PostStoreSession(session, false, pr.sl.Csn().String())
 }
 
 func (pr *Provider) StoreSsoSession(session *base.RbacSession) {
 	pr.osl.StoreSsoSession(session)
+	pr.replInterceptor.PostStoreSession(session, true, pr.sl.Csn().String())
 }
 
-func (pr *Provider) RevokeOauthSession(ctx *base.OpContext, sessionToBeRevoked *base.RbacSession) {
-	pr.osl.RevokeOauthSession(sessionToBeRevoked)
+// intended for use by the replication-event-handler only
+func (pr *Provider) StoreReplSession(session *base.RbacSession, sso bool) {
+	if sso {
+		pr.osl.StoreSsoSession(session)
+	} else {
+		pr.osl.StoreOauthSession(session)
+	}
 }
 
-func (pr *Provider) IsRevokedSession(ctx *base.OpContext, session *base.RbacSession) bool {
-	return pr.osl.IsRevokedSession(session)
+func (pr *Provider) RevokeOauthSession(ctx *base.OpContext, jti string) {
+	pr.osl.RevokeOauthSession(jti)
+	pr.replInterceptor.PostRevokeSession(jti, pr.sl.Csn().String())
+}
+
+func (pr *Provider) RevokeReplSession(jti string, sso bool) {
+	if sso {
+	} else {
+		pr.osl.RevokeOauthSession(jti)
+	}
+}
+
+func (pr *Provider) IsRevokedSession(ctx *base.OpContext, jti string) bool {
+	return pr.osl.IsRevokedSession(jti)
 }
 
 func (pr *Provider) GetOauthSession(jti string) *base.RbacSession {
@@ -195,6 +214,7 @@ func (pr *Provider) GetSsoSession(jti string) *base.RbacSession {
 }
 
 func (pr *Provider) StoreGrantCodeId(creationTime int64, gcIvAsId []byte) (err error) {
+	// grant codes cannot be replicated, they depend on a key tied to the server instance
 	return pr.osl.StoreGrantCodeId(creationTime, gcIvAsId)
 }
 
@@ -203,14 +223,31 @@ func (pr *Provider) HasGrantCodeId(creationTime int64, gcIvAsId []byte) bool {
 }
 
 func (pr *Provider) DeleteOauthSession(opCtx *base.OpContext) bool {
-	deleted := pr.osl.DeleteOauthSession(opCtx.Session.Jti)
+	deleted := pr.DeleteReplSsoSessionById(opCtx.Session.Jti, false, false)
 	pr.Al.LogDelSession(opCtx, deleted)
 	return deleted
 }
 
 func (pr *Provider) DeleteSsoSession(opCtx *base.OpContext) bool {
-	deleted := pr.osl.DeleteSsoSession(opCtx.Session.Jti)
+	deleted := pr.DeleteReplSsoSessionById(opCtx.Session.Jti, true, false)
 	pr.Al.LogDelSession(opCtx, deleted)
+	return deleted
+}
+
+// only intended to be called directly by the replication event handler
+// all other calls should be from DeleteOauthSession or DeleteSsoSession
+func (pr *Provider) DeleteReplSsoSessionById(jti string, sso bool, repl bool) bool {
+	deleted := false
+	if sso {
+		deleted = pr.osl.DeleteSsoSession(jti)
+	} else {
+		deleted = pr.osl.DeleteOauthSession(jti)
+	}
+
+	if !repl && deleted {
+		pr.replInterceptor.PostDeleteSession(jti, sso, pr.sl.Csn().String())
+	}
+
 	return deleted
 }
 

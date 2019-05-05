@@ -67,6 +67,14 @@ type SearchContext struct {
 	*OpContext // the operation context
 }
 
+type ChangePasswordContext struct {
+	Rid         string
+	NewPassword string
+	HashAlgo    string
+	Res         *Resource
+	*OpContext  // the operation context
+}
+
 type ListResponse struct {
 	TotalResults int64
 	Resources    []*Resource
