@@ -23,7 +23,7 @@ func ParseResPerms(group *Resource, resTypes map[string]*schema.ResourceType) ma
 		permSubAts := perms.GetComplexAt().SubAts
 		// TODO avoid looping over all the perms once just for detecting a wildcard entry
 		for _, subAtMap := range permSubAts {
-			resNameAt := subAtMap["resname"]
+			resNameAt := subAtMap["value"] // resName is stored in the value attribute
 
 			resName := ""
 			if resNameAt != nil {
@@ -49,7 +49,7 @@ func ParseResPerms(group *Resource, resTypes map[string]*schema.ResourceType) ma
 		}
 
 		for _, subAtMap := range permSubAts {
-			resNameAt := subAtMap["resname"]
+			resNameAt := subAtMap["value"] // resName is stored in the value attribute
 
 			resName := ""
 			if resNameAt != nil {

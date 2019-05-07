@@ -231,7 +231,7 @@ func (prv *Provider) createDefaultResources(rfc2307i *Rfc2307BisAttrInterceptor)
 		adminGroup := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
 	                "id": "%s",
 				    "displayName": "%s",
-				    "permissions": [{"resName": "*", "opsArr" : "[{\"op\":\"read\",\"allowAttrs\": \"*\",\"filter\":\"ANY\"},{\"op\":\"write\",\"allowAttrs\":\"*\",\"filter\":\"ANY\"}]"}],
+				    "permissions": [{"value": "*", "opsArr" : "[{\"op\":\"read\",\"allowAttrs\": \"*\",\"filter\":\"ANY\"},{\"op\":\"write\",\"allowAttrs\":\"*\",\"filter\":\"ANY\"}]"}],
                    "members": [
                        {
                           "value": "%s"

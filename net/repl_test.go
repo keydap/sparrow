@@ -295,7 +295,7 @@ func createRandomUser() string {
 func createRandomGroup(members ...string) string {
 	tmpl := `{"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
 				    "displayName": "%s",
-				    "permissions": [{"resName": "*", "opsArr" : "[{\"op\":\"read\",\"allowAttrs\": \"*\",\"filter\":\"ANY\"}]"}],
+				    "permissions": [{"value": "*", "opsArr" : "[{\"op\":\"read\",\"allowAttrs\": \"*\",\"filter\":\"ANY\"}]"}],
                     "members": [ %s ]
 
              }`

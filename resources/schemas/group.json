@@ -74,7 +74,7 @@
             "required":false,
             "subAttributes":[
                 {
-                    "name":"resName",
+                    "name":"value",
                     "type":"string",
                     "multiValued":false,
                     "description":"Name of the resource type.",
