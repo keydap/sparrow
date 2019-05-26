@@ -3,8 +3,9 @@ package repl
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	bolt "github.com/coreos/bbolt"
-	"sparrow/base"
+	"net/http"
 )
 
 var (
@@ -44,7 +45,7 @@ func OpenReplProviderSilo(path string) (*ReplProviderSilo, error) {
 	return rl, nil
 }
 
-func (rpl *ReplProviderSilo) StoreEvent(event base.ReplicationEvent) (*bytes.Buffer, error) {
+func (rpl *ReplProviderSilo) StoreEvent(event ReplicationEvent) (*bytes.Buffer, error) {
 	tx, err := rpl.db.Begin(true)
 	if err != nil {
 		return nil, err
@@ -72,15 +73,21 @@ func (rpl *ReplProviderSilo) StoreEvent(event base.ReplicationEvent) (*bytes.Buf
 	return &buf, err
 }
 
-func (rpl *ReplProviderSilo) SendEventsAfter(csn string, target chan []byte) {
+func (rpl *ReplProviderSilo) SendEventsAfter(csn string, peer *ReplicationPeer, transport *http.Transport, serverId uint16, webhookToken string, domainCode string) (string, error) {
 	tx, err := rpl.db.Begin(true)
 	if err != nil {
-		target <- nil //TODO improve this to notify the caller about failure to open a read transaction
-		return
+		return "", err
 	}
 
+	if peer.catchingUpBacklog {
+		return "", fmt.Errorf("peer is already sending backlog events, try again later")
+	}
+
+	peer.lock.Lock()
+	peer.catchingUpBacklog = true
+
 	defer func() {
-		recover() // to recover when the channel is closed by the caller
+		peer.lock.Unlock()
 		tx.Rollback()
 	}()
 
@@ -88,9 +95,51 @@ func (rpl *ReplProviderSilo) SendEventsAfter(csn string, target chan []byte) {
 	buck := tx.Bucket(BUC_REPL_EVENTS)
 	cursor := buck.Cursor()
 	cursor.Seek(key)
+	lastSentVersion := ""
 	for k, v := cursor.Prev(); k != nil; k, v = cursor.Prev() {
-		target <- v
+		version := string(k)
+		err = peer._sendEvent(v, transport, serverId, webhookToken, domainCode, version)
+		if err != nil {
+			break
+		}
+		lastSentVersion = version
 	}
 
-	target <- nil
+	if err == nil {
+		peer.updatePendingVersionMap(domainCode, lastSentVersion)
+		peer.catchingUpBacklog = false
+	}
+	return lastSentVersion, err
+}
+
+func (rpl *ReplProviderSilo) _sendEventsWithoutLockAfter(csn string, peer *ReplicationPeer, transport *http.Transport, serverId uint16, webhookToken string, domainCode string) (string, error) {
+	tx, err := rpl.db.Begin(true)
+	if err != nil {
+		return "", err
+	}
+
+	peer.catchingUpBacklog = true
+
+	defer func() {
+		tx.Rollback()
+	}()
+
+	key := []byte(csn)
+	buck := tx.Bucket(BUC_REPL_EVENTS)
+	cursor := buck.Cursor()
+	cursor.Seek(key)
+	lastSentVersion := ""
+	for k, v := cursor.Prev(); k != nil; k, v = cursor.Prev() {
+		version := string(k)
+		err = peer._sendEvent(v, transport, serverId, webhookToken, domainCode, version)
+		if err != nil {
+			break
+		}
+		lastSentVersion = version
+	}
+
+	if err == nil {
+		peer.catchingUpBacklog = false
+	}
+	return lastSentVersion, err
 }

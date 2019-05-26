@@ -19,7 +19,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/provider"
 	"sparrow/repl"
@@ -67,7 +66,7 @@ type Sparrow struct {
 	listener  *net.TCPListener
 
 	rl    *repl.ReplSilo
-	peers map[uint16]*base.ReplicationPeer
+	peers map[uint16]*repl.ReplicationPeer
 
 	// Mutex to serialize updates to the domain configuration
 	dconfUpdateMutex sync.Mutex
@@ -100,7 +99,7 @@ func NewSparrowServer(homeDir string, overrideConf string) *Sparrow {
 	fmt.Println("Current working directory: ", cwd)
 
 	if len(sp.providers) == 0 {
-		sp.createDefaultDomain(sc.DomainsDir)
+		sp.createDefaultDomain()
 	}
 
 	if len(sp.providers) == 1 {
@@ -358,14 +357,23 @@ func (sp *Sparrow) loadProviders(domainsDir string) {
 	log.Infof("Loaded providers for %d domains", len(sp.providers))
 }
 
-func (sp *Sparrow) createDefaultDomain(domainsDir string) {
-	sc := sp.srvConf
-	log.Infof("Creating default domain")
-
-	defaultDomain := filepath.Join(domainsDir, "example.com")
-	layout, err := provider.NewLayout(defaultDomain, true)
+func (sp *Sparrow) createDefaultDomain() {
+	err := sp.createDomain("example.com")
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (sp *Sparrow) createDomain(domainName string) error {
+	domainName = strings.ToLower(domainName)
+	domainName = strings.TrimSpace(domainName)
+	log.Infof("Creating domain %s", domainName)
+	sc := sp.srvConf
+
+	defaultDomain := filepath.Join(sc.DomainsDir, domainName)
+	layout, err := provider.NewLayout(defaultDomain, true)
+	if err != nil {
+		return err
 	}
 
 	writeSchemas(layout.SchemaDir)
@@ -389,6 +397,8 @@ func (sp *Sparrow) createDefaultDomain(domainsDir string) {
 
 	sp.providers[layout.Name()] = prv
 	sp.dcPrvMap[prv.DomainCode()] = prv
+
+	return nil
 }
 
 func copyDir(src, dest string) {

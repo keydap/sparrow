@@ -60,7 +60,7 @@ func init() {
 	log = logger.GetLogger("sparrow.provider")
 }
 
-func NewProvider(layout *Layout, sc *conf.ServerConf, peers map[uint16]*base.ReplicationPeer) (prv *Provider, err error) {
+func NewProvider(layout *Layout, sc *conf.ServerConf, peers map[uint16]*repl.ReplicationPeer) (prv *Provider, err error) {
 	schemas, err := base.LoadSchemas(layout.SchemaDir)
 	if err != nil {
 		return nil, err
@@ -801,6 +801,10 @@ func (prv *Provider) UpdateTemplate(name string, data []byte) (t *template.Templ
 
 func (prv *Provider) AddAppToSsoSession(jti string, spIssuer string, sas base.SamlAppSession) {
 	prv.osl.AddAppToSsoSession(jti, spIssuer, sas)
+}
+
+func (prv *Provider) SendBacklogEvents(lastVersion string, peer *repl.ReplicationPeer) {
+	prv.replInterceptor.replSilo.SendEventsAfter(lastVersion, peer, prv.replInterceptor.transport, prv.ServerId, prv.replInterceptor.webhookToken, prv.domainCode)
 }
 
 func genDomainCode(name string) string {

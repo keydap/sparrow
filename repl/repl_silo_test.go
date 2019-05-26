@@ -6,7 +6,6 @@ import (
 	. "github.com/onsi/gomega"
 	"net/url"
 	"os"
-	"sparrow/base"
 	"sparrow/utils"
 	"testing"
 )
@@ -43,7 +42,7 @@ var _ = Describe("testing replication silo", func() {
 
 	Context("pending replication join peers", func() {
 		It("insert, get and delete", func() {
-			peer := base.JoinRequest{}
+			peer := JoinRequest{}
 			peer.WebHookToken = "abcd"
 			peer.ServerId = 1
 			peer.Host = "localhost"
@@ -74,7 +73,7 @@ var _ = Describe("testing replication silo", func() {
 
 	Context("replication peers", func() {
 		It("insert, get and delete", func() {
-			peer := &base.ReplicationPeer{}
+			peer := &ReplicationPeer{}
 			peer.WebHookToken = "abcd"
 			peer.ServerId = 1
 			peer.Url, _ = url.Parse("https://localhost:8080")
@@ -91,7 +90,7 @@ var _ = Describe("testing replication silo", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			fetchedPeer = sl.GetReplicationPeer(peer.ServerId)
-			var nilPeer *base.ReplicationPeer
+			var nilPeer *ReplicationPeer
 			Expect(fetchedPeer).To(Equal(nilPeer))
 		})
 	})

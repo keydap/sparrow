@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"sparrow/base"
 	"sparrow/provider"
+	"sparrow/repl"
 	"sparrow/utils"
 	"strconv"
 	"strings"
@@ -67,6 +68,9 @@ func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 	case "events":
 		handleEvents(w, r, sp)
 
+	case "fetchBacklog":
+		sendBacklogEvents(w, r, sp)
+
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("received path " + uri + " action " + action))
@@ -74,13 +78,13 @@ func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func receivedApproval(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
-	var joinResp base.JoinResponse
+	var joinResp repl.JoinResponse
 	err := parseJsonBody(w, r, &joinResp)
 	if err != nil {
 		return // error was already handled
 	}
 
-	var sentReq *base.JoinRequest
+	var sentReq *repl.JoinRequest
 	sent := sp.rl.GetSentJoinRequests()
 	for _, v := range sent {
 		if v.RequestId == joinResp.RequestId {
@@ -118,12 +122,12 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 		return
 	}
 
-	joinResp := base.JoinResponse{}
+	joinResp := repl.JoinResponse{}
 	joinResp.PeerServerId = sp.srvConf.ServerId
 	joinResp.ApprovedBy = opCtx.Session.Username
 	joinResp.PeerWebHookToken = sp.rl.WebHookToken
 	joinResp.RequestId = joinReq.RequestId
-	joinResp.PeerView = make([]base.ReplicationPeer, 0)
+	joinResp.PeerView = make([]repl.ReplicationPeer, 0)
 
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -153,16 +157,18 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 	log.Debugf("approved the server at %s to join the replication club", baseUrl)
 }
 
-func _storePeer(joinReq *base.JoinRequest, w http.ResponseWriter, sp *Sparrow, opCtx *base.OpContext) error {
+func _storePeer(joinReq *repl.JoinRequest, w http.ResponseWriter, sp *Sparrow, opCtx *base.OpContext) error {
 	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
 	log.Debugf("[%d] storing replication peer %s after sending approval", sp.srvConf.ServerId, baseUrl)
-	rp := &base.ReplicationPeer{}
+	rp := &repl.ReplicationPeer{}
 	rp.ServerId = joinReq.ServerId
 	rp.ApprovedBy = opCtx.Session.Username
 	rp.Domain = joinReq.Domain
 	rp.Url, _ = url.Parse(baseUrl + "/events")
 	rp.CreatedTime = utils.DateTimeMillis()
 	rp.WebHookToken = joinReq.WebHookToken
+	rp.LastVersions = make(map[string]string)
+	rp.PendingVersions = make(map[string]string)
 	err := sp.rl.AddReplicationPeer(rp)
 	if err != nil {
 		log.Warningf("%#v", err)
@@ -191,7 +197,7 @@ func rejectJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 }
 
 func addJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
-	var joinReq base.JoinRequest
+	var joinReq repl.JoinRequest
 
 	err := parseJsonBody(w, r, &joinReq)
 	if err != nil {
@@ -225,7 +231,7 @@ func sendJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 
 	host := strings.TrimSpace(r.Form.Get("host"))
 	portVal := r.Form.Get("port")
-	joinReq := base.JoinRequest{}
+	joinReq := repl.JoinRequest{}
 	port, err := strconv.Atoi(portVal)
 	if err != nil {
 		log.Debugf("%#v", err)
@@ -338,16 +344,18 @@ func parseJsonBody(w http.ResponseWriter, r *http.Request, v interface{}) error 
 	return nil
 }
 
-func _storePeerAfterReceivingApproval(joinReq *base.JoinRequest, joinResp *base.JoinResponse, w http.ResponseWriter, sp *Sparrow) error {
+func _storePeerAfterReceivingApproval(joinReq *repl.JoinRequest, joinResp *repl.JoinResponse, w http.ResponseWriter, sp *Sparrow) error {
 	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.PeerHost, joinReq.PeerPort)
 	log.Debugf("storing replication peer %s after receiving approval from server with Id %d ", baseUrl, joinResp.PeerServerId)
-	rp := &base.ReplicationPeer{}
+	rp := &repl.ReplicationPeer{}
 	rp.ServerId = joinResp.PeerServerId
 	rp.ApprovedBy = joinResp.ApprovedBy
 	rp.Domain = joinReq.Domain
 	rp.Url, _ = url.Parse(baseUrl + "/events")
 	rp.CreatedTime = utils.DateTimeMillis()
 	rp.WebHookToken = joinResp.PeerWebHookToken
+	rp.LastVersions = make(map[string]string)
+	rp.PendingVersions = make(map[string]string)
 	err := sp.rl.AddReplicationPeer(rp)
 	if err != nil {
 		log.Warningf("%#v", err)
