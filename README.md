@@ -17,9 +17,10 @@ And I want an identity server to have the ability to speak over HTTP directly wi
 4. Support for multiple domains
 5. A java client, see https://github.com/keydap/sparrow-client 
 6. Support for LDAP bind, unbind, search and password modify operations over startTLS.
+7. Multi-Master Replication
 
 ## Can I Use it in Production Environment?
-Not yet. We are aiming to make it production ready by Q4 2017.
+Not yet.
  
 ## What is Happening Right Now?
 1. Preparing for OpenIDConnect Certification
