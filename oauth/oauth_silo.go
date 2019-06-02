@@ -310,6 +310,7 @@ func (osl *OauthSilo) AddAppToSsoSession(jti string, spIssuer string, sas base.S
 func (osl *OauthSilo) Close() {
 	log.Infof("Closing token silo")
 	osl.db.Close()
+	osl.grantSilo.db.Close()
 	osl.db = nil
 	osl.rvTokens = nil
 }

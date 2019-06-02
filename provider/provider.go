@@ -16,6 +16,7 @@ import (
 	samlTypes "github.com/russellhaering/gosaml2/types"
 	"html/template"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sparrow/base"
@@ -181,6 +182,7 @@ func (pr *Provider) Close() {
 	pr.sl.Close()
 	pr.osl.Close()
 	pr.Al.Close()
+	pr.replInterceptor.replSilo.Close()
 }
 
 func (prv *Provider) createDefaultResources(rfc2307i *Rfc2307BisAttrInterceptor) error {
@@ -803,8 +805,12 @@ func (prv *Provider) AddAppToSsoSession(jti string, spIssuer string, sas base.Sa
 	prv.osl.AddAppToSsoSession(jti, spIssuer, sas)
 }
 
-func (prv *Provider) SendBacklogEvents(lastVersion string, peer *repl.ReplicationPeer) {
-	prv.replInterceptor.replSilo.SendEventsAfter(lastVersion, peer, prv.replInterceptor.transport, prv.ServerId, prv.replInterceptor.webhookToken, prv.domainCode)
+func (prv *Provider) WriteBacklogEvents(lastVersion string, peer *repl.ReplicationPeer, w http.ResponseWriter) {
+	prv.replInterceptor.replSilo.WriteBacklogEvents(lastVersion, peer, w, prv.domainCode)
+}
+
+func (prv *Provider) GetResourceInternal(rid string, rt *schema.ResourceType) (*base.Resource, error) {
+	return prv.sl.Get(rid, rt)
 }
 
 func genDomainCode(name string) string {

@@ -71,6 +71,9 @@ func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 	case "fetchBacklog":
 		sendBacklogEvents(w, r, sp)
 
+	case "fetchRes":
+		sendResourceAsEvent(w, r, sp)
+
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("received path " + uri + " action " + action))
@@ -164,7 +167,8 @@ func _storePeer(joinReq *repl.JoinRequest, w http.ResponseWriter, sp *Sparrow, o
 	rp.ServerId = joinReq.ServerId
 	rp.ApprovedBy = opCtx.Session.Username
 	rp.Domain = joinReq.Domain
-	rp.Url, _ = url.Parse(baseUrl + "/events")
+	rp.BaseUrl = baseUrl
+	rp.EventsUrl, _ = url.Parse(baseUrl + "/events")
 	rp.CreatedTime = utils.DateTimeMillis()
 	rp.WebHookToken = joinReq.WebHookToken
 	rp.LastVersions = make(map[string]string)
@@ -351,7 +355,8 @@ func _storePeerAfterReceivingApproval(joinReq *repl.JoinRequest, joinResp *repl.
 	rp.ServerId = joinResp.PeerServerId
 	rp.ApprovedBy = joinResp.ApprovedBy
 	rp.Domain = joinReq.Domain
-	rp.Url, _ = url.Parse(baseUrl + "/events")
+	rp.BaseUrl = baseUrl
+	rp.EventsUrl, _ = url.Parse(baseUrl + "/events")
 	rp.CreatedTime = utils.DateTimeMillis()
 	rp.WebHookToken = joinResp.PeerWebHookToken
 	rp.LastVersions = make(map[string]string)

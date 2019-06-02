@@ -79,7 +79,8 @@ type JoinResponse struct {
 
 type ReplicationPeer struct {
 	ServerId           uint16
-	Url                *url.URL
+	BaseUrl            string
+	EventsUrl          *url.URL
 	WebHookToken       string
 	ApprovedBy         string
 	Domain             string
@@ -122,7 +123,11 @@ func (peer *ReplicationPeer) SendEvent(eventData []byte, transport *http.Transpo
 		if err != nil {
 			return
 		}
-		updated := peer.updatePendingVersionMap(domainCode, lastSentVersion)
+		updated := false
+		if lastSentVersion != "" {
+			updated = peer.updatePendingVersionMap(domainCode, lastSentVersion)
+		}
+
 		if !updated {
 			return
 		}
@@ -160,14 +165,14 @@ func (peer *ReplicationPeer) _sendEvent(eventData []byte, transport *http.Transp
 	req.Header.Add(HEADER_X_WEBHOOK_TOKEN, webhookToken)
 
 	req.Body = ioutil.NopCloser(bytes.NewBuffer(eventData))
-	req.URL = peer.Url
+	req.URL = peer.EventsUrl
 	client := &http.Client{Transport: transport, Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Debugf("%#v", err)
 		peer.LastReqFailureTime = utils.DateTimeMillis()
 	} else if resp.StatusCode == 200 {
-		log.Debugf("successfully sent event with version %s to peer %d %s", version, serverId, peer.Url)
+		log.Debugf("successfully sent event with version %s to peer %d %s", version, serverId, peer.EventsUrl)
 		peer.LastVersions[domainCode] = version
 		peer.LastReqSentTime = utils.DateTimeMillis()
 	}

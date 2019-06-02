@@ -37,13 +37,20 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		return
 	}
 
+	err = processEvent(event, serverId, sp)
+	if err != nil {
+		writeError(w, err)
+	}
+}
+
+func processEvent(event repl.ReplicationEvent, serverId uint16, sp *Sparrow) error {
+	var err error
 	pr := sp.dcPrvMap[event.DomainCode]
 	// the provider might have been de-activated on this server
 	if pr == nil && event.Type != repl.NEW_DOMAIN {
 		msg := fmt.Sprintf("provider with domain code %s is not active", event.DomainCode)
 		log.Debugf(msg)
-		writeError(w, base.NewNotFoundError(msg))
-		return
+		return base.NewNotFoundError(msg)
 	}
 
 	switch event.Type {
@@ -97,7 +104,7 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	default:
 		msg := fmt.Sprintf("unknown event type %d (server ID %d)", event.Type, serverId)
 		log.Debugf(msg)
-		writeError(w, base.NewBadRequestError(msg))
+		err = base.NewBadRequestError(msg)
 	}
 
 	if err == nil {
@@ -106,6 +113,7 @@ func handleEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		log.Debugf("failed to save the replication event with ID %s", event.Version)
 	}
 
+	return nil // no error must be returned from here, either consume the event or discard it
 }
 
 func parseServerIdPeer(w http.ResponseWriter, r *http.Request, sp *Sparrow) (uint16, *repl.ReplicationPeer, error) {
@@ -146,12 +154,61 @@ func sendBacklogEvents(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		return // error was already handled
 	}
 
+	// write to w directly instead of sending async events, the caller's HTTP server won't be available yet
+	// during this call
 	for _, pr := range sp.providers {
 		lv, ok := peer.LastVersions[pr.DomainCode()]
 		if !ok {
 			// likely a new domain was created but not replicated, send all the events from the provider
 		} else {
-			go pr.SendBacklogEvents(lv, peer)
+			pr.WriteBacklogEvents(lv, peer, w)
 		}
 	}
+}
+
+func sendResourceAsEvent(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
+	_, _, err := parseServerIdPeer(w, r, sp)
+	if err != nil {
+		return // error was already handled
+	}
+
+	domainCode := r.Form.Get("dc")
+	pr := sp.dcPrvMap[domainCode]
+	if pr == nil {
+		msg := fmt.Sprintf("no provider found with the domain code %s", domainCode)
+		log.Debugf(msg)
+		writeError(w, base.NewBadRequestError(msg))
+		return
+	}
+
+	rtName := r.Form.Get("rt")
+	rt := pr.RsTypes[rtName]
+	if rt == nil {
+		msg := fmt.Sprintf("no resourcetype found with the name %s", rtName)
+		log.Debugf(msg)
+		writeError(w, base.NewBadRequestError(msg))
+		return
+	}
+
+	rid := r.Form.Get("rid")
+	res, err := pr.GetResourceInternal(rid, rt)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	event := repl.ReplicationEvent{}
+	event.Version = res.GetVersion()
+	event.CreatedRes = res
+	event.DomainCode = domainCode
+	event.Type = repl.RESOURCE_CREATE
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err = enc.Encode(event)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.Write(buf.Bytes())
 }

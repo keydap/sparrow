@@ -323,15 +323,15 @@ func (rl *ReplSilo) GetReplicationPeers() map[uint16]*ReplicationPeer {
 	var buf bytes.Buffer
 	dec := gob.NewDecoder(&buf)
 	for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-		var p *ReplicationPeer
+		var p ReplicationPeer
 		buf.Write(v)
-		err = dec.Decode(p)
+		err = dec.Decode(&p)
 		buf.Reset()
 		if err != nil {
 			log.Warningf("%#v", err)
 			continue
 		}
-		peers[p.ServerId] = p
+		peers[p.ServerId] = &p
 	}
 
 	return peers

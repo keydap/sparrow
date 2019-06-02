@@ -45,6 +45,11 @@ func OpenReplProviderSilo(path string) (*ReplProviderSilo, error) {
 	return rl, nil
 }
 
+func (rpl *ReplProviderSilo) Close() {
+	log.Infof("Closing replication preovider silo")
+	rpl.db.Close()
+}
+
 func (rpl *ReplProviderSilo) StoreEvent(event ReplicationEvent) (*bytes.Buffer, error) {
 	tx, err := rpl.db.Begin(true)
 	if err != nil {
@@ -106,9 +111,73 @@ func (rpl *ReplProviderSilo) SendEventsAfter(csn string, peer *ReplicationPeer, 
 	}
 
 	if err == nil {
-		peer.updatePendingVersionMap(domainCode, lastSentVersion)
+		if lastSentVersion != "" {
+			peer.updatePendingVersionMap(domainCode, lastSentVersion)
+		}
 		peer.catchingUpBacklog = false
 	}
+	return lastSentVersion, err
+}
+
+func (rpl *ReplProviderSilo) WriteBacklogEvents(csn string, peer *ReplicationPeer, w http.ResponseWriter, domainCode string) (string, error) {
+	tx, err := rpl.db.Begin(true)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return "", err
+	}
+
+	if peer.catchingUpBacklog {
+		w.WriteHeader(http.StatusTooManyRequests)
+		return "", fmt.Errorf("peer is already sending backlog events, try again later")
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return "", fmt.Errorf("writer interface is not a Flusher")
+	}
+
+	peer.lock.Lock()
+	peer.catchingUpBacklog = true
+
+	defer func() {
+		peer.lock.Unlock()
+		tx.Rollback()
+	}()
+
+	key := []byte(csn)
+	buck := tx.Bucket(BUC_REPL_EVENTS)
+	cursor := buck.Cursor()
+	log.Debugf("version => %s", csn)
+	for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
+		log.Debugf("%s", string(k))
+	}
+
+	k, v := cursor.Seek(key)
+	if bytes.Compare(k, key) == 0 {
+		k, v = cursor.Next()
+	}
+
+	lastSentVersion := ""
+	for ; k != nil; k, v = cursor.Next() {
+		version := string(k)
+		log.Debugf("****************************** %s", version)
+		_, err := w.Write(v)
+		flusher.Flush()
+		if err != nil {
+			break
+		}
+		lastSentVersion = version
+	}
+
+	if err == nil {
+		peer.updatePendingVersionMap(domainCode, lastSentVersion)
+		peer.catchingUpBacklog = false
+		//w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+	}
+
+	flusher.Flush()
 	return lastSentVersion, err
 }
 

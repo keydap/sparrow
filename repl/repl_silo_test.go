@@ -76,7 +76,7 @@ var _ = Describe("testing replication silo", func() {
 			peer := &ReplicationPeer{}
 			peer.WebHookToken = "abcd"
 			peer.ServerId = 1
-			peer.Url, _ = url.Parse("https://localhost:8080")
+			peer.EventsUrl, _ = url.Parse("https://localhost:8080")
 			peer.CreatedTime = utils.DateTimeMillis()
 			peer.LastReqSentTime = utils.DateTimeMillis()
 

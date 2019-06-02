@@ -112,6 +112,15 @@ func (sp *Sparrow) stopHttp() {
 	for _, pr := range sp.providers {
 		pr.Close()
 	}
+
+	for _, p := range sp.peers {
+		err := sp.rl.AddReplicationPeer(p)
+		if err != nil {
+			log.Warningf("%#v", err)
+		}
+	}
+
+	sp.rl.Close()
 	log.Debugf("Stopped HTTP server with id %d", sp.srvConf.ServerId)
 }
 

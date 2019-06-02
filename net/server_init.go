@@ -7,18 +7,22 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/gob"
 	"encoding/json"
 	"encoding/pem"
 	"flag"
 	"fmt"
 	"github.com/mholt/caddy"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"sparrow/base"
 	"sparrow/conf"
 	"sparrow/provider"
 	"sparrow/repl"
@@ -115,6 +119,9 @@ func (sp *Sparrow) Start() {
 	log.Debugf("Starting server...")
 	// TODO catch up with the peers first to bring self uptodate
 	// this way, no other peer during its startup will get a chance to connect to this server which is still playing catch-up
+	for _, p := range sp.peers {
+		fetchBacklog(p, sp)
+	}
 
 	if sp.srvConf.LdapEnabled {
 		err := sp.startLdap()
@@ -572,4 +579,67 @@ func genRandomServerId() uint16 {
 	id = uint16(randBytes[0])
 	id = id<<8 | uint16(randBytes[1])
 	return id
+}
+
+func fetchBacklog(peer *repl.ReplicationPeer, sp *Sparrow) {
+	serverId := sp.srvConf.ServerId
+	log.Infof("fetching backlog events from %d to %d", peer.ServerId, serverId)
+	req := &http.Request{}
+	req.Method = http.MethodGet
+	req.Header = http.Header{}
+	req.Header.Add("Content-Type", "application/octet-stream")
+	req.Header.Add(repl.HEADER_X_FROM_PEER_ID, fmt.Sprintf("%d", serverId))
+	req.Header.Add(repl.HEADER_X_WEBHOOK_TOKEN, sp.rl.WebHookToken)
+
+	req.URL, _ = url.Parse(peer.BaseUrl + "/fetchBacklog")
+	client := &http.Client{Transport: sp.srvConf.ReplTransport} // not specifying any timeout
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Debugf("failed to fetch the backlog entries from %d to %d [%#v]", peer.ServerId, serverId, err)
+	} else {
+		dec := gob.NewDecoder(resp.Body)
+		for {
+			var event repl.ReplicationEvent
+			err = dec.Decode(&event)
+			if err != nil {
+				if err == io.EOF {
+					resp.Body.Close()
+					break
+				}
+			}
+
+			if len(event.Version) > 0 { // do not precess until the event is fully read
+				log.Debugf(">>>>>>>>>> processing backlog event version %s", event.Version)
+				err = processEvent(event, serverId, sp)
+				// this can happen in a multi-peer situation where the total number of peers is > 2
+				if event.Type == repl.RESOURCE_PATCH {
+					if err != nil {
+						se, ok := err.(*base.ScimError)
+						if ok && se.Status == base.NotFound {
+							// fetch the resource from peer and insert and then re-apply the patch
+							req.URL, _ = url.Parse(peer.BaseUrl + "/fetchRes?rt=" + event.RtName + "&rid=" + event.PatchRid + "&dc=" + event.DomainCode)
+							resClient := &http.Client{Transport: sp.srvConf.ReplTransport} // not specifying any timeout
+							resResp, err := resClient.Do(req)
+							if err != nil {
+								resEventDec := gob.NewDecoder(resResp.Body)
+								var resEvent repl.ReplicationEvent
+								err = resEventDec.Decode(&resEvent)
+								if err != nil {
+									processEvent(resEvent, serverId, sp)
+									processEvent(event, serverId, sp)
+								}
+								resResp.Body.Close()
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if resp.StatusCode == 200 {
+			log.Debugf("successfully received all the backlog entries from %d to %d", peer.ServerId, serverId)
+		} else {
+			log.Warningf("failed to fetch all the backlog events received error code %d", resp.StatusCode)
+		}
+	}
 }

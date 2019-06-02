@@ -69,7 +69,7 @@ loop:
 			ctx.InRes = res
 			err := al.sl.InsertInternal(ctx)
 			if err != nil {
-				log.Warningf("failed to insert audit log event")
+				log.Warningf("failed to insert audit log event [%#v]", err)
 			}
 
 		case now := <-al.roller:
