@@ -121,7 +121,7 @@ func NewProvider(layout *Layout, sc *conf.ServerConf, peers map[uint16]*repl.Rep
 	}
 
 	replDataFilePath := filepath.Join(layout.DataDir, "repl-events.db")
-	replSilo, err := repl.OpenReplProviderSilo(replDataFilePath)
+	replSilo, err := repl.OpenReplProviderSilo(replDataFilePath, prv.Config.Replication.EventTtl, prv.Config.Replication.PurgeInterval)
 	if err != nil {
 		return nil, err
 	}

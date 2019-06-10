@@ -84,12 +84,13 @@ type ResourceConf struct {
 }
 
 type DomainConfig struct {
-	CsnGen     *base.CsnGenerator `json:"-"`
-	Scim       *ScimConfig        `json:"scim"`
-	Oauth      *OauthConfig       `json:"oauth"`
-	Ppolicy    *Ppolicy           `json:"ppolicy"`
-	Resources  []*ResourceConf    `json:"resources"`
-	Rfc2307bis *Rfc2307bis        `json:"rfc2307bis"`
+	CsnGen      *base.CsnGenerator `json:"-"`
+	Scim        *ScimConfig        `json:"scim"`
+	Oauth       *OauthConfig       `json:"oauth"`
+	Ppolicy     *PpolicyConfig     `json:"ppolicy"`
+	Resources   []*ResourceConf    `json:"resources"`
+	Rfc2307bis  *Rfc2307bis        `json:"rfc2307bis"`
+	Replication *ReplicationConfig `json:"replication"`
 }
 
 type Rfc2307bis struct {
@@ -100,11 +101,16 @@ type Rfc2307bis struct {
 	GidNumberStart      int64  `json:"gidNumberStart"`
 }
 
-type Ppolicy struct {
+type PpolicyConfig struct {
 	PasswdHashAlgo      string `json:"passwordHashAlgo" valid:"checkHashAlgo"`
 	PasswdMinLen        int    `json:"passwordMinLen"`
 	LockAccAfterNumFail int    `json:"lockAccAfterNumFail"`
 	UnlockAccAfterSec   int    `json:"unlockAccAfterSec"`
+}
+
+type ReplicationConfig struct {
+	EventTtl      int `json:"eventTtl"`      // the life of each event in seconds
+	PurgeInterval int `json:"purgeInterval"` // the interval(in seconds) at which the purging should repeat
 }
 
 type OauthConfig struct {
@@ -188,17 +194,22 @@ func DefaultDomainConfig() *DomainConfig {
 	oauthCf.GrantCodePurgeInterval = 5 * 60 // 5 minutes
 	oauthCf.GrantCodeMaxLife = 2 * 60       // 2 minutes
 
-	ppolicy := &Ppolicy{}
+	ppolicy := &PpolicyConfig{}
 	ppolicy.PasswdHashAlgo = "sha256"
 	ppolicy.LockAccAfterNumFail = 10
 	ppolicy.UnlockAccAfterSec = 600 // 10 minutes
 
 	rfc2307bis := &Rfc2307bis{Enabled: false, LoginShell: "/bin/bash", HomeDirectoryPrefix: "/home/", UidNumberStart: 200, GidNumberStart: 200}
 
+	replication := &ReplicationConfig{}
+	replication.EventTtl = 60 * 60 * 24 * 2      // 2 days
+	replication.PurgeInterval = 60 * 60 * 24 * 1 // 1 day
+
 	cf.Rfc2307bis = rfc2307bis
 	cf.Scim = scim
 	cf.Oauth = oauthCf
 	cf.Ppolicy = ppolicy
+	cf.Replication = replication
 
 	return cf
 }

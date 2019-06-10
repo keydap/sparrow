@@ -6,18 +6,24 @@ import (
 	"fmt"
 	bolt "github.com/coreos/bbolt"
 	"net/http"
+	"sparrow/base"
+	"time"
 )
 
 var (
 	// a bucket that holds the replication events
-	BUC_REPL_EVENTS = []byte("repl_events")
+	BUC_REPL_EVENTS      = []byte("repl_events")
+	defaultEventTtl      = 60 * 60 * 24 * 2 // 2 days
+	defaultPurgeInterval = 60 * 60 * 24 * 1 // 1 day
 )
 
 type ReplProviderSilo struct {
-	db *bolt.DB
+	db            *bolt.DB
+	eventTtl      int // the life of each event in seconds
+	purgeInterval int // the interval(in seconds) at which the purging should repeat
 }
 
-func OpenReplProviderSilo(path string) (*ReplProviderSilo, error) {
+func OpenReplProviderSilo(path string, eventTtl int, purgeInterval int) (*ReplProviderSilo, error) {
 	db, err := bolt.Open(path, 0644, nil)
 
 	if err != nil {
@@ -41,7 +47,23 @@ func OpenReplProviderSilo(path string) (*ReplProviderSilo, error) {
 	rl := &ReplProviderSilo{}
 	rl.db = db
 
+	if eventTtl <= 0 {
+		log.Warningf("invalid eventTtl %d is configured using the default value %d", eventTtl, defaultEventTtl)
+		eventTtl = defaultEventTtl
+	}
+
+	if purgeInterval <= 0 {
+		log.Warningf("invalid purgeInterval %d is configured using the default value %d", eventTtl, defaultPurgeInterval)
+		purgeInterval = defaultPurgeInterval
+	}
+
+	rl.eventTtl = eventTtl
+	rl.purgeInterval = purgeInterval
+
 	log.Debugf("opened replication provider silo")
+
+	go rl.removeExpiredEvents()
+
 	return rl, nil
 }
 
@@ -211,4 +233,54 @@ func (rpl *ReplProviderSilo) _sendEventsWithoutLockAfter(csn string, peer *Repli
 		peer.catchingUpBacklog = false
 	}
 	return lastSentVersion, err
+}
+
+func (rl *ReplProviderSilo) removeExpiredEvents() {
+	log.Debugf("Starting replication provider event log cleaner")
+	defer func() {
+		// this can happen when the silo gets closed
+		// but the goroutine is still executing
+		recover()
+		// do nothing
+	}()
+
+	sleepTime := time.Duration(rl.purgeInterval) * time.Second
+	if rl.eventTtl > rl.purgeInterval {
+		sleepTime = time.Duration(rl.eventTtl) * time.Second
+	}
+
+	for {
+		tx, err := rl.db.Begin(true)
+		if err != nil {
+			log.Warningf("Failed to open a transaction for removing expired replication events %s", err)
+			continue
+		}
+
+		gcBuck := tx.Bucket(BUC_REPL_EVENTS)
+
+		cursor := gcBuck.Cursor()
+
+		t := time.Now().UTC().Truncate(time.Duration(rl.eventTtl) * time.Second)
+		keyCsn := base.ToCsn(t, 0, 0, 0)
+		log.Debugf("searching key %d", t)
+		key := []byte(keyCsn)
+
+		for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
+			log.Debugf("deleting replication event with key %s", string(k))
+			if bytes.Compare(key, k) >= 0 {
+				err := gcBuck.Delete(k)
+				if err != nil {
+					log.Debugf("error prev key %#v", err)
+				}
+			} else {
+				// safe to break here cause keys are sorted
+				break
+			}
+		}
+
+		tx.Commit()
+
+		log.Debugf("grant code cleaner sleeping for %s", sleepTime)
+		time.Sleep(sleepTime)
+	}
 }

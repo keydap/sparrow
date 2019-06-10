@@ -9,7 +9,7 @@ import (
 )
 
 type PpolicyInterceptor struct {
-	Config *conf.Ppolicy
+	Config *conf.PpolicyConfig
 }
 
 func (pi *PpolicyInterceptor) PreCreate(crCtx *base.CreateContext) (err error) {

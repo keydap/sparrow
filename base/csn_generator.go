@@ -44,9 +44,12 @@ func (ci csnImpl) ModificationCount() uint32 {
 }
 
 func (ci csnImpl) String() string {
-	t := ci.now.Format(gtime_format)
+	return ToCsn(ci.now, ci.changeCount, ci.replicaId, ci.modCount)
+}
 
-	return fmt.Sprintf("%s#%06x#%04x#%06x", t, ci.changeCount, ci.replicaId, ci.modCount)
+func ToCsn(t time.Time, changeCount uint32, serverId uint16, modCount uint32) string {
+	timestamp := t.Format(gtime_format)
+	return fmt.Sprintf("%s#%06x#%04x#%06x", timestamp, changeCount, serverId, modCount)
 }
 
 func (ci csnImpl) DateTime() string {
