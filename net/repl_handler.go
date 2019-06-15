@@ -5,9 +5,11 @@ package net
 
 import (
 	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"github.com/asaskevich/govalidator"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -18,10 +20,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-func HandleReplEvent() {
-
-}
 
 func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 	conStatus := r.TLS
@@ -74,6 +72,9 @@ func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 	case "fetchRes":
 		sendResourceAsEvent(w, r, sp)
 
+	case "clonePeer":
+		sendCloneDataToPeer(w, r, sp)
+
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("received path " + uri + " action " + action))
@@ -103,7 +104,44 @@ func receivedApproval(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		return
 	}
 
-	_storePeerAfterReceivingApproval(sentReq, &joinResp, w, sp)
+	peer, err := _storePeerAfterReceivingApproval(sentReq, &joinResp, w, sp)
+	if err == nil {
+		w.WriteHeader(http.StatusOK)
+		if !sp.rl.IsCloned() {
+			req, _ := http.NewRequest(http.MethodPost, peer.BaseUrl+"/clonePeer", nil)
+			req.Header.Add("Content-Type", "application/octet-stream")
+			req.Header.Add(repl.HEADER_X_FROM_PEER_ID, fmt.Sprintf("%d", sp.srvConf.ServerId))
+			req.Header.Add(repl.HEADER_X_WEBHOOK_TOKEN, sp.rl.WebHookToken)
+
+			client := &http.Client{Transport: sp.srvConf.ReplTransport}
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Debugf("err right after sending clone request >> %#v", err)
+			}
+			dec := gob.NewDecoder(resp.Body)
+			for {
+				var event repl.ReplicationEvent
+				err = dec.Decode(&event)
+				if err != nil {
+					log.Debugf("err >> %#v", err)
+					if err == io.EOF {
+						resp.Body.Close()
+						break
+					}
+				}
+
+				if len(event.Version) > 0 { // do not precess until the event is fully read
+					log.Debugf(">>>>>>>>>> processing cloning event version %s", event.Version)
+					err = processEvent(event, sp.srvConf.ServerId, sp)
+					if err != nil {
+						log.Warningf("failed to process the event %s while cloning", event.Version)
+					}
+				}
+			}
+
+			sp.rl.SetClonedFrom(peer.ServerId)
+		}
+	}
 }
 
 func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
@@ -125,6 +163,17 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 		return
 	}
 
+	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
+
+	// first store the peer
+	err = _storePeer(joinReq, w, sp, opCtx)
+	if err != nil {
+		log.Debugf(err.Error())
+		writeError(w, err)
+		return
+	}
+	log.Debugf("approved the server at %s to join the replication club", baseUrl)
+
 	joinResp := repl.JoinResponse{}
 	joinResp.PeerServerId = sp.srvConf.ServerId
 	joinResp.ApprovedBy = opCtx.Session.Username
@@ -135,8 +184,6 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.Encode(joinResp)
-
-	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
 
 	approveReq, _ := http.NewRequest(http.MethodPost, baseUrl+"/approve", ioutil.NopCloser(&buf))
 	approveReq.Header.Add("Content-Type", "application/json")
@@ -150,14 +197,13 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 	}
 
 	if resp.StatusCode != 200 {
+		// remove the stored peer
+		sp.rl.DeleteReplicationPeer(joinReq.ServerId)
 		err = base.NewFromHttpResp(resp)
 		log.Debugf("%#v", err)
 		writeError(w, err)
 		return
 	}
-
-	err = _storePeer(joinReq, w, sp, opCtx)
-	log.Debugf("approved the server at %s to join the replication club", baseUrl)
 }
 
 func _storePeer(joinReq *repl.JoinRequest, w http.ResponseWriter, sp *Sparrow, opCtx *base.OpContext) error {
@@ -348,7 +394,7 @@ func parseJsonBody(w http.ResponseWriter, r *http.Request, v interface{}) error 
 	return nil
 }
 
-func _storePeerAfterReceivingApproval(joinReq *repl.JoinRequest, joinResp *repl.JoinResponse, w http.ResponseWriter, sp *Sparrow) error {
+func _storePeerAfterReceivingApproval(joinReq *repl.JoinRequest, joinResp *repl.JoinResponse, w http.ResponseWriter, sp *Sparrow) (*repl.ReplicationPeer, error) {
 	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.PeerHost, joinReq.PeerPort)
 	log.Debugf("storing replication peer %s after receiving approval from server with Id %d ", baseUrl, joinResp.PeerServerId)
 	rp := &repl.ReplicationPeer{}
@@ -365,9 +411,9 @@ func _storePeerAfterReceivingApproval(joinReq *repl.JoinRequest, joinResp *repl.
 	if err != nil {
 		log.Warningf("%#v", err)
 		writeError(w, base.NewInternalserverError(err.Error()))
-		return err
+		return nil, err
 	}
 
 	sp.peers[joinResp.PeerServerId] = rp
-	return nil
+	return rp, nil
 }

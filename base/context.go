@@ -44,6 +44,7 @@ type ReplaceContext struct {
 	Rt          *schema.ResourceType
 	Res         *Resource // the resource after replacing
 	Repl        bool
+	Cloning     bool
 	ReplVersion string
 	*OpContext  // the operation context
 }

@@ -13,6 +13,8 @@ import (
 // while following the interaction, in reality they both are peers
 const masterHome string = "/tmp/master"
 const slaveHome string = "/tmp/slave"
+const seconSlaveHome string = "/tmp/secondslave"
+
 const masterConf string = `{
 	"serverId": 1,
     "enableHttps" : true,
@@ -42,6 +44,21 @@ const slaveConf string = `{
 	"skipPeerCertCheck": true
 }`
 
+const secondSlaveConf string = `{
+	"serverId": 3,
+    "enableHttps" : true,
+    "httpPort" : 2090,
+    "ldapPort" : 2092,
+	"ldapEnabled" : true,
+    "ldapOverTlsOnly" : true,
+    "ipAddress" : "0.0.0.0",
+    "certificateFile": "default.cer",
+    "privatekeyFile": "default.key",
+	"controllerDomain": "example.com",
+	"defaultDomain": "example.com",
+	"skipPeerCertCheck": true
+}`
+
 var master *Sparrow
 var slave *Sparrow
 var mclient *client.SparrowClient
@@ -51,6 +68,7 @@ var domainName string
 func initPeers() {
 	os.RemoveAll(masterHome)
 	os.RemoveAll(slaveHome)
+	os.RemoveAll(seconSlaveHome)
 
 	master = NewSparrowServer(masterHome, masterConf)
 	slave = NewSparrowServer(slaveHome, slaveConf)
@@ -128,4 +146,22 @@ func createRandomGroup(members ...string) string {
 
 	groupname := utils.NewRandShaStr()[0:7]
 	return fmt.Sprintf(tmpl, groupname, memberAt)
+}
+
+func checkReplicatedResources(srcClient *client.SparrowClient, targetClient *client.SparrowClient) {
+	for _, rt := range srcClient.ResTypes {
+		// audit events are not replicated
+		if rt.Name == "AuditEvent" {
+			continue
+		}
+
+		sr := srcClient.GetAll(rt)
+		Expect(sr.StatusCode).To(Equal(200))
+		for _, srcRs := range sr.Resources {
+			cr := targetClient.GetResource(srcRs.GetId(), srcRs.GetType())
+			Expect(cr.StatusCode).To(Equal(200))
+			log.Debugf("%s = %s", srcRs.GetId(), cr.Rs.GetId())
+			Expect(srcRs.GetVersion()).To(Equal(cr.Rs.GetVersion()))
+		}
+	}
 }

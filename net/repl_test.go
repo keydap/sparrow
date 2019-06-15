@@ -280,6 +280,27 @@ func stop_slave_inject_and_modify_on_master_and_start_slave_then_check() {
 	})
 }
 
+func start_second_slave_and_clone() {
+	secondSlave := NewSparrowServer(seconSlaveHome, secondSlaveConf)
+	go secondSlave.Start()
+	time.Sleep(2 * time.Second)
+
+	secondSclient := client.NewSparrowClient(secondSlave.homeUrl)
+	secondSclient.DirectLogin("admin", "secret", domainName)
+	err := secondSclient.MakeSchemaAware()
+	Expect(err).ToNot(HaveOccurred())
+
+	injectUsers(mclient, 10) // inject 10 more entries in master server
+
+	result := secondSclient.SendJoinReq("localhost", master.srvConf.HttpPort)
+	Expect(result.StatusCode).To(Equal(200))
+	result = mclient.ApproveJoinReq(secondSlave.srvConf.ServerId)
+	Expect(result.StatusCode).To(Equal(200))
+
+	time.Sleep(2 * time.Second)
+	checkReplicatedResources(mclient, secondSclient)
+}
+
 var _ = Describe("testing replication", func() {
 	BeforeSuite(createClients)
 	AfterSuite(func() {
@@ -301,5 +322,8 @@ var _ = Describe("testing replication", func() {
 		It("join and approve", joinAndApprove)
 		It("stop slave inject on master start slave then check", stop_slave_inject_on_master_start_slave_then_check)
 		It("stop slave inject and modify on master and start slave then check", stop_slave_inject_and_modify_on_master_and_start_slave_then_check)
+	})
+	Context("testing server cloning", func() {
+		It("start second slave and clone", start_second_slave_and_clone)
 	})
 })

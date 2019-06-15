@@ -54,6 +54,7 @@ type ReplicationEvent struct {
 	NewPassword      string
 	HashAlgo         string
 	NewDomainName    string
+	Cloning          bool // flag to indicate that this was generated as part of clone operation
 }
 
 type JoinRequest struct {
@@ -92,6 +93,22 @@ type ReplicationPeer struct {
 	lock               sync.Mutex
 	pendingVersionLock sync.Mutex
 	catchingUpBacklog  bool
+}
+
+func (peer *ReplicationPeer) IsBusy() bool {
+	return peer.catchingUpBacklog
+}
+
+func (peer *ReplicationPeer) BeginRebase() {
+	peer.lock.Lock()
+	peer.catchingUpBacklog = true
+	peer.lock.Unlock()
+}
+
+func (peer *ReplicationPeer) EndRebase() {
+	peer.lock.Lock()
+	peer.catchingUpBacklog = false
+	peer.lock.Unlock()
 }
 
 func (peer *ReplicationPeer) SendEvent(eventData []byte, transport *http.Transport, serverId uint16, webhookToken string, domainCode string, version string, replSilo *ReplProviderSilo) {

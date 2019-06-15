@@ -1165,9 +1165,11 @@ func (sl *Silo) Replace(replaceCtx *base.ReplaceContext) (err error) {
 	}
 
 	if replaceCtx.Repl {
-		curVersion := existing.GetVersion()
-		if strings.Compare(curVersion, replaceCtx.ReplVersion) > 0 {
-			return fmt.Errorf("replication event is older than the current version %s of the target resource %s, aborting replace", curVersion, rid)
+		if !replaceCtx.Cloning {
+			curVersion := existing.GetVersion()
+			if strings.Compare(curVersion, replaceCtx.ReplVersion) > 0 {
+				return fmt.Errorf("replication event is older than the current version %s of the target resource %s, aborting replace", curVersion, rid)
+			}
 		}
 	} else if strings.Compare(existing.GetVersion(), version) != 0 {
 		msg := fmt.Sprintf("The given version %s of the resource %s doesn't match with stored version", version, rid)
@@ -1600,6 +1602,49 @@ func (sl *Silo) FindResources(filter *base.FilterNode, rt *schema.ResourceType) 
 	}
 
 	return results
+}
+
+func (sl *Silo) ReadAllOfType(rt *schema.ResourceType, outPipe chan *base.Resource) error {
+	tx, err := sl.db.Begin(false)
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+			if log.IsDebugEnabled() {
+				log.Debugf("Error while reading resources of type %s [%#v]", rt.Name, err.Error())
+				debug.PrintStack()
+			}
+		}
+
+		close(outPipe)
+		tx.Rollback()
+	}()
+
+	log.Debugf("Reading all resources of type %s", rt.Name)
+	buc := tx.Bucket(sl.resources[rt.Name])
+	cursor := buc.Cursor()
+
+	for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+		reader := bytes.NewReader(v)
+		decoder := gob.NewDecoder(reader)
+
+		if v != nil {
+			var rs *base.Resource
+			err = decoder.Decode(&rs)
+			if err != nil {
+				panic(err)
+			}
+
+			rs.SetSchema(rt)
+			outPipe <- rs
+		}
+	}
+
+	return nil
 }
 
 func (sl *Silo) LoadGroups() {

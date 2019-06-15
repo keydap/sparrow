@@ -43,6 +43,15 @@ type Result struct {
 	Rs         *base.Resource
 }
 
+type SearchResult struct {
+	StatusCode   int
+	ErrorMsg     string
+	TotalResults int `json:"totalResults"`
+	Resources    []*base.Resource
+	StartIndex   int `json:"startIndex"`
+	ItemsPerPage int `json:"itemsPerPage"`
+}
+
 func NewSparrowClient(baseUrl string) *SparrowClient {
 	client := &SparrowClient{}
 	tlsConf := &tls.Config{InsecureSkipVerify: true}
@@ -293,4 +302,53 @@ func (scl *SparrowClient) ParseResource(data []byte) (*base.Resource, error) {
 	}
 
 	return base.ParseResource(scl.ResTypes, scl.Schemas, ioutil.NopCloser(bytes.NewBuffer(data)))
+}
+
+func (scl *SparrowClient) GetAll(rt *schema.ResourceType) SearchResult {
+	req, _ := http.NewRequest(http.MethodGet, scl.baseUrl+"/v2"+rt.Endpoint, nil)
+	scl.addRequiredHeaders(req)
+
+	result := scl.sendReq(req)
+	sr := SearchResult{}
+
+	sr.StatusCode = result.StatusCode
+	sr.ErrorMsg = result.ErrorMsg
+
+	if result.StatusCode == http.StatusOK {
+		var m map[string]interface{}
+		err := json.Unmarshal(result.Data, &m)
+		if err != nil {
+			sr.ErrorMsg = err.Error()
+		} else {
+			i, _ := strconv.ParseInt(fmt.Sprint(m["totalResults"]), 10, 64)
+			sr.TotalResults = int(i)
+
+			i, _ = strconv.ParseInt(fmt.Sprint(m["startIndex"]), 10, 64)
+			sr.StartIndex = int(i)
+
+			i, _ = strconv.ParseInt(fmt.Sprint(m["itemsPerPage"]), 10, 64)
+			sr.ItemsPerPage = int(i)
+
+			ri := m["Resources"]
+			if ri != nil {
+				arr, ok := ri.([]interface{})
+				if !ok {
+					panic("expected an array of resources")
+				}
+
+				sr.Resources = make([]*base.Resource, 0)
+				for _, v := range arr {
+					rsBytes, _ := json.Marshal(v)
+					rs, err := base.ParseResource(scl.ResTypes, scl.Schemas, ioutil.NopCloser(bytes.NewBuffer(rsBytes)))
+					if err != nil {
+						panic(err)
+					}
+
+					sr.Resources = append(sr.Resources, rs)
+				}
+			}
+		}
+	}
+
+	return sr
 }

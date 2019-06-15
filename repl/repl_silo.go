@@ -13,8 +13,10 @@ var (
 	BUC_SENT_JOIN_REQUESTS     = []byte("sent_join_requests")
 	BUC_RECEIVED_JOIN_REQUESTS = []byte("received_join_requests")
 	BUC_PEERS                  = []byte("peers")
-	BUC_SELF_WEBHOOK_TOKEN     = []byte("self_webhook_token")
+	BUC_SELF_STATE             = []byte("self_state")
 	keySelfWebHookToken        = []byte("selfWebhookToken")
+	keyClonedFrom              = []byte("clonedFrom")
+	keyClonedAt                = []byte("clonedAt")
 )
 var log logger.Logger
 
@@ -24,7 +26,9 @@ func init() {
 
 type ReplSilo struct {
 	db           *bolt.DB
-	WebHookToken string // webook token of this server
+	WebHookToken string // webhook token of this server
+	clonedFrom   uint16
+	clonedAt     int64
 }
 
 func OpenReplSilo(path string) (*ReplSilo, error) {
@@ -35,6 +39,8 @@ func OpenReplSilo(path string) (*ReplSilo, error) {
 	}
 
 	token := ""
+	var clonedFrom uint16
+	var clonedAt int64
 	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(BUC_SENT_JOIN_REQUESTS)
 		if err != nil {
@@ -51,7 +57,7 @@ func OpenReplSilo(path string) (*ReplSilo, error) {
 			return err
 		}
 
-		buck, err := tx.CreateBucketIfNotExists(BUC_SELF_WEBHOOK_TOKEN)
+		buck, err := tx.CreateBucketIfNotExists(BUC_SELF_STATE)
 		if err != nil {
 			return err
 		}
@@ -63,6 +69,17 @@ func OpenReplSilo(path string) (*ReplSilo, error) {
 		} else {
 			token = string(data)
 		}
+
+		data = buck.Get(keyClonedFrom)
+		if data != nil {
+			clonedFrom = utils.BtoUint16(data)
+		}
+
+		data = buck.Get(keyClonedAt)
+		if data != nil {
+			clonedAt = utils.Btoi(data)
+		}
+
 		return nil
 	})
 
@@ -74,9 +91,44 @@ func OpenReplSilo(path string) (*ReplSilo, error) {
 	rl := &ReplSilo{}
 	rl.db = db
 	rl.WebHookToken = token
+	rl.clonedFrom = clonedFrom
+	rl.clonedAt = clonedAt
 
 	log.Debugf("opened replication silo")
 	return rl, nil
+}
+
+func (rl *ReplSilo) IsCloned() bool {
+	return rl.clonedFrom != 0
+}
+
+func (rl *ReplSilo) SetClonedFrom(serverId uint16) error {
+	tx, err := rl.db.Begin(true)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil || err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	buck := tx.Bucket(BUC_SELF_STATE)
+	err = buck.Put(keyClonedFrom, utils.Uint16tob(serverId))
+	t := utils.DateTimeMillis()
+	if err == nil {
+		err = buck.Put(keyClonedAt, utils.Itob(t))
+	}
+
+	if err == nil {
+		rl.clonedFrom = serverId
+		rl.clonedAt = t
+		tx.Commit()
+	}
+
+	return err
 }
 
 func (rl *ReplSilo) AddSentJoinReq(req JoinRequest) error {

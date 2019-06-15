@@ -68,7 +68,7 @@ func OpenReplProviderSilo(path string, eventTtl int, purgeInterval int) (*ReplPr
 }
 
 func (rpl *ReplProviderSilo) Close() {
-	log.Infof("Closing replication preovider silo")
+	log.Infof("Closing replication provider silo")
 	rpl.db.Close()
 }
 

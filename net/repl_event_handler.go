@@ -7,7 +7,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sparrow/base"
+	"sparrow/provider"
 	"sparrow/repl"
+	"sparrow/schema"
 	"strconv"
 	"strings"
 )
@@ -56,10 +58,15 @@ func processEvent(event repl.ReplicationEvent, serverId uint16, sp *Sparrow) err
 	switch event.Type {
 	case repl.RESOURCE_CREATE:
 		rs := event.CreatedRes
-		rs.SetSchema(pr.RsTypes[rs.TypeName])
+		rt := pr.RsTypes[rs.TypeName]
+		rs.SetSchema(rt)
 		crCtx := &base.CreateContext{Repl: true}
 		crCtx.InRes = rs
 		err = pr.CreateResource(crCtx)
+		if err != nil && event.Cloning {
+			replaceCtx := &base.ReplaceContext{InRes: rs, Rt: rt, Repl: true, Cloning: event.Cloning, ReplVersion: event.Version}
+			err = pr.Replace(replaceCtx)
+		}
 
 	case repl.RESOURCE_PATCH:
 		rt := pr.RsTypes[event.RtName]
@@ -211,4 +218,82 @@ func sendResourceAsEvent(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 	}
 
 	w.Write(buf.Bytes())
+}
+
+func sendCloneDataToPeer(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
+	_, peer, err := parseServerIdPeer(w, r, sp)
+	if err != nil {
+		return // error was already handled
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		err = fmt.Errorf("writer interface is not a Flusher")
+		writeError(w, err)
+		return
+	}
+
+	if peer.IsBusy() {
+		w.WriteHeader(http.StatusTooManyRequests)
+		log.Debugf("peer %d is already receiving events, try again later", peer.ServerId)
+		return
+	}
+
+	peer.BeginRebase()
+	defer peer.EndRebase()
+
+	for _, pr := range sp.providers {
+		event := repl.ReplicationEvent{}
+		event.DomainCode = pr.DomainCode()
+		event.Type = repl.RESOURCE_CREATE
+		event.Cloning = true
+
+		// users and groups must be sent in sequence
+		// so that the data need not be sorted based on the creation time
+		// and also the groups' can perfectly link their members
+		rt := pr.RsTypes["User"]
+		sendCloneData(pr, w, flusher, event, rt)
+		rt = pr.RsTypes["Group"]
+		sendCloneData(pr, w, flusher, event, rt)
+
+		for _, rt := range pr.RsTypes {
+			// do not replicate audit events
+			if rt.Name == "AuditEvent" || rt.Name == "User" || rt.Name == "Group" {
+				continue
+			}
+			sendCloneData(pr, w, flusher, event, rt)
+		}
+	}
+
+	log.Debugf("******* final flush after sending cloned data")
+	flusher.Flush()
+}
+
+func sendCloneData(pr *provider.Provider, w http.ResponseWriter, flusher http.Flusher, partialEvent repl.ReplicationEvent, rt *schema.ResourceType) {
+	outPipe := make(chan *base.Resource)
+	go pr.ReadAllInternal(rt, outPipe)
+
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+
+	for res := range outPipe {
+		buf.Reset()
+		partialEvent.Version = res.GetVersion()
+		partialEvent.CreatedRes = res
+		err := enc.Encode(&partialEvent)
+		if err != nil {
+			log.Debugf("sending error >> %#v", err)
+			writeError(w, err)
+			close(outPipe)
+			break
+		}
+
+		log.Debugf("sending >> %s", res.GetId())
+		data := buf.Bytes()
+		i, err := w.Write(data)
+		if err != nil {
+			log.Debugf("%d, %#v", i, err)
+		}
+		flusher.Flush()
+	}
 }

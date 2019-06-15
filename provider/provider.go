@@ -813,6 +813,10 @@ func (prv *Provider) GetResourceInternal(rid string, rt *schema.ResourceType) (*
 	return prv.sl.Get(rid, rt)
 }
 
+func (prv *Provider) ReadAllInternal(rt *schema.ResourceType, outPipe chan *base.Resource) error {
+	return prv.sl.ReadAllOfType(rt, outPipe)
+}
+
 func genDomainCode(name string) string {
 	sh2 := sha256.New()
 	sh2.Write([]byte(name))
