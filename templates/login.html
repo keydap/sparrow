@@ -27,4 +27,36 @@
         </form>
     </div>
 </body>
+<script type="application/javascript">
+    if (!window.PublicKeyCredential) {
+        console.log("useragent does not support Webauthn")
+        alert("useragent does not support Webauthn")
+    }
+
+    function doPubKeyAuth(authReq) {
+        var creds = new Array()
+        for (var i = 0; i < authReq.credIds.length; i++) {
+            var buf = Uint8Array.from(window.atob(authReq.credIds[i]), c => c.charCodeAt(0))
+            var c = {
+                id: buf.slice(1),
+                type: "public-key"
+            }
+            creds.push(c)
+        }
+        var publicKey = {
+            allowCredentials: creds,
+            challenge: Uint8Array.from(window.atob(authReq.challenge), c => c.charCodeAt(0)),
+            //rpId : authReq.rpId
+            timeout: authReq.timeout,
+            userVerification: authReq.userVerification
+        }
+
+        navigator.credentials.get({publicKey})
+            .then(function (authResp) {
+                console.log(authResp)
+            }).catch(function (err) {
+            console.log(err)
+        });
+    }
+</script>
 </html>
