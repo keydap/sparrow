@@ -30,6 +30,11 @@ type AuthData struct {
 	FLoginCount int
 }
 
+type SecurityKey struct {
+	Id string
+	Fmt string
+}
+
 type LoginResult struct {
 	User   *Resource // user is non-nil only if the authentication is successful
 	Id     string    // user resource's ID will always be present unless the user is not found
