@@ -141,6 +141,8 @@ func (sp *Sparrow) setup(c *caddy.Controller) error {
 	scimRouter.HandleFunc("/directLogin", sp.directLogin).Methods("POST")
 	//scimRouter.HandleFunc("/revoke", handleRevoke).Methods("DELETE")
 	scimRouter.HandleFunc("/Me", sp.selfServe).Methods("GET")
+	scimRouter.HandleFunc("/pubkeyOptions", sp.pubKeyOptions).Methods("GET")
+	scimRouter.HandleFunc("/registerPubkey", sp.registerPubKey).Methods("POST").Queries("a", "c")
 	scimRouter.HandleFunc("/logout", sp.handleLogout).Methods("POST")
 
 	// generic service provider methods
@@ -846,21 +848,24 @@ func (sp *Sparrow) selfServe(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		getCtx := &base.GetContext{}
-		getCtx.OpContext = opCtx
 		ses := opCtx.Session
-		getCtx.Rid = ses.Sub
-		getCtx.Rt = pr.RsTypes["User"]
-		user, err := pr.GetResource(getCtx)
+		user, err := pr.GetUserById(opCtx.Session.Sub)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
 
-		attrs := parseAttrParam("*", getCtx.Rt)
+		rt := pr.RsTypes["User"]
+		attrs := parseAttrParam("*", rt)
 		jsonMap := user.ToJsonObject(attrs)
 		jsonMap["perms"] = ses.EffPerms
 		jsonMap["domain"] = ses.Domain
+
+		keys := user.AuthData.Skeys
+		if keys == nil {
+			keys = make([]*base.SecurityKey, 0)
+		}
+		jsonMap["securityKeys"] = keys
 
 		apps := make([]map[string]string, 0) // an array of allowed apps for this user, each map holds application name, home page URL and icon
 

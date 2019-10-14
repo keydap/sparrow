@@ -31,3 +31,6 @@ go get github.com/mholt/caddy
 # Ginkgo test framework
 go get github.com/onsi/ginkgo/ginkgo
 go get github.com/onsi/gomega/...
+
+# COSE for webauthn
+go get -u go.mozilla.org/cose

@@ -817,6 +817,22 @@ func (prv *Provider) ReadAllInternal(rt *schema.ResourceType, outPipe chan *base
 	return prv.sl.ReadAllOfType(rt, outPipe)
 }
 
+func (prv *Provider) GenWebauthnIdFor(userId string) (string, error) {
+	wid, err := prv.sl.GenWebauthnIdFor(userId)
+	// prv.replInterceptor.PostAuthDataUpdate()
+	return wid, err
+}
+
+func (prv *Provider) GetUserByWebauthnId(webauthnId string) (*base.Resource, error) {
+	return prv.sl.GetUserByWebauthnId(webauthnId)
+}
+
+func (prv *Provider) StoreSecurityKey(rid string, secKey *base.SecurityKey) error {
+	err := prv.sl.StoreSecurityKey(rid, secKey)
+	// prv.replInterceptor.PostAuthDataUpdate()
+	return err
+}
+
 func genDomainCode(name string) string {
 	sh2 := sha256.New()
 	sh2.Write([]byte(name))

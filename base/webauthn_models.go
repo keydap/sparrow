@@ -6,14 +6,15 @@ import (
 )
 
 type PublicKeyCredentialCreationOptions struct {
-	Attestation     string
-	Challenge       string
-	RpId            string
-	RpName          string
-	UserId          string
-	UserName        string
-	UserDisplayName string
-	Timeout         uint64
+	Attestation        string   `json:"attestation"`
+	Challenge          string   `json:"challenge"`
+	RpId               string   `json:"rpId"`
+	RpName             string   `json:"rpName"`
+	UserId             string   `json:"userId"`
+	UserName           string   `json:"userName"`
+	UserDisplayName    string   `json:"userDisplayName"`
+	Timeout            uint64   `json:"timeout"`
+	ExcludeCredentials []string `json:"excludeCredentials"`
 }
 
 type PublicKeyCredentialRquestOptions struct {
@@ -45,7 +46,7 @@ type AttestationObject struct {
 	AuthData []byte                 `codec:authData`
 }
 
-func NewPubKeyCred(rpId string) PublicKeyCredentialCreationOptions {
+func NewPubKeyCred(rpId string, userId string, username string, userDisplayName string) PublicKeyCredentialCreationOptions {
 	pkco := PublicKeyCredentialCreationOptions{}
 	challenge := make([]byte, 16)
 	rand.Read(challenge)
@@ -56,7 +57,7 @@ func NewPubKeyCred(rpId string) PublicKeyCredentialCreationOptions {
 	pkco.UserDisplayName = pkco.UserName
 	pkco.Attestation = "none"
 	pkco.Timeout = 90000
-	pkco.UserId = base64.StdEncoding.EncodeToString([]byte(pkco.UserName))
+	pkco.UserId = userId
 
 	return pkco
 }

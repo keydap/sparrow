@@ -30,6 +30,9 @@ var (
 	// a bucket that holds the names of the resource buckets e.g users, groups etc.
 	BUC_INDICES = []byte("indices")
 
+	// a bucket that holds the unique ids of users that are registered for Webauthn.
+	BUC_WEBAUTHN = []byte("webauthn")
+
 	// the delimiter that separates resource and index name
 	RES_INDEX_DELIM = ":"
 
@@ -382,6 +385,11 @@ func Open(path string, serverId uint16, config *conf.DomainConfig, rtypes map[st
 		}
 
 		_, err = tx.CreateBucketIfNotExists(BUC_INDICES)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateBucketIfNotExists(BUC_WEBAUTHN)
 		if err != nil {
 			return err
 		}
@@ -772,8 +780,15 @@ func (sl *Silo) InsertInternal(crCtx *base.CreateContext) (err error) {
 	}
 
 	// for User resource initialize AuthData
-	if !crCtx.Repl && rt.Name == "User" {
-		inRes.AuthData = &base.AuthData{}
+	if rt.Name == "User" {
+		if !crCtx.Repl {
+			inRes.AuthData = &base.AuthData{}
+		} else {
+			wid := inRes.AuthData.WebauthnId
+			if wid != "" {
+				tx.Bucket(BUC_WEBAUTHN).Put([]byte(wid), []byte(rid))
+			}
+		}
 	}
 
 	sl.storeResource(tx, inRes)
@@ -945,7 +960,7 @@ func (sl *Silo) Delete(delCtx *base.DeleteContext) (err error) {
 		}
 
 		if err != nil {
-			log.Debugf("failed to remove resource with ID %s\n %s", rid, err)
+			log.Debugf("failed to remove resource with ID %s %#v", rid, err)
 			tx.Rollback()
 		} else {
 			tx.Commit()
@@ -1049,7 +1064,7 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 				}
 			}
 		}
-	} else {
+	} else if rt.Name == "User" {
 		groups := resource.GetAttr("groups")
 		if groups != nil {
 			refRt := sl.resTypes["Group"]
@@ -1073,6 +1088,13 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 						break
 					}
 				}
+			}
+		}
+		wid := resource.AuthData.WebauthnId
+		if wid != "" {
+			err := tx.Bucket(BUC_WEBAUTHN).Delete([]byte(wid))
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -2166,4 +2188,125 @@ func isChangePassword(user *base.Resource) bool {
 
 func (sl *Silo) Csn() base.Csn {
 	return sl.cg.NewCsn()
+}
+
+func (sl *Silo) GenWebauthnIdFor(userId string) (string, error) {
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		detail := fmt.Sprintf("Could not begin a transaction for generating webauthn ID for the resource %s %#v", userId, err.Error())
+		log.Criticalf(detail)
+		err = base.NewInternalserverError(detail)
+		return "", err
+	}
+
+	generated := false
+	// locking mutex is not needed for this operation
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			log.Debugf("failed to update user with ID %s %#v", userId, err)
+			tx.Rollback()
+		} else {
+			if generated {
+				tx.Commit()
+			} else {
+				tx.Rollback()
+			}
+		}
+	}()
+
+	wid := ""
+	user, err := sl.getUsingTx(userId, sl.resTypes["User"], tx)
+	if err == nil {
+		wid = user.AuthData.WebauthnId
+		if wid == "" {
+			wid = utils.B64Encode(utils.Rand32())
+			user.AuthData.WebauthnId = wid
+			user.UpdateLastModTime(sl.cg.NewCsn())
+			sl.storeResource(tx, user)
+			tx.Bucket(BUC_WEBAUTHN).Put([]byte(wid), []byte(userId))
+			generated = true
+			log.Debugf("Successfully generated webauthn ID for user with ID %s", userId)
+		}
+	}
+
+	return wid, err
+}
+
+func (sl *Silo) GetUserByWebauthnId(webauthnId string) (user *base.Resource, err error) {
+	tx, err := sl.db.Begin(false)
+	if err != nil {
+		return nil, err
+	}
+
+	rt := sl.resTypes["User"]
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			log.Debugf("Error while fetching the user with webauthn ID %s %#v", webauthnId, err)
+		}
+
+		tx.Rollback()
+	}()
+
+	rid := tx.Bucket(BUC_WEBAUTHN).Get([]byte(webauthnId))
+
+	if len(rid) == 0 {
+		return nil, fmt.Errorf("User with webauthn ID %s not found", webauthnId)
+	}
+
+	user, err = sl.getUsingTx(string(rid), rt, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (sl *Silo) StoreSecurityKey(rid string, secKey *base.SecurityKey) error {
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		log.Warningf("Failed to begin transaction %#v", err)
+		return err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			tx.Rollback()
+			log.Debugf("Error while storing security key %#v", err)
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	rt := sl.resTypes["User"]
+	user, err := sl.getUsingTx(rid, rt, tx)
+	if err != nil {
+		return err
+	}
+
+	keys := user.AuthData.Skeys
+	if keys == nil {
+		keys = make([]*base.SecurityKey, 0)
+	}
+
+	user.AuthData.Skeys = append(keys, secKey)
+	user.UpdateLastModTime(sl.cg.NewCsn())
+	sl.storeResource(tx, user)
+
+	return nil
 }

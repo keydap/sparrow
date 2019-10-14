@@ -39,6 +39,10 @@ func GenUUID() string {
 	// set variant to 10
 	b[8] = (b[8] & 0x3F) | 0x80
 
+	return FormatUUID(b)
+}
+
+func FormatUUID(b []byte) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
