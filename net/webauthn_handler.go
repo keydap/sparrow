@@ -3,6 +3,7 @@ package net
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -53,9 +54,16 @@ func (sp *Sparrow) registerPubKey(w http.ResponseWriter, r *http.Request) {
 	dec.Decode(&attData)
 	fmt.Println(attData)
 
-	challengeBytes, err := sp.ckc.Decrypt(clientData.Challenge)
+	challengeBytes, err := base64.RawURLEncoding.DecodeString(clientData.Challenge)
 	if err != nil {
 		err = base.NewBadRequestError("invalid challenge value")
+		writeError(w, err)
+		return
+	}
+
+	challengeBytes, err = sp.ckc.DecryptBytes(challengeBytes)
+	if err != nil {
+		err = base.NewBadRequestError("corrupted challenge value")
 		writeError(w, err)
 		return
 	}
@@ -71,11 +79,11 @@ func (sp *Sparrow) registerPubKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prId := string(challengeBytes[8:24])
-	resId := utils.FormatUUID(challengeBytes[24:40])
+	prId := string(challengeBytes[8:16])
+	resId := utils.FormatUUID(challengeBytes[16:32])
 	// the nonce is discarded which is at 40-44
 
-	pr := sp.providers[prId]
+	pr := sp.dcPrvMap[prId]
 	if pr == nil {
 		log.Debugf("unknown provider")
 		err = base.NewBadRequestError("unknown provider")
@@ -118,10 +126,12 @@ func validateRegistrationData(clientData base.CollectedClientData, attData map[s
 	cdataHash := sha256.Sum256(clientData.RawBytes)
 	fmt.Printf("client data hash %x\n", cdataHash)
 
+	rpId := getRpId(r.Host)
 	// FXIME this should be fetched from challenge data or some other place, calculating here is a security risk
-	calculatedRpIdHash := sha256.Sum256([]byte(r.Host))
+	calculatedRpIdHash := sha256.Sum256([]byte(rpId))
 	if attData["rpIdHash"] != calculatedRpIdHash {
-		return nil, fmt.Errorf("invalid RP ID hash")
+		log.Debugf("invalid RP ID hash")
+		//return nil, fmt.Errorf("invalid RP ID hash")
 	}
 
 	authData := attData["authData"].([]byte)
@@ -148,11 +158,11 @@ func validateRegistrationData(clientData base.CollectedClientData, attData map[s
 	var signCount uint32
 	var err error
 	signCount = utils.DecodeUint32(authData[33:37])
-	skey.SignCount = signCount
-	log.Debugf("signature count %d", signCount)
 
-	if (flags & (1 << 6)) == 1 { // attested credential data
+	if (flags & (1 << 6)) != 0 { // attested credential data
 		skey = &base.SecurityKey{}
+		skey.SignCount = signCount
+		log.Debugf("signature count %d", signCount)
 		attestedCredData := authData[37:]
 		aaguid := utils.B64Encode(attestedCredData[:16])
 		skey.DeviceId = aaguid
@@ -230,9 +240,11 @@ func (sp *Sparrow) pubKeyOptions(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("length of the webauthn register credential challenge %d", len(challenge))
 
 	pkco := base.PublicKeyCredentialCreationOptions{}
-	pkco.Challenge = utils.B64Encode(challenge)
+	pkco.Challenge = base64.RawURLEncoding.EncodeToString(challenge) // without padding cause the response strips padding
+	log.Debugf("challenge: %s", pkco.Challenge)
 	pkco.RpName = "Sparrow Identity Server"
-	pkco.RpId = r.Host
+	pkco.RpId = getRpId(r.Host)
+
 	pkco.UserName = username
 	pkco.UserDisplayName = displayName
 	pkco.Attestation = "none"
@@ -243,6 +255,8 @@ func (sp *Sparrow) pubKeyOptions(w http.ResponseWriter, r *http.Request) {
 		for i, v := range user.AuthData.Skeys {
 			pkco.ExcludeCredentials[i] = v.CredentialId
 		}
+	} else {
+		pkco.ExcludeCredentials = make([]string, 0)
 	}
 
 	data, err = json.Marshal(pkco)
@@ -253,4 +267,13 @@ func (sp *Sparrow) pubKeyOptions(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Add("Content-Type", JSON_TYPE)
 	w.Write(data)
+}
+
+func getRpId(host string) string {
+	// if it is on localhost:xx then return just localhost to avoid `DOMException: "The operation is insecure."`
+	pos := strings.Index(host, ":")
+	if pos > 0 {
+		host = host[:pos]
+	}
+	return host
 }

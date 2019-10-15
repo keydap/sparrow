@@ -74,6 +74,10 @@ func (ckc *CookieKeyCache) Decrypt(b64value string) (data []byte, err error) {
 		return nil, err
 	}
 
+	return ckc.DecryptBytes(data)
+}
+
+func (ckc *CookieKeyCache) DecryptBytes(data []byte) ([]byte, error) {
 	id := DecodeUint32(data[:4])
 	key := ckc.keysById[id]
 

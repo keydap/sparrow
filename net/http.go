@@ -142,7 +142,7 @@ func (sp *Sparrow) setup(c *caddy.Controller) error {
 	//scimRouter.HandleFunc("/revoke", handleRevoke).Methods("DELETE")
 	scimRouter.HandleFunc("/Me", sp.selfServe).Methods("GET")
 	scimRouter.HandleFunc("/pubkeyOptions", sp.pubKeyOptions).Methods("GET")
-	scimRouter.HandleFunc("/registerPubkey", sp.registerPubKey).Methods("POST").Queries("a", "c")
+	scimRouter.HandleFunc("/registerPubkey", sp.registerPubKey).Methods("POST")
 	scimRouter.HandleFunc("/logout", sp.handleLogout).Methods("POST")
 
 	// generic service provider methods
