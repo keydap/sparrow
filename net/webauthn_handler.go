@@ -41,7 +41,7 @@ func (sp *Sparrow) registerPubKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Println(len(data))
-	fmt.Println(string(data[a:]))
+	fmt.Printf("%s", utils.B64Encode(data))
 
 	var clientData base.CollectedClientData
 	json.Unmarshal(data[a:], &clientData)
