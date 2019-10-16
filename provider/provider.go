@@ -833,6 +833,12 @@ func (prv *Provider) StoreSecurityKey(rid string, secKey *base.SecurityKey) erro
 	return err
 }
 
+func (prv *Provider) DeleteSecurityKey(userId string, credentialId string) error {
+	err := prv.sl.StoreSecurityKey(rid, secKey)
+	// prv.replInterceptor.PostAuthDataUpdate()
+	return err
+}
+
 func genDomainCode(name string) string {
 	sh2 := sha256.New()
 	sh2.Write([]byte(name))

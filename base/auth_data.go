@@ -28,7 +28,7 @@ type AuthData struct {
 	LastSLogin  time.Time
 	LastFLogin  time.Time
 	FLoginCount int
-	Skeys       []*SecurityKey
+	Skeys       map[string]*SecurityKey
 	WebauthnId  string // a special unique identifier that links user on the authenticator
 }
 

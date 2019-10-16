@@ -16,7 +16,41 @@ import (
 	"strings"
 )
 
+func (sp *Sparrow) deletePubKey(w http.ResponseWriter, r *http.Request) {
+	opCtx, err := createOpCtx(r, sp)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	pr := sp.providers[opCtx.Session.Domain]
+	log.Debugf("handling %s request on %s for the domain %s", r.Method, r.RequestURI, pr.Name)
+	user, err := pr.GetUserById(opCtx.Session.Sub)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	keys := user.AuthData.Skeys
+	if keys == nil {
+		msg := "no key exists with the given crednetial ID"
+		log.Debugf(msg)
+		writeError(w, base.NewNotFoundError(msg))
+		return
+	}
+
+	for _, k := range keys {
+		//if k.CredentialId ==
+	}
+}
+
 func (sp *Sparrow) registerPubKey(w http.ResponseWriter, r *http.Request) {
+	_, err := createOpCtx(r, sp)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	r.ParseForm()
 	a, err := strconv.Atoi(r.Form.Get("a"))
 	if err != nil {
@@ -164,7 +198,7 @@ func validateRegistrationData(clientData base.CollectedClientData, attData map[s
 		skey.SignCount = signCount
 		log.Debugf("signature count %d", signCount)
 		attestedCredData := authData[37:]
-		aaguid := utils.B64Encode(attestedCredData[:16])
+		aaguid := base64.RawURLEncoding.EncodeToString(attestedCredData[:16])
 		skey.DeviceId = aaguid
 		log.Debugf("AAUGUID %s", aaguid)
 		var credIdLength uint16
@@ -173,7 +207,7 @@ func validateRegistrationData(clientData base.CollectedClientData, attData map[s
 		credIdLength = credIdLength<<8 | uint16(attestedCredData[17])
 		credIdLenEndPos := 18 + int(credIdLength)
 		credentialId := attestedCredData[18:credIdLenEndPos]
-		credIdStr := utils.B64Encode(credentialId)
+		credIdStr := base64.RawURLEncoding.EncodeToString(credentialId)
 		skey.CredentialId = credIdStr
 		log.Debugf("CredentialId %s", credIdStr)
 		if len(attestedCredData) > credIdLenEndPos {
@@ -251,12 +285,13 @@ func (sp *Sparrow) pubKeyOptions(w http.ResponseWriter, r *http.Request) {
 	pkco.Timeout = 90000
 	pkco.UserId = webauthnId
 	if user.AuthData.Skeys != nil {
-		pkco.ExcludeCredentials = make([]string, len(user.AuthData.Skeys))
-		for i, v := range user.AuthData.Skeys {
-			pkco.ExcludeCredentials[i] = v.CredentialId
+		pkco.ExcludeCredentials = make([]base.PublicKeyCredentialDescriptor, len(user.AuthData.Skeys))
+		i := 0
+		for _, v := range user.AuthData.Skeys {
+			pkco.ExcludeCredentials[i] = base.PublicKeyCredentialDescriptor{Type: "public-key", Id: v.CredentialId}
 		}
 	} else {
-		pkco.ExcludeCredentials = make([]string, 0)
+		pkco.ExcludeCredentials = make([]base.PublicKeyCredentialDescriptor, 0)
 	}
 
 	data, err = json.Marshal(pkco)

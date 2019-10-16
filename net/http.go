@@ -143,6 +143,7 @@ func (sp *Sparrow) setup(c *caddy.Controller) error {
 	scimRouter.HandleFunc("/Me", sp.selfServe).Methods("GET")
 	scimRouter.HandleFunc("/pubkeyOptions", sp.pubKeyOptions).Methods("GET")
 	scimRouter.HandleFunc("/registerPubkey", sp.registerPubKey).Methods("POST")
+	scimRouter.HandleFunc("/deletePubkey", sp.deletePubKey).Methods("DELETE")
 	scimRouter.HandleFunc("/logout", sp.handleLogout).Methods("POST")
 
 	// generic service provider methods
@@ -861,11 +862,17 @@ func (sp *Sparrow) selfServe(w http.ResponseWriter, r *http.Request) {
 		jsonMap["perms"] = ses.EffPerms
 		jsonMap["domain"] = ses.Domain
 
-		keys := user.AuthData.Skeys
-		if keys == nil {
+		var keys []*base.SecurityKey
+		keysMap := user.AuthData.Skeys
+		if keysMap != nil {
+			keys = make([]*base.SecurityKey, 0)
+			for _, v := range keysMap {
+				keys = append(keys, v)
+			}
+		} else {
 			keys = make([]*base.SecurityKey, 0)
 		}
-		jsonMap["securityKeys"] = keys
+		jsonMap["securitykeys"] = keys
 
 		apps := make([]map[string]string, 0) // an array of allowed apps for this user, each map holds application name, home page URL and icon
 

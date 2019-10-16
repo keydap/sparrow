@@ -6,15 +6,15 @@ import (
 )
 
 type PublicKeyCredentialCreationOptions struct {
-	Attestation        string   `json:"attestation"`
-	Challenge          string   `json:"challenge"`
-	RpId               string   `json:"rpId"`
-	RpName             string   `json:"rpName"`
-	UserId             string   `json:"userId"`
-	UserName           string   `json:"userName"`
-	UserDisplayName    string   `json:"userDisplayName"`
-	Timeout            uint64   `json:"timeout"`
-	ExcludeCredentials []string `json:"excludeCredentials"`
+	Attestation        string                          `json:"attestation"`
+	Challenge          string                          `json:"challenge"`
+	RpId               string                          `json:"rpId"`
+	RpName             string                          `json:"rpName"`
+	UserId             string                          `json:"userId"`
+	UserName           string                          `json:"userName"`
+	UserDisplayName    string                          `json:"userDisplayName"`
+	Timeout            uint64                          `json:"timeout"`
+	ExcludeCredentials []PublicKeyCredentialDescriptor `json:"excludeCredentials"`
 }
 
 type PublicKeyCredentialRquestOptions struct {
@@ -44,6 +44,12 @@ type AttestationObject struct {
 	AttStmt  map[string]interface{} `codec:"attStmt"`
 	Fmt      string                 `codec:"fmt"`
 	AuthData []byte                 `codec:authData`
+}
+
+type PublicKeyCredentialDescriptor struct {
+	Type       string `json:"type"`
+	Id         string `json:"id"`
+	Transports string `json:"transports"`
 }
 
 func NewPubKeyCred(rpId string, userId string, username string, userDisplayName string) PublicKeyCredentialCreationOptions {
