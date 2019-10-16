@@ -465,7 +465,8 @@ func TestWebauthnInsert(t *testing.T) {
 	rid := rs.GetId()
 
 	// test generating webauthn id
-	wid, _ := sl.GenWebauthnIdFor(rid)
+	userWithWebauthnKey, _ := sl.GenWebauthnIdFor(rid)
+	wid := userWithWebauthnKey.AuthData.WebauthnId
 	if len(wid) == 0 {
 		t.Error("Invalid webauthn id")
 		t.FailNow()
@@ -480,9 +481,9 @@ func TestWebauthnInsert(t *testing.T) {
 	}
 
 	// try generating again for the same user, it should return the old one
-	wid2, _ := sl.GenWebauthnIdFor(rid)
-	if wid != wid2 {
-		t.Error("webauthn id should not be re-generated")
+	_, err := sl.GenWebauthnIdFor(rid)
+	if err == nil {
+		t.Error("webauthn ID should not be re-generated")
 		t.FailNow()
 	}
 
@@ -495,7 +496,7 @@ func TestWebauthnInsert(t *testing.T) {
 	delCtx := &base.DeleteContext{}
 	delCtx.Rid = rid
 	delCtx.Rt = restypes["User"]
-	err := sl.Delete(delCtx)
+	err = sl.Delete(delCtx)
 	if err != nil {
 		t.FailNow()
 	}

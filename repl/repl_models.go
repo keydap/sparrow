@@ -34,6 +34,7 @@ const (
 	DELETE_SESSION
 	NEW_DOMAIN
 	DELETE_DOMAIN
+	REPLACE_AUTHDATA
 )
 
 type ReplicationEvent struct {

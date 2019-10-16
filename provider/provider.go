@@ -9,6 +9,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	_ "github.com/dgrijalva/jwt-go"
@@ -132,6 +133,8 @@ func NewProvider(layout *Layout, sc *conf.ServerConf, peers map[uint16]*repl.Rep
 	replInterceptor.domainCode = prv.domainCode
 	replInterceptor.serverId = sc.ServerId
 	replInterceptor.webhookToken = sc.ReplWebHookToken
+	replInterceptor.buf = new(bytes.Buffer)
+	replInterceptor.enc = gob.NewEncoder(replInterceptor.buf)
 	prv.replInterceptor = replInterceptor
 
 	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
@@ -818,8 +821,12 @@ func (prv *Provider) ReadAllInternal(rt *schema.ResourceType, outPipe chan *base
 }
 
 func (prv *Provider) GenWebauthnIdFor(userId string) (string, error) {
-	wid, err := prv.sl.GenWebauthnIdFor(userId)
-	// prv.replInterceptor.PostAuthDataUpdate()
+	user, err := prv.sl.GenWebauthnIdFor(userId)
+	wid := ""
+	if err == nil {
+		wid = user.AuthData.WebauthnId
+		prv.replInterceptor.PostAuthDataUpdate(user)
+	}
 	return wid, err
 }
 
@@ -828,14 +835,18 @@ func (prv *Provider) GetUserByWebauthnId(webauthnId string) (*base.Resource, err
 }
 
 func (prv *Provider) StoreSecurityKey(rid string, secKey *base.SecurityKey) error {
-	err := prv.sl.StoreSecurityKey(rid, secKey)
-	// prv.replInterceptor.PostAuthDataUpdate()
+	user, err := prv.sl.StoreSecurityKey(rid, secKey)
+	if err == nil {
+		prv.replInterceptor.PostAuthDataUpdate(user)
+	}
 	return err
 }
 
 func (prv *Provider) DeleteSecurityKey(userId string, credentialId string) error {
-	err := prv.sl.StoreSecurityKey(rid, secKey)
-	// prv.replInterceptor.PostAuthDataUpdate()
+	user, err := prv.sl.DeleteSecurityKey(userId, credentialId)
+	if err == nil {
+		prv.replInterceptor.PostAuthDataUpdate(user)
+	}
 	return err
 }
 

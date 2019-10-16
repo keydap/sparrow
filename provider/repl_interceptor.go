@@ -2,6 +2,7 @@ package provider
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"net/http"
 	"sparrow/base"
@@ -15,6 +16,8 @@ type ReplInterceptor struct {
 	transport    *http.Transport
 	serverId     uint16
 	webhookToken string
+	buf          *bytes.Buffer
+	enc          *gob.Encoder
 }
 
 func (ri *ReplInterceptor) PreCreate(crCtx *base.CreateContext) error {
@@ -163,6 +166,23 @@ func (ri *ReplInterceptor) PostDeleteSession(jti string, ssoSession bool, versio
 		go ri.sendToPeers(dataBuf, event, ri.peers)
 	} else {
 		log.Debugf("failed to store the generated new session replication event [%#v]", err)
+	}
+}
+
+func (ri *ReplInterceptor) PostAuthDataUpdate(user *base.Resource) {
+	event := repl.ReplicationEvent{}
+	event.Version = user.GetVersion()
+	event.DomainCode = ri.domainCode
+	event.Type = repl.REPLACE_AUTHDATA
+	err := ri.enc.Encode(user.AuthData)
+	event.Data = ri.buf.Bytes()
+	event.RtName = user.GetType().Name
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the authdata event [%#v]", err)
 	}
 }
 

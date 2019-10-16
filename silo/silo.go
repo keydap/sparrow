@@ -2190,13 +2190,13 @@ func (sl *Silo) Csn() base.Csn {
 	return sl.cg.NewCsn()
 }
 
-func (sl *Silo) GenWebauthnIdFor(userId string) (string, error) {
+func (sl *Silo) GenWebauthnIdFor(userId string) (*base.Resource, error) {
 	tx, err := sl.db.Begin(true)
 	if err != nil {
 		detail := fmt.Sprintf("Could not begin a transaction for generating webauthn ID for the resource %s %#v", userId, err.Error())
 		log.Criticalf(detail)
 		err = base.NewInternalserverError(detail)
-		return "", err
+		return nil, err
 	}
 
 	generated := false
@@ -2232,10 +2232,12 @@ func (sl *Silo) GenWebauthnIdFor(userId string) (string, error) {
 			tx.Bucket(BUC_WEBAUTHN).Put([]byte(wid), []byte(userId))
 			generated = true
 			log.Debugf("Successfully generated webauthn ID for user with ID %s", userId)
+		} else {
+			return nil, base.NewConflictError("webauthn ID already exists for the user")
 		}
 	}
 
-	return wid, err
+	return user, err
 }
 
 func (sl *Silo) GetUserByWebauthnId(webauthnId string) (user *base.Resource, err error) {
@@ -2272,11 +2274,11 @@ func (sl *Silo) GetUserByWebauthnId(webauthnId string) (user *base.Resource, err
 	return user, nil
 }
 
-func (sl *Silo) DeleteSecurityKey(userId string, credentialId string) error {
+func (sl *Silo) DeleteSecurityKey(userId string, credentialId string) (*base.Resource, error) {
 	tx, err := sl.db.Begin(true)
 	if err != nil {
 		log.Warningf("Failed to begin transaction for deleting securitykey %#v", err)
-		return err
+		return nil, err
 	}
 
 	defer func() {
@@ -2296,7 +2298,7 @@ func (sl *Silo) DeleteSecurityKey(userId string, credentialId string) error {
 	rt := sl.resTypes["User"]
 	user, err := sl.getUsingTx(userId, rt, tx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	keys := user.AuthData.Skeys
@@ -2304,25 +2306,25 @@ func (sl *Silo) DeleteSecurityKey(userId string, credentialId string) error {
 		// debug a slightly different message than what is advertised
 		log.Debugf("there are no securitykeys configured for the user %s", userId)
 		msg := fmt.Sprintf("no securitykey exists with the credential ID %s", credentialId)
-		return base.NewNotFoundError(msg)
+		return nil, base.NewNotFoundError(msg)
 	} else if _, ok := keys[credentialId]; !ok {
 		msg := fmt.Sprintf("no securitykey exists with the credential ID %s", credentialId)
 		log.Debugf(msg)
-		return base.NewNotFoundError(msg)
+		return nil, base.NewNotFoundError(msg)
 	}
 
 	delete(user.AuthData.Skeys, credentialId)
 	user.UpdateLastModTime(sl.cg.NewCsn())
 	sl.storeResource(tx, user)
 
-	return nil
+	return user, nil
 }
 
-func (sl *Silo) StoreSecurityKey(rid string, secKey *base.SecurityKey) error {
+func (sl *Silo) StoreSecurityKey(rid string, secKey *base.SecurityKey) (*base.Resource, error) {
 	tx, err := sl.db.Begin(true)
 	if err != nil {
 		log.Warningf("Failed to begin transaction for storing securitykey %#v", err)
-		return err
+		return nil, err
 	}
 
 	defer func() {
@@ -2342,7 +2344,7 @@ func (sl *Silo) StoreSecurityKey(rid string, secKey *base.SecurityKey) error {
 	rt := sl.resTypes["User"]
 	user, err := sl.getUsingTx(rid, rt, tx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	keys := user.AuthData.Skeys
@@ -2354,5 +2356,5 @@ func (sl *Silo) StoreSecurityKey(rid string, secKey *base.SecurityKey) error {
 	user.UpdateLastModTime(sl.cg.NewCsn())
 	sl.storeResource(tx, user)
 
-	return nil
+	return user, nil
 }

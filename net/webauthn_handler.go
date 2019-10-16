@@ -25,22 +25,20 @@ func (sp *Sparrow) deletePubKey(w http.ResponseWriter, r *http.Request) {
 
 	pr := sp.providers[opCtx.Session.Domain]
 	log.Debugf("handling %s request on %s for the domain %s", r.Method, r.RequestURI, pr.Name)
-	user, err := pr.GetUserById(opCtx.Session.Sub)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
 
-	keys := user.AuthData.Skeys
-	if keys == nil {
-		msg := "no key exists with the given crednetial ID"
+	path := strings.TrimRight(r.RequestURI, "/")
+	pos := strings.LastIndex(path, "/")
+	if pos < 0 || (pos+1 >= len(path)) {
+		msg := "invalid request, no credential ID found in the path"
 		log.Debugf(msg)
 		writeError(w, base.NewNotFoundError(msg))
 		return
 	}
-
-	for _, k := range keys {
-		//if k.CredentialId ==
+	err = pr.DeleteSecurityKey(opCtx.Session.Sub, path[pos+1:])
+	if err != nil {
+		log.Debugf("%#v", err)
+		writeError(w, err)
+		return
 	}
 }
 
