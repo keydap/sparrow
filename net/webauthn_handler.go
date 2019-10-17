@@ -88,14 +88,18 @@ func (sp *Sparrow) registerPubKey(w http.ResponseWriter, r *http.Request) {
 
 	challengeBytes, err := base64.RawURLEncoding.DecodeString(clientData.Challenge)
 	if err != nil {
-		err = base.NewBadRequestError("invalid challenge value")
+		msg := "invalid challenge value"
+		log.Debugf(msg)
+		err = base.NewBadRequestError(msg)
 		writeError(w, err)
 		return
 	}
 
 	challengeBytes, err = sp.ckc.DecryptBytes(challengeBytes)
 	if err != nil {
-		err = base.NewBadRequestError("corrupted challenge value")
+		msg := "corrupted challenge value"
+		log.Debugf(msg)
+		err = base.NewBadRequestError(msg)
 		writeError(w, err)
 		return
 	}
@@ -158,7 +162,7 @@ func validateRegistrationData(clientData base.CollectedClientData, attData map[s
 	cdataHash := sha256.Sum256(clientData.RawBytes)
 	fmt.Printf("client data hash %x\n", cdataHash)
 
-	rpId := getRpId(r.Host)
+	rpId := stripPortNumber(r.Host)
 	// FXIME this should be fetched from challenge data or some other place, calculating here is a security risk
 	calculatedRpIdHash := sha256.Sum256([]byte(rpId))
 	if attData["rpIdHash"] != calculatedRpIdHash {
@@ -178,7 +182,9 @@ func validateRegistrationData(clientData base.CollectedClientData, attData map[s
 
 	// user present
 	if (flags & 1) != 1 {
-		return nil, fmt.Errorf("user is not present")
+		msg := "user is not present"
+		log.Debugf(msg)
+		return nil, fmt.Errorf(msg)
 	}
 
 	// will depend on authenticator's capabilities
@@ -275,7 +281,7 @@ func (sp *Sparrow) pubKeyOptions(w http.ResponseWriter, r *http.Request) {
 	pkco.Challenge = base64.RawURLEncoding.EncodeToString(challenge) // without padding cause the response strips padding
 	log.Debugf("challenge: %s", pkco.Challenge)
 	pkco.RpName = "Sparrow Identity Server"
-	pkco.RpId = getRpId(r.Host)
+	pkco.RpId = stripPortNumber(r.Host)
 
 	pkco.UserName = username
 	pkco.UserDisplayName = displayName
@@ -302,7 +308,7 @@ func (sp *Sparrow) pubKeyOptions(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func getRpId(host string) string {
+func stripPortNumber(host string) string {
 	// if it is on localhost:xx then return just localhost to avoid `DOMException: "The operation is insecure."`
 	pos := strings.Index(host, ":")
 	if pos > 0 {

@@ -5,6 +5,7 @@ package silo
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/gob"
 	"fmt"
 	"github.com/pquerna/otp/totp"
@@ -2225,7 +2226,7 @@ func (sl *Silo) GenWebauthnIdFor(userId string) (*base.Resource, error) {
 	if err == nil {
 		wid = user.AuthData.WebauthnId
 		if wid == "" {
-			wid = utils.B64Encode(utils.Rand32())
+			wid = base64.RawURLEncoding.EncodeToString(utils.Rand32())
 			user.AuthData.WebauthnId = wid
 			user.UpdateLastModTime(sl.cg.NewCsn())
 			sl.storeResource(tx, user)
@@ -2316,7 +2317,7 @@ func (sl *Silo) DeleteSecurityKey(userId string, credentialId string) (*base.Res
 	delete(user.AuthData.Skeys, credentialId)
 	user.UpdateLastModTime(sl.cg.NewCsn())
 	sl.storeResource(tx, user)
-
+	log.Debugf("deleted security key %s of user %s", credentialId, userId)
 	return user, nil
 }
 
@@ -2347,9 +2348,8 @@ func (sl *Silo) StoreSecurityKey(rid string, secKey *base.SecurityKey) (*base.Re
 		return nil, err
 	}
 
-	keys := user.AuthData.Skeys
-	if keys == nil {
-		keys = make(map[string]*base.SecurityKey)
+	if user.AuthData.Skeys == nil {
+		user.AuthData.Skeys = make(map[string]*base.SecurityKey)
 	}
 
 	user.AuthData.Skeys[secKey.CredentialId] = secKey
