@@ -20,6 +20,7 @@ type cookieKey struct {
 	id       uint32
 	key      []byte
 	iv       []byte
+	encodedId []byte
 	lastUsed time.Time
 }
 
@@ -32,6 +33,7 @@ func NewCookieKeyCache() *CookieKeyCache {
 		ck := ckc.newCookieKey()
 		ckc.keys = append(ckc.keys, ck)
 		ckc.keysById[ck.id] = ck
+		ck.encodedId = EncodeUint32(ck.id)
 	}
 
 	return ckc
@@ -45,7 +47,7 @@ func (ckc *CookieKeyCache) Encrypt(value []byte) []byte {
 	index := rand.Intn(len(ckc.keys))
 	key := ckc.keys[index]
 	buf := bytes.Buffer{}
-	buf.Write(EncodeUint32(key.id)) // these 4 bytes MUST NOT be encrypted
+	buf.Write(key.encodedId) // these 4 bytes MUST NOT be encrypted
 
 	if pad != 0 {
 		pad = (dataLen / aes.BlockSize)
