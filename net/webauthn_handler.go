@@ -78,13 +78,15 @@ func (sp *Sparrow) registerPubKey(w http.ResponseWriter, r *http.Request) {
 	var clientData base.CollectedClientData
 	json.Unmarshal(data[a:], &clientData)
 	clientData.RawBytes = data[a:]
-	fmt.Println(clientData)
+	log.Debugf("client data: %s", utils.B64Encode(clientData.RawBytes))
 
 	ch := new(codec.CborHandle)
 	dec := codec.NewDecoderBytes(data[:a], ch)
 	var attData map[string]interface{}
 	dec.Decode(&attData)
 	fmt.Println(attData)
+
+	log.Debugf("received challenge: %s", clientData.Challenge)
 
 	challengeBytes, err := base64.RawURLEncoding.DecodeString(clientData.Challenge)
 	if err != nil {
@@ -95,6 +97,7 @@ func (sp *Sparrow) registerPubKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Debugf("decrypting the challenge: %s", clientData.Challenge)
 	challengeBytes, err = sp.ckc.DecryptBytes(challengeBytes)
 	if err != nil {
 		msg := "corrupted challenge value"
@@ -105,7 +108,8 @@ func (sp *Sparrow) registerPubKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO check the timeout against the configured timeout
-	//cTime := utils.Btoi(challengeBytes[:8])
+	cTime := utils.Btoi(challengeBytes[:8])
+	log.Debugf("%d", cTime)
 
 	skey, err := validateRegistrationData(clientData, attData, r, sp)
 	if err != nil {
@@ -117,7 +121,7 @@ func (sp *Sparrow) registerPubKey(w http.ResponseWriter, r *http.Request) {
 
 	prId := string(challengeBytes[8:16])
 	resId := utils.FormatUUID(challengeBytes[16:32])
-	// the nonce is discarded which is at 40-44
+	// the nonce is discarded which is at 32-36
 
 	pr := sp.dcPrvMap[prId]
 	if pr == nil {
@@ -163,13 +167,7 @@ func validateRegistrationData(clientData base.CollectedClientData, attData map[s
 	fmt.Printf("client data hash %x\n", cdataHash)
 
 	rpId := stripPortNumber(r.Host)
-	// FXIME this should be fetched from challenge data or some other place, calculating here is a security risk
 	calculatedRpIdHash := sha256.Sum256([]byte(rpId))
-	if attData["rpIdHash"] != calculatedRpIdHash {
-		log.Debugf("invalid RP ID hash")
-		//return nil, fmt.Errorf("invalid RP ID hash")
-	}
-
 	authData := attData["authData"].([]byte)
 
 	rpIdHash := authData[:32]
@@ -288,6 +286,7 @@ func (sp *Sparrow) pubKeyOptions(w http.ResponseWriter, r *http.Request) {
 	pkco.Attestation = "none"
 	pkco.Timeout = 90000
 	pkco.UserId = webauthnId
+
 	if user.AuthData.Skeys != nil {
 		pkco.ExcludeCredentials = make([]base.PublicKeyCredentialDescriptor, len(user.AuthData.Skeys))
 		i := 0
