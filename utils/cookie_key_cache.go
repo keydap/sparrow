@@ -17,11 +17,11 @@ type CookieKeyCache struct {
 }
 
 type cookieKey struct {
-	id       uint32
-	key      []byte
-	iv       []byte
+	id        uint32
+	key       []byte
+	iv        []byte
 	encodedId []byte
-	lastUsed time.Time
+	lastUsed  time.Time
 }
 
 func NewCookieKeyCache() *CookieKeyCache {

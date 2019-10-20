@@ -484,6 +484,10 @@ func writeDefaultUiStyle(uiDir string) {
 	// login-style.css
 	loginStyle := filepath.Join(uiDir, "login-style.css")
 	writeFile(loginStyle, login_style)
+
+	// base64.js
+	base64Js := filepath.Join(uiDir, "base64.js")
+	writeFile(base64Js, base64_js)
 }
 
 func writeDefaultHtmlTemplates(tmplDir string) {
@@ -510,6 +514,10 @@ func writeDefaultHtmlTemplates(tmplDir string) {
 	// changepassword.html
 	cpTmpl := filepath.Join(tmplDir, "changepassword.html")
 	writeFile(cpTmpl, changepassword_html)
+
+	// webauthn.html
+	webauthnTmpl := filepath.Join(tmplDir, "webauthn.html")
+	writeFile(webauthnTmpl, webauthn_html)
 }
 
 func writeFile(name string, content string) {

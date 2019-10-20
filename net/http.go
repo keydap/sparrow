@@ -205,6 +205,9 @@ func (sp *Sparrow) setup(c *caddy.Controller) error {
 	router.HandleFunc("/verifyPassword", sp.verifyPassword).Methods("POST")
 	router.HandleFunc("/changePassword", sp.handleChangePasswordReq).Methods("GET")
 	router.HandleFunc("/registerTotp", sp.registerTotp).Methods("POST")
+	router.HandleFunc("/webauthn", sp.sendWebauthnAuthReq).Methods("POST")
+	router.HandleFunc("/webauthnVerifyCred", sp.webauthnVerifyCred).Methods("POST")
+	router.HandleFunc("/redirect", sp.redirectAfterAuth).Methods("GET")
 
 	router.PathPrefix("/repl/").HandlerFunc(sp.replHandler)
 
@@ -905,7 +908,7 @@ func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
 
 func (sp *Sparrow) serveUI(w http.ResponseWriter, r *http.Request) {
 	//static assets
-	if strings.HasSuffix(r.URL.Path, ".css") {
+	if strings.HasSuffix(r.URL.Path, ".css") || strings.HasSuffix(r.URL.Path, ".js") {
 		sp.uiHandler.ServeHTTP(w, r)
 		return
 	}

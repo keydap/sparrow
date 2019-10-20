@@ -91,12 +91,7 @@ func (sp *Sparrow) verifyPassword(w http.ResponseWriter, r *http.Request) {
 
 	username := r.Form.Get("username")
 	if !af.VerifiedPassword() {
-		pos := strings.LastIndexByte(username, '@')
-		unameLen := len(username) - 1
-		if pos > 0 && pos != unameLen {
-			domain = strings.ToLower(username[pos+1:])
-			username = username[:pos]
-		}
+		username, domain = sp.splitUsernameAndDomain(username)
 		prv = sp.providers[domain]
 	} else {
 		prv = sp.dcPrvMap[af.DomainCode]
@@ -366,8 +361,7 @@ func sendFinalResponse(sp *Sparrow, w http.ResponseWriter, r *http.Request, sess
 	// delete the authflow cookie
 	setAuthFlow(sp, nil, w)
 	headers := w.Header()
-	headers.Add("Cache-Control", "no-store")
-	headers.Add("Pragma", "no-cache")
+	headers.Add("Cache-Control", "no-cache")
 	http.Redirect(w, r, tmpUri, http.StatusFound)
 
 	// ignore the received redirect URI
@@ -561,4 +555,49 @@ func setSsoCookie(pr *provider.Provider, session *base.RbacSession, w http.Respo
 	cookie.Value = session.Jti
 	//cookie.Secure
 	http.SetCookie(w, cookie)
+}
+
+func (sp *Sparrow) splitUsernameAndDomain(username string) (string, string) {
+	pos := strings.LastIndexByte(username, '@')
+	unameLen := len(username) - 1
+	domain := sp.srvConf.DefaultDomain
+	if pos > 0 && pos != unameLen {
+		domain = strings.ToLower(username[pos+1:])
+		username = username[:pos]
+	}
+
+	return username, domain
+}
+
+func (sp *Sparrow) redirectAfterAuth(w http.ResponseWriter, r *http.Request) {
+	session := getSessionUsingCookie(r, sp)
+	if session == nil {
+		sp.showLogin(w, r)
+		return
+	}
+
+	af := getAuthFlow(r, sp)
+	if af == nil {
+		af = &authFlow{}
+	}
+
+	if af.FromOauth() {
+		log.Debugf("sending oauth request for consent")
+		// FIXME show consent only if application/client config enforces it
+		setAuthFlow(sp, af, w)
+		paramMap := copyParams(r)
+		consentTmpl := sp.templates["consent.html"]
+		consentTmpl.Execute(w, paramMap)
+	} else if af.FromSaml() {
+		log.Debugf("resuming SAML flow")
+		setAuthFlow(sp, nil, w)
+		sendSamlResponse(sp, w, r, session, af)
+	} else {
+		setAuthFlow(sp, nil, w)
+		http.Redirect(w, r, "/ui", http.StatusFound)
+	}
+}
+
+func redirectToLogin(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/login?redirectTo=/ui", http.StatusFound)
 }
