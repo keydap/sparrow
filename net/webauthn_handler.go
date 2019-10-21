@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ugorji/go/codec"
+	"hash"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -374,7 +375,7 @@ func (sp *Sparrow) parseWebauthnResp(r *http.Request) (base.WebauthnResponse, er
 	// the nonce is discarded which is at 32-36
 
 	if s > 0 {
-		webauthnResp.Signature = data[c : c+s]
+		webauthnResp.Signature = data[a+c : a+c+s]
 	}
 
 	return webauthnResp, nil
@@ -506,7 +507,7 @@ func validateCredLoginData(webauthnResp base.WebauthnResponse, r *http.Request, 
 
 	valid := validateSignature(skey, webauthnResp, cdataHash[:])
 	if !valid {
-		//return nil, fmt.Errorf("signature verification failed")
+		return nil, fmt.Errorf("signature verification failed")
 	}
 
 	return user, nil
@@ -516,7 +517,7 @@ func validateSignature(skey *base.SecurityKey, webauthnResp base.WebauthnRespons
 	coseKey := skey.PubKeyCOSE
 	kty := coseKey[1].(uint64) // key type
 
-	log.Debugf("signature b64: %s", utils.B64Encode(webauthnResp.Signature))
+	log.Debugf("signature urlb64: %s", base64.RawURLEncoding.EncodeToString(webauthnResp.Signature))
 	sigValid := false
 	switch kty {
 	case 2: // EC2
@@ -524,14 +525,14 @@ func validateSignature(skey *base.SecurityKey, webauthnResp base.WebauthnRespons
 			R *big.Int
 			S *big.Int
 		}
-		key, err := parseEC2Key(coseKey)
+		key, h, err := parseEC2Key(coseKey)
 		parts := ecdsaParts{}
 		rest, err := asn1.Unmarshal(webauthnResp.Signature, &parts)
 		fmt.Println(rest, err)
 		if err == nil {
-			digest := make([]byte, 0, len(webauthnResp.AuthData.RawData)+len(cdataHash))
-			digest = append(digest, webauthnResp.AuthData.RawData...)
-			digest = append(digest, cdataHash...)
+			h.Write(webauthnResp.AuthData.RawData)
+			h.Write(cdataHash)
+			digest := h.Sum(nil)
 			sigValid = ecdsa.Verify(key, digest, parts.R, parts.S)
 		}
 	case 3: // RSA
@@ -564,7 +565,7 @@ func validateSignature(skey *base.SecurityKey, webauthnResp base.WebauthnRespons
 	return sigValid
 }
 
-func parseEC2Key(coseKey map[int]interface{}) (*ecdsa.PublicKey, error) {
+func parseEC2Key(coseKey map[int]interface{}) (*ecdsa.PublicKey, hash.Hash, error) {
 	alg := coseKey[3].(int64) // algorithm
 	x := coseKey[-2].([]uint8)
 	xInt := new(big.Int).SetBytes(x)
@@ -572,18 +573,22 @@ func parseEC2Key(coseKey map[int]interface{}) (*ecdsa.PublicKey, error) {
 	yInt := new(big.Int).SetBytes(y)
 
 	var curve elliptic.Curve
+	var h hash.Hash
 	switch alg {
 	case -7: // "ES256"
 		curve = elliptic.P256()
+		h = sha256.New()
 	case -35: // "ES384"
 		curve = elliptic.P384()
+		h = crypto.SHA384.New()
 	case -36: // "ES512"
 		curve = elliptic.P521()
+		h = crypto.SHA512.New()
 	default:
 		msg := fmt.Sprintf("unsupported EC2 algorithm identifier %d", alg)
 		log.Warningf(msg)
-		return nil, fmt.Errorf(msg)
+		return nil, nil, fmt.Errorf(msg)
 	}
 
-	return &ecdsa.PublicKey{X: xInt, Y: yInt, Curve: curve}, nil
+	return &ecdsa.PublicKey{X: xInt, Y: yInt, Curve: curve}, h, nil
 }
