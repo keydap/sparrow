@@ -75,6 +75,9 @@ func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 	case "clonePeer":
 		sendCloneDataToPeer(w, r, sp)
 
+	case "fetchPeers":
+		getPeersInformation(w, r, sp)
+
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("received path " + uri + " action " + action))
@@ -416,4 +419,54 @@ func _storePeerAfterReceivingApproval(joinReq *repl.JoinRequest, joinResp *repl.
 
 	sp.peers[joinResp.PeerServerId] = rp
 	return rp, nil
+}
+
+func getPeersInformation(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
+	opCtx := getOpCtxOfAdminSessionOrAbort(w, r, sp)
+	if opCtx == nil {
+		return
+	}
+
+	peersMap := sp.rl.GetReplicationPeers()
+	peers := make([]*repl.ReplicationPeer, len(peersMap))
+	i := 0
+	for _, v := range peersMap {
+		peers[i] = v
+		i++
+	}
+
+	data, err := json.Marshal(peers)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJson(w, data)
+}
+
+func getPendingApprovals(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
+	opCtx := getOpCtxOfAdminSessionOrAbort(w, r, sp)
+	if opCtx == nil {
+		return
+	}
+
+	reqMap := sp.rl.GetReceivedJoinRequests()
+	requests := make([]repl.JoinRequest, len(reqMap))
+	i := 0
+	for _, v := range reqMap {
+		v.WebHookToken = "" // blank it out
+		requests[i] = v
+		i++
+	}
+
+	data, err := json.Marshal(requests)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJson(w, data)
+}
+
+func writeJson(w http.ResponseWriter, data []byte) {
+	w.Header().Set("Content-Type", JSON_TYPE)
+	w.Write(data)
 }

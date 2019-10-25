@@ -80,20 +80,20 @@ type JoinResponse struct {
 }
 
 type ReplicationPeer struct {
-	ServerId           uint16
-	BaseUrl            string
-	EventsUrl          *url.URL
-	WebHookToken       string
-	ApprovedBy         string
-	Domain             string
-	CreatedTime        int64
-	LastVersions       map[string]string // a map of domain code and the associated event version
-	PendingVersions    map[string]string // a map of domain code and the associated LATEST event version that was NOT sent yet due to backlog processing
-	LastReqSentTime    int64
-	LastReqFailureTime int64
-	lock               sync.Mutex
-	pendingVersionLock sync.Mutex
-	catchingUpBacklog  bool
+	ServerId           uint16            `json:"serverId"`
+	BaseUrl            string            `json:"baseUrl"`
+	EventsUrl          *url.URL          `json:"-"`
+	WebHookToken       string            `json:"-"`
+	ApprovedBy         string            `json:"approvedBy"`
+	Domain             string            `json:"domain"`
+	CreatedTime        int64             `json:"createdTime"`
+	LastVersions       map[string]string `json:"lastVersions"` // a map of domain code and the associated event version
+	PendingVersions    map[string]string `json:"-"`            // a map of domain code and the associated LATEST event version that was NOT sent yet due to backlog processing
+	LastReqSentTime    int64             `json:"lastReqSentTime"`
+	LastReqFailureTime int64             `json:"lastReqFailureTime"`
+	lock               sync.Mutex        `json:"-"`
+	pendingVersionLock sync.Mutex        `json:"-"`
+	catchingUpBacklog  bool              `json:"-"`
 }
 
 func (peer *ReplicationPeer) IsBusy() bool {
