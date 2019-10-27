@@ -5,7 +5,9 @@ package base
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"net/http"
+	"strconv"
 )
 
 var (
@@ -139,6 +141,17 @@ func (se ScimError) Code() int {
 }
 
 func NewFromHttpResp(resp *http.Response) *ScimError {
+	data, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err == nil {
+		var se ScimError
+		err = json.Unmarshal(data, &se)
+		if err == nil {
+			se.code, _ = strconv.Atoi(se.Status)
+			return &se
+		}
+	}
+
 	detail := resp.Status
 	switch resp.StatusCode {
 	case 400:
