@@ -28,7 +28,6 @@ import (
 	"sparrow/repl"
 	"sparrow/schema"
 	"sparrow/utils"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -172,45 +171,30 @@ func initHome(srvHome string, overrideConf string) *conf.ServerConf {
 			strConf = overrideConf
 		}
 
-		addr := ""
-		addrFlag := flag.Lookup("a")
-		if addrFlag != nil {
-			addr = addrFlag.Value.(flag.Getter).Get().(string)
-		}
-
-		enableTls := false
-		enableTlsFlag := flag.Lookup("tls")
-		if enableTlsFlag != nil {
-			enableTls = enableTlsFlag.Value.(flag.Getter).Get().(bool)
-		}
-		addr = strings.TrimSpace(addr)
-
 		var tmp conf.ServerConf
 		err = json.Unmarshal([]byte(strConf), &tmp)
 		if err != nil {
 			panic(err)
 		}
 
-		if addr != "" || enableTls {
-			parts := strings.Split(addr, ":")
-			if len(parts) > 0 {
-				tmp.IpAddress = parts[0]
-			}
-			if len(parts) == 2 {
-				port, err := strconv.Atoi(parts[1])
-				if err != nil {
-					panic(err)
-				}
-				tmp.HttpPort = port
-				if port == 443 {
-					tmp.Https = true
-				}
-			}
+		hostFlag := flag.Lookup("h")
+		if hostFlag != nil {
+			tmp.IpAddress = hostFlag.Value.(flag.Getter).Get().(string)
+		}
 
-			if enableTls {
-				tmp.Https = true
-			}
+		enableTlsFlag := flag.Lookup("tls")
+		if enableTlsFlag != nil {
+			tmp.Https = enableTlsFlag.Value.(flag.Getter).Get().(bool)
+		}
 
+		httpPortFlag := flag.Lookup("hp")
+		if httpPortFlag != nil {
+			tmp.HttpPort = httpPortFlag.Value.(flag.Getter).Get().(int)
+		}
+
+		ldapPortFlag := flag.Lookup("lp")
+		if ldapPortFlag != nil {
+			tmp.LdapPort = ldapPortFlag.Value.(flag.Getter).Get().(int)
 		}
 
 		// override the server ID only if it is set to <=0
