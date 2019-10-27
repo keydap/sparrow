@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sparrow/base"
 	"sparrow/repl"
+	"sparrow/utils"
 )
 
 type ReplInterceptor struct {
@@ -16,8 +17,9 @@ type ReplInterceptor struct {
 	transport    *http.Transport
 	serverId     uint16
 	webhookToken string
-	buf          *bytes.Buffer
-	enc          *gob.Encoder
+	// do not reuse the encoder
+	//buf          *bytes.Buffer
+	//enc          *gob.Encoder
 }
 
 func (ri *ReplInterceptor) PreCreate(crCtx *base.CreateContext) error {
@@ -174,9 +176,15 @@ func (ri *ReplInterceptor) PostAuthDataUpdate(user *base.Resource) {
 	event.Version = user.GetVersion()
 	event.DomainCode = ri.domainCode
 	event.Type = repl.REPLACE_AUTHDATA
-	err := ri.enc.Encode(user.AuthData)
-	event.Data = ri.buf.Bytes()
+	var buf bytes.Buffer
+	// a new decoder must be created, without which the Skeys field is not properly getting
+	// encoded, even tried registering the type map[int]interface{} but didn't work
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(user.AuthData)
+	event.Data = buf.Bytes()
+	fmt.Println(utils.B64Encode(event.Data))
 	event.RtName = user.GetType().Name
+	event.Rid = user.GetId()
 	dataBuf, err := ri.replSilo.StoreEvent(event)
 	// send to the peers
 	if err == nil {

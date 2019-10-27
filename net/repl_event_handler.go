@@ -108,6 +108,15 @@ func processEvent(event repl.ReplicationEvent, serverId uint16, sp *Sparrow) err
 		pr.Close()
 		// delete or move the files to a stash dir
 
+	case repl.REPLACE_AUTHDATA:
+		dec := gob.NewDecoder(bytes.NewBuffer(event.Data))
+		var ad base.AuthData
+		err = dec.Decode(&ad)
+		if err == nil {
+			err = pr.UpdateAuthData(event.Rid, event.Version, ad)
+		} else {
+			log.Criticalf("failed to decode the AuthData recieved from the peer %#v", err)
+		}
 	default:
 		msg := fmt.Sprintf("unknown event type %d (server ID %d)", event.Type, serverId)
 		log.Debugf(msg)

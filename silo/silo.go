@@ -2358,3 +2358,43 @@ func (sl *Silo) StoreSecurityKey(rid string, secKey *base.SecurityKey) (*base.Re
 
 	return user, nil
 }
+
+func (sl *Silo) UpdateAuthData(rid string, version string, ad base.AuthData) error {
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		log.Warningf("Failed to begin transaction for updating AuthData %#v", err)
+		return err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			tx.Rollback()
+			log.Debugf("Error while updating AuthData key %#v", err)
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	rt := sl.resTypes["User"]
+	user, err := sl.getUsingTx(rid, rt, tx)
+	if err != nil {
+		return err
+	}
+
+	curVersion := user.GetVersion()
+	if strings.Compare(curVersion, version) > 0 {
+		return fmt.Errorf("replication event is older than the current version %s of the target resource %s, aborting authdata update", curVersion, rid)
+	}
+	user.AuthData = &ad
+	// update the version with the given value
+	meta := user.GetMeta().GetFirstSubAt()
+	meta["version"].Values[0] = version
+	sl.storeResource(tx, user)
+
+	return nil
+}

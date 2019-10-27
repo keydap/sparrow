@@ -78,6 +78,9 @@ func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 	case "fetchPeers":
 		getPeersInformation(w, r, sp)
 
+	case "fetchPendingApprovals":
+		getPendingApprovals(w, r, sp)
+
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("received path " + uri + " action " + action))
@@ -106,6 +109,8 @@ func receivedApproval(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		writeError(w, base.NewNotFoundError(msg))
 		return
 	}
+
+	sp.rl.DeleteSentJoinRequest(sentReq.ServerId)
 
 	peer, err := _storePeerAfterReceivingApproval(sentReq, &joinResp, w, sp)
 	if err == nil {
@@ -166,6 +171,7 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 		return
 	}
 
+	sp.rl.DeleteReceivedJoinRequest(serverId)
 	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
 
 	// first store the peer

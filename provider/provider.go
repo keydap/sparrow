@@ -9,7 +9,6 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	_ "github.com/dgrijalva/jwt-go"
@@ -133,8 +132,6 @@ func NewProvider(layout *Layout, sc *conf.ServerConf, peers map[uint16]*repl.Rep
 	replInterceptor.domainCode = prv.domainCode
 	replInterceptor.serverId = sc.ServerId
 	replInterceptor.webhookToken = sc.ReplWebHookToken
-	replInterceptor.buf = new(bytes.Buffer)
-	replInterceptor.enc = gob.NewEncoder(replInterceptor.buf)
 	prv.replInterceptor = replInterceptor
 
 	prv.LdapTemplates = base.LoadLdapTemplates(layout.LdapTmplDir, prv.RsTypes)
@@ -848,6 +845,11 @@ func (prv *Provider) DeleteSecurityKey(userId string, credentialId string) error
 		prv.replInterceptor.PostAuthDataUpdate(user)
 	}
 	return err
+}
+
+// Note: this method MUST be used only for replication purpose
+func (prv *Provider) UpdateAuthData(rid string, version string, ad base.AuthData) error {
+	return prv.sl.UpdateAuthData(rid, version, ad)
 }
 
 func genDomainCode(name string) string {

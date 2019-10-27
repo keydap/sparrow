@@ -219,9 +219,7 @@ func (rl *ReplSilo) _getJoinRequests(bucketName []byte) []JoinRequest {
 		return requests
 	}
 
-	defer func() {
-		tx.Rollback()
-	}()
+	defer tx.Rollback()
 
 	buck := tx.Bucket(bucketName)
 	cursor := buck.Cursor()
