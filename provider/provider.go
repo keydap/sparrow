@@ -852,6 +852,10 @@ func (prv *Provider) UpdateAuthData(rid string, version string, ad base.AuthData
 	return prv.sl.UpdateAuthData(rid, version, ad)
 }
 
+func (prv *Provider) SendCreateDomainEvent(name string) error {
+	return prv.replInterceptor.PostCreateDomain(name)
+}
+
 func genDomainCode(name string) string {
 	sh2 := sha256.New()
 	sh2.Write([]byte(name))

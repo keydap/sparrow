@@ -25,8 +25,8 @@ func (sp *Sparrow) handleDomainLifecycle(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			writeError(w, base.NewBadRequestError(err.Error()))
 		} else {
-			send
+			pr := sp.providers[sp.srvConf.ControllerDomain]
+			pr.SendCreateDomainEvent(name)
 		}
-
 	}
 }

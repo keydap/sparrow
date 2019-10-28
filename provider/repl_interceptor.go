@@ -194,6 +194,21 @@ func (ri *ReplInterceptor) PostAuthDataUpdate(user *base.Resource) {
 	}
 }
 
+func (ri *ReplInterceptor) PostCreateDomain(name string) error {
+	event := repl.ReplicationEvent{}
+	event.NewDomainName = name
+	event.Type = repl.NEW_DOMAIN
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the new domain replication event [%#v]", err)
+	}
+
+	return err
+}
+
 func (ri *ReplInterceptor) sendToPeers(dataBuf *bytes.Buffer, event repl.ReplicationEvent, peers map[uint16]*repl.ReplicationPeer) {
 	for _, v := range peers {
 		go v.SendEvent(dataBuf.Bytes(), ri.transport, ri.serverId, ri.webhookToken, event.DomainCode, event.Version, ri.replSilo)
