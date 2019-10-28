@@ -10,6 +10,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/mholt/caddy"
@@ -361,8 +362,14 @@ func (sp *Sparrow) createDomain(domainName string) error {
 	log.Infof("Creating domain %s", domainName)
 	sc := sp.srvConf
 
-	defaultDomain := filepath.Join(sc.DomainsDir, domainName)
-	layout, err := provider.NewLayout(defaultDomain, true)
+	domainDir := filepath.Join(sc.DomainsDir, domainName)
+	fi, _ := os.Stat(domainDir)
+	if fi != nil {
+		msg := fmt.Sprintf("domain %s already exists", domainName)
+		log.Debugf(msg)
+		return errors.New(msg)
+	}
+	layout, err := provider.NewLayout(domainDir, true)
 	if err != nil {
 		return err
 	}

@@ -211,6 +211,9 @@ func (sp *Sparrow) setup(c *caddy.Controller) error {
 
 	router.PathPrefix("/repl/").HandlerFunc(sp.replHandler)
 
+	domainsRouter := router.PathPrefix("/domains").Subrouter()
+	domainsRouter.HandleFunc("/dlc", sp.handleDomainLifecycle).Methods("POST")
+
 	httpserver.GetConfig(c).AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
 		return muxHandler{router: router, next: next}
 	})

@@ -344,14 +344,14 @@ func getOpCtxOfAdminSessionOrAbort(w http.ResponseWriter, r *http.Request, sp *S
 	}
 
 	if _, ok := opCtx.Session.Roles[provider.SystemGroupId]; !ok {
-		err := base.NewForbiddenError("Insufficient access privileges, only users belonging to System group can configure replication")
+		err := base.NewForbiddenError("Insufficient access privileges, only users belonging to System group are allowed to perform this operation")
 		log.Debugf("%#v", err)
 		writeError(w, err)
 		return nil
 	}
 
 	if opCtx.Session.Domain != sp.srvConf.ControllerDomain {
-		err := base.NewForbiddenError("Insufficient access privileges, only users of the control domain are allowed to configure replication")
+		err := base.NewForbiddenError("Insufficient access privileges, only users of the control domain are allowed to perform this operation")
 		log.Debugf("%#v", err)
 		writeError(w, err)
 		return nil
