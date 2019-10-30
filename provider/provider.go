@@ -852,8 +852,20 @@ func (prv *Provider) UpdateAuthData(rid string, version string, ad base.AuthData
 	return prv.sl.UpdateAuthData(rid, version, ad)
 }
 
-func (prv *Provider) SendCreateDomainEvent(name string) error {
-	return prv.replInterceptor.PostCreateDomain(name)
+func (prv *Provider) SendCreateDomainEvent(name string, ctx *base.OpContext) error {
+	defer func() {
+		event := base.AuditEvent{}
+		event.StatusCode = 201
+		event.ActorId = ctx.Session.Sub
+		event.ActorName = ctx.Session.Username
+		event.Desc = "created new domain"
+		event.IpAddress = ctx.ClientIP
+		event.Payload = name
+		event.Uri = ctx.Endpoint
+		event.Operation = "createDomain"
+		prv.Al.LogEvent(event)
+	}()
+	return prv.replInterceptor.PostCreateDomain(name, prv.sl.Csn().String())
 }
 
 func genDomainCode(name string) string {

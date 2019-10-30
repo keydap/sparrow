@@ -194,8 +194,9 @@ func (ri *ReplInterceptor) PostAuthDataUpdate(user *base.Resource) {
 	}
 }
 
-func (ri *ReplInterceptor) PostCreateDomain(name string) error {
+func (ri *ReplInterceptor) PostCreateDomain(name string, version string) error {
 	event := repl.ReplicationEvent{}
+	event.Version = version
 	event.NewDomainName = name
 	event.Type = repl.NEW_DOMAIN
 	dataBuf, err := ri.replSilo.StoreEvent(event)
