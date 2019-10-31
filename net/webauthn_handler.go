@@ -454,9 +454,9 @@ func validateCredLoginData(webauthnResp base.WebauthnResponse, r *http.Request, 
 		scheme = "https://"
 	}
 
-	origin := (scheme + r.Host)
+	origin := (scheme + stripPortNumber(r.Host))
 	if clientData.Origin != origin {
-		return nil, fmt.Errorf("invalid origin")
+		return nil, fmt.Errorf("invalid origin %s", origin)
 	}
 
 	// TODO support token binding
