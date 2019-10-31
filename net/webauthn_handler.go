@@ -394,7 +394,7 @@ func validateRegistrationData(webauthnResp base.WebauthnResponse, r *http.Reques
 		scheme = "https://"
 	}
 
-	origin := (scheme + r.Host)
+	origin := (scheme + stripPortNumber(r.Host))
 	if clientData.Origin != origin {
 		return nil, fmt.Errorf("invalid origin %s", origin)
 	}
