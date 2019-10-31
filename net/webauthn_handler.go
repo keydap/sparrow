@@ -120,7 +120,7 @@ func (sp *Sparrow) pubKeyOptions(w http.ResponseWriter, r *http.Request) {
 	pkco.Challenge = sp.createWebauthnChallenge(opCtx.Session.Sub, pr)
 	log.Debugf("challenge: %s", pkco.Challenge)
 	pkco.RpName = "Sparrow Identity Server"
-	pkco.RpId = stripPortNumber(r.Host)
+	pkco.RpId = stripPortNumber(r.Host, true)
 	pkco.PubKeyCredParams = base.DEFAULT_PUB_KEY_CRED_PARAMS
 
 	pkco.UserName = username
@@ -186,7 +186,7 @@ func (sp *Sparrow) sendWebauthnAuthReq(w http.ResponseWriter, r *http.Request) {
 		authReq.CredIds[i] = v.CredentialId
 		i++
 	}
-	authReq.RpId = stripPortNumber(r.Host)
+	authReq.RpId = stripPortNumber(r.Host, true)
 	authReq.Timeout = 90000
 	authReq.UserVerification = "discouraged" // TODO should be fetched from RP specific policy
 
@@ -197,12 +197,14 @@ func (sp *Sparrow) sendWebauthnAuthReq(w http.ResponseWriter, r *http.Request) {
 func (sp *Sparrow) webauthnVerifyCred(w http.ResponseWriter, r *http.Request) {
 	webauthnResp, err := sp.parseWebauthnResp(r)
 	if err != nil {
+		log.Debugf(err.Error())
 		redirectToLogin(w, r)
 		return
 	}
 
 	user, err := validateCredLoginData(webauthnResp, r, sp)
 	if err != nil {
+		log.Debugf(err.Error())
 		redirectToLogin(w, r)
 		return
 	}
@@ -223,11 +225,18 @@ func (sp *Sparrow) webauthnVerifyCred(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("/redirect"))
 }
 
-func stripPortNumber(host string) string {
+func stripPortNumber(host string, anyPort bool) string {
 	// if it is on localhost:xx then return just localhost to avoid `DOMException: "The operation is insecure."`
 	pos := strings.Index(host, ":")
 	if pos > 0 {
-		host = host[:pos]
+		if anyPort {
+			host = host[:pos]
+		} else {
+			port := host[pos+1:]
+			if port == "80" || port == "443" {
+				host = host[:pos]
+			}
+		}
 	}
 	return host
 }
@@ -394,7 +403,7 @@ func validateRegistrationData(webauthnResp base.WebauthnResponse, r *http.Reques
 		scheme = "https://"
 	}
 
-	origin := (scheme + stripPortNumber(r.Host))
+	origin := (scheme + stripPortNumber(r.Host, false))
 	if clientData.Origin != origin {
 		return nil, fmt.Errorf("invalid origin %s", origin)
 	}
@@ -405,7 +414,7 @@ func validateRegistrationData(webauthnResp base.WebauthnResponse, r *http.Reques
 	cdataHash := sha256.Sum256(clientData.RawBytes)
 	fmt.Printf("client data hash %x\n", cdataHash)
 
-	rpId := stripPortNumber(r.Host)
+	rpId := stripPortNumber(r.Host, true)
 	calculatedRpIdHash := sha256.Sum256([]byte(rpId))
 
 	if bytes.Compare(calculatedRpIdHash[:], authData.RpIdHash) != 0 {
@@ -454,7 +463,7 @@ func validateCredLoginData(webauthnResp base.WebauthnResponse, r *http.Request, 
 		scheme = "https://"
 	}
 
-	origin := (scheme + stripPortNumber(r.Host))
+	origin := (scheme + stripPortNumber(r.Host, false))
 	if clientData.Origin != origin {
 		return nil, fmt.Errorf("invalid origin %s", origin)
 	}
@@ -465,7 +474,7 @@ func validateCredLoginData(webauthnResp base.WebauthnResponse, r *http.Request, 
 	cdataHash := sha256.Sum256(clientData.RawBytes)
 	fmt.Printf("client data hash %x\n", cdataHash)
 
-	rpId := stripPortNumber(r.Host)
+	rpId := stripPortNumber(r.Host, true)
 	calculatedRpIdHash := sha256.Sum256([]byte(rpId))
 
 	if bytes.Compare(calculatedRpIdHash[:], authData.RpIdHash) != 0 {
