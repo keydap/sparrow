@@ -588,22 +588,12 @@ func (sp *Sparrow) redirectAfterAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	af := getAuthFlow(r, sp)
-	if af == nil {
-		af = &authFlow{}
-	}
+	r.ParseForm()
+	samlReq := r.Form.Get("SAMLRequest")
 
-	if af.FromOauth() {
-		log.Debugf("sending oauth request for consent")
-		// FIXME show consent only if application/client config enforces it
-		setAuthFlow(sp, af, w)
-		paramMap := copyParams(r)
-		consentTmpl := sp.templates["consent.html"]
-		consentTmpl.Execute(w, paramMap)
-	} else if af.FromSaml() {
-		log.Debugf("resuming SAML flow")
-		setAuthFlow(sp, nil, w)
-		sendSamlResponse(sp, w, r, session, af)
+	if samlReq != "" {
+		log.Debugf("resuming SAML flow after authentication")
+		sp.handleSamlReq(w, r)
 	} else {
 		setAuthFlow(sp, nil, w)
 		http.Redirect(w, r, "/ui", http.StatusFound)

@@ -190,8 +190,13 @@ func (sp *Sparrow) sendWebauthnAuthReq(w http.ResponseWriter, r *http.Request) {
 	authReq.Timeout = 90000
 	authReq.UserVerification = "discouraged" // TODO should be fetched from RP specific policy
 
+	params := copyParams(r)
+	delete(params, "password")
+	pMap := make(map[string]interface{})
+	pMap["authReq"] = authReq
+	pMap["params"] = params
 	tmpl := sp.templates["webauthn.html"]
-	tmpl.Execute(w, authReq)
+	tmpl.Execute(w, pMap)
 }
 
 func (sp *Sparrow) webauthnVerifyCred(w http.ResponseWriter, r *http.Request) {

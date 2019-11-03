@@ -207,7 +207,7 @@ func (sp *Sparrow) setup(c *caddy.Controller) error {
 	router.HandleFunc("/registerTotp", sp.registerTotp).Methods("POST")
 	router.HandleFunc("/webauthn", sp.sendWebauthnAuthReq).Methods("POST")
 	router.HandleFunc("/webauthnVerifyCred", sp.webauthnVerifyCred).Methods("POST")
-	router.HandleFunc("/redirect", sp.redirectAfterAuth).Methods("GET")
+	router.HandleFunc("/redirect", sp.redirectAfterAuth).Methods("GET", "POST")
 
 	router.PathPrefix("/repl/").HandlerFunc(sp.replHandler)
 
