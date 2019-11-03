@@ -333,7 +333,9 @@ func (sc *SearchContext) CanDenyOp() (bool, *FilterNode) {
 	var fn *FilterNode
 	for i, rt := range sc.ResTypes {
 		efp := sc.Session.EffPerms[rt.Name]
-		if efp == nil {
+		if efp != nil && efp.ReadPerm.AllowAll {
+			// valid case
+		} else if efp == nil {
 			// flip the bit at ith index
 			flipped ^= (1 << uint(i))
 			//} else if efp.ReadPerm.AllowAttrs == nil && !efp.ReadPerm.AllowAll {
