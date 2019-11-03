@@ -111,6 +111,13 @@ func (sl *Silo) Patch(patchCtx *base.PatchContext) (err error) {
 			meta := res.GetMeta().GetFirstSubAt()
 			meta["version"].Values[0] = patchCtx.ReplVersion
 		} else {
+			// special hack for twofactorType
+			if rt.Name == "User" {
+				if !res.IsTfaEnabled() && res.IsTfaSetupComplete() {
+					res.AuthData.TotpSecret = ""
+					res.AuthData.TotpCodes = nil
+				}
+			}
 			res.UpdateLastModTime(sl.cg.NewCsn())
 		}
 
