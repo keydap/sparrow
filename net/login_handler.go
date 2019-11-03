@@ -555,6 +555,18 @@ func setSsoCookie(pr *provider.Provider, session *base.RbacSession, w http.Respo
 	cookie.Value = session.Jti
 	//cookie.Secure
 	http.SetCookie(w, cookie)
+
+	prCookie := &http.Cookie{}
+	prCookie.Path = "/"
+	prCookie.MaxAge = cookie.MaxAge
+	prCookie.Expires = cookie.Expires
+	prCookie.HttpOnly = true
+	prCookie.SameSite = http.SameSiteStrictMode
+	prCookie.Name = TENANT_COOKIE
+	prCookie.Value = pr.Name
+	//cookie.Secure
+	http.SetCookie(w, prCookie)
+
 }
 
 func (sp *Sparrow) splitUsernameAndDomain(username string) (string, string) {

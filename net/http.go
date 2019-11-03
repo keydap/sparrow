@@ -725,7 +725,11 @@ func getPrFromParam(r *http.Request, sp *Sparrow) (pr *provider.Provider, err er
 	// NO NEED TO parse Form cause the domain ID will be either in the
 	// Header or in a Cookie
 	//r.ParseForm()
-	domain := r.Header.Get(TENANT_COOKIE)
+	domain := ""
+	domainCookie, _ := r.Cookie(TENANT_COOKIE)
+	if domainCookie != nil {
+		domain = domainCookie.Value
+	}
 
 	if len(domain) == 0 {
 		domain = r.Header.Get(TENANT_HEADER)
