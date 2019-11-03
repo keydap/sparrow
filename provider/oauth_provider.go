@@ -265,6 +265,7 @@ func parseMetadata(location string) (spmd *samlTypes.SPSSODescriptor, err error)
 		return nil, err
 	}
 
+	spmd = &samlTypes.SPSSODescriptor{}
 	err = xml.Unmarshal(data, spmd)
 	if err != nil {
 		return nil, err
