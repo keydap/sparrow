@@ -8,6 +8,16 @@
 </head>
 <body>
     <div class="wrapper">
+        <form action="/redirect" method="post">
+        <!-- DO NOT remove the below part -->
+        <table style="display: none;">
+            {{range $k, $v := .params}}
+                <tr>
+                    <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
+                </tr>
+            {{end}}
+        </table>
+        </form>
     </div>
 <script type="application/javascript">
     if (!window.PublicKeyCredential) {
@@ -16,7 +26,7 @@
     }
     else {
         var webauthnTransports = ["usb", "nfc", "ble", "internal"]
-        var credIds = {{.CredIds}}
+        var credIds = {{.authReq.CredIds}}
         var creds = new Array()
         for (var i = 0; i < credIds.length; i++) {
             var c = {
@@ -28,10 +38,10 @@
         }
         var publicKey = {
             allowCredentials: creds,
-            challenge: decodeUrlBase64("{{.Challenge}}"),
-            rpId : "{{.RpId}}",
-            timeout: {{.Timeout}},
-            userVerification: {{.UserVerification}}
+            challenge: decodeUrlBase64("{{.authReq.Challenge}}"),
+            rpId : "{{.authReq.RpId}}",
+            timeout: {{.authReq.Timeout}},
+            userVerification: {{.authReq.UserVerification}}
         }
 
         navigator.credentials.get({publicKey})
@@ -51,7 +61,7 @@
                     if(xhr.readyState == XMLHttpRequest.DONE &&
                         xhr.status == 200) {
                         console.log(xhr.responseText)
-                        window.location.href = xhr.responseText
+                        document.forms[0].submit()
                     }
                     else {
                         console.log("non 200 response received")
