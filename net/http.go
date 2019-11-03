@@ -63,7 +63,7 @@ func (mh muxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, err
 
 func (sp *Sparrow) startHttp() {
 	srvConf := sp.srvConf
-	hostAddr := srvConf.IpAddress + ":" + strconv.Itoa(srvConf.HttpPort)
+	hostAddr := "0.0.0.0:" + strconv.Itoa(srvConf.HttpPort)
 	log.Infof("Starting http server(%d) %s", srvConf.ServerId, hostAddr)
 	caddy.AppName = "Sparrow Identity Server"
 	caddy.AppVersion = SparrowVersion
