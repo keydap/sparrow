@@ -544,6 +544,25 @@ func (sp *Sparrow) handleChangePasswordReq(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, path, http.StatusFound)
 }
 
+func unsetSsoCookie(w http.ResponseWriter) {
+	cookie := &http.Cookie{}
+	cookie.Path = "/"
+	cookie.MaxAge = -1
+	cookie.HttpOnly = true
+	cookie.SameSite = http.SameSiteStrictMode
+	cookie.Name = SSO_COOKIE
+	cookie.Value = ""
+	http.SetCookie(w, cookie)
+
+	prCookie := &http.Cookie{}
+	prCookie.Path = "/"
+	cookie.MaxAge = -1
+	prCookie.HttpOnly = true
+	prCookie.SameSite = http.SameSiteStrictMode
+	prCookie.Name = TENANT_COOKIE
+	prCookie.Value = ""
+	http.SetCookie(w, prCookie)
+}
 func setSsoCookie(pr *provider.Provider, session *base.RbacSession, w http.ResponseWriter) {
 	cookie := &http.Cookie{}
 	cookie.Path = "/"

@@ -839,6 +839,7 @@ func (sp *Sparrow) handleLogout(w http.ResponseWriter, r *http.Request) {
 		if opCtx.Sso {
 			_logoutSessionApps(pr, opCtx)
 		}
+		unsetSsoCookie(w)
 	}
 	w.WriteHeader(code)
 }
