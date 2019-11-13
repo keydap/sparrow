@@ -75,6 +75,12 @@ func (sp *Sparrow) replHandler(w http.ResponseWriter, r *http.Request) {
 	case "clonePeer":
 		sendCloneDataToPeer(w, r, sp)
 
+	case "fetchPeers":
+		getPeersInformation(w, r, sp)
+
+	case "fetchPendingApprovals":
+		getPendingApprovals(w, r, sp)
+
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("received path " + uri + " action " + action))
@@ -103,6 +109,8 @@ func receivedApproval(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
 		writeError(w, base.NewNotFoundError(msg))
 		return
 	}
+
+	sp.rl.DeleteSentJoinRequest(sentReq.ServerId)
 
 	peer, err := _storePeerAfterReceivingApproval(sentReq, &joinResp, w, sp)
 	if err == nil {
@@ -163,6 +171,7 @@ func sendApprovalForJoinRequest(w http.ResponseWriter, r *http.Request, sp *Spar
 		return
 	}
 
+	sp.rl.DeleteReceivedJoinRequest(serverId)
 	baseUrl := fmt.Sprintf("https://%s:%d/repl", joinReq.Host, joinReq.Port)
 
 	// first store the peer
@@ -335,14 +344,14 @@ func getOpCtxOfAdminSessionOrAbort(w http.ResponseWriter, r *http.Request, sp *S
 	}
 
 	if _, ok := opCtx.Session.Roles[provider.SystemGroupId]; !ok {
-		err := base.NewForbiddenError("Insufficient access privileges, only users belonging to System group can configure replication")
+		err := base.NewForbiddenError("Insufficient access privileges, only users belonging to System group are allowed to perform this operation")
 		log.Debugf("%#v", err)
 		writeError(w, err)
 		return nil
 	}
 
 	if opCtx.Session.Domain != sp.srvConf.ControllerDomain {
-		err := base.NewForbiddenError("Insufficient access privileges, only users of the control domain are allowed to configure replication")
+		err := base.NewForbiddenError("Insufficient access privileges, only users of the control domain are allowed to perform this operation")
 		log.Debugf("%#v", err)
 		writeError(w, err)
 		return nil
@@ -416,4 +425,54 @@ func _storePeerAfterReceivingApproval(joinReq *repl.JoinRequest, joinResp *repl.
 
 	sp.peers[joinResp.PeerServerId] = rp
 	return rp, nil
+}
+
+func getPeersInformation(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
+	opCtx := getOpCtxOfAdminSessionOrAbort(w, r, sp)
+	if opCtx == nil {
+		return
+	}
+
+	peersMap := sp.rl.GetReplicationPeers()
+	peers := make([]*repl.ReplicationPeer, len(peersMap))
+	i := 0
+	for _, v := range peersMap {
+		peers[i] = v
+		i++
+	}
+
+	data, err := json.Marshal(peers)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJson(w, data)
+}
+
+func getPendingApprovals(w http.ResponseWriter, r *http.Request, sp *Sparrow) {
+	opCtx := getOpCtxOfAdminSessionOrAbort(w, r, sp)
+	if opCtx == nil {
+		return
+	}
+
+	reqMap := sp.rl.GetReceivedJoinRequests()
+	requests := make([]repl.JoinRequest, len(reqMap))
+	i := 0
+	for _, v := range reqMap {
+		v.WebHookToken = "" // blank it out
+		requests[i] = v
+		i++
+	}
+
+	data, err := json.Marshal(requests)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJson(w, data)
+}
+
+func writeJson(w http.ResponseWriter, data []byte) {
+	w.Header().Set("Content-Type", JSON_TYPE)
+	w.Write(data)
 }

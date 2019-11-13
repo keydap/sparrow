@@ -1,8 +1,18 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache">
 <title>Sparrow - Login</title>
-<link rel="stylesheet" href="/ui/login-style.css">
+<link rel="stylesheet" type="text/css" href="/ui/login-style.css">
+<script type="application/javascript">
+    function initWebauthn() {
+        var username = document.getElementById("username").value
+        if(username.trim() != "") {
+            document.forms[0].action = "/webauthn"
+            document.forms[0].submit()
+        }
+    }
+</script>
 </head>
 <body>
     <div class="wrapper">
@@ -15,6 +25,8 @@
             </div>
             <div class="input-group">
                 <input class="btn" type="submit" id="login" value="Login" tabindex="3">
+                <br/>
+                <input class="btn" type="submit" id="login-webauthn" value="Login Using Security Key" tabindex="4" onclick="initWebauthn()">
             </div>
             <!-- DO NOT remove the below part -->
             <table style="display: none;">

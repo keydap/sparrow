@@ -5,6 +5,7 @@ package silo
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/gob"
 	"fmt"
 	"github.com/pquerna/otp/totp"
@@ -29,6 +30,9 @@ var (
 
 	// a bucket that holds the names of the resource buckets e.g users, groups etc.
 	BUC_INDICES = []byte("indices")
+
+	// a bucket that holds the unique ids of users that are registered for Webauthn.
+	BUC_WEBAUTHN = []byte("webauthn")
 
 	// the delimiter that separates resource and index name
 	RES_INDEX_DELIM = ":"
@@ -382,6 +386,11 @@ func Open(path string, serverId uint16, config *conf.DomainConfig, rtypes map[st
 		}
 
 		_, err = tx.CreateBucketIfNotExists(BUC_INDICES)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateBucketIfNotExists(BUC_WEBAUTHN)
 		if err != nil {
 			return err
 		}
@@ -772,8 +781,15 @@ func (sl *Silo) InsertInternal(crCtx *base.CreateContext) (err error) {
 	}
 
 	// for User resource initialize AuthData
-	if !crCtx.Repl && rt.Name == "User" {
-		inRes.AuthData = &base.AuthData{}
+	if rt.Name == "User" {
+		if !crCtx.Repl {
+			inRes.AuthData = &base.AuthData{}
+		} else {
+			wid := inRes.AuthData.WebauthnId
+			if wid != "" {
+				tx.Bucket(BUC_WEBAUTHN).Put([]byte(wid), []byte(rid))
+			}
+		}
 	}
 
 	sl.storeResource(tx, inRes)
@@ -945,7 +961,7 @@ func (sl *Silo) Delete(delCtx *base.DeleteContext) (err error) {
 		}
 
 		if err != nil {
-			log.Debugf("failed to remove resource with ID %s\n %s", rid, err)
+			log.Debugf("failed to remove resource with ID %s %#v", rid, err)
 			tx.Rollback()
 		} else {
 			tx.Commit()
@@ -1049,7 +1065,7 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 				}
 			}
 		}
-	} else {
+	} else if rt.Name == "User" {
 		groups := resource.GetAttr("groups")
 		if groups != nil {
 			refRt := sl.resTypes["Group"]
@@ -1073,6 +1089,13 @@ func (sl *Silo) _removeResource(rid string, rt *schema.ResourceType, tx *bolt.Tx
 						break
 					}
 				}
+			}
+		}
+		wid := resource.AuthData.WebauthnId
+		if wid != "" {
+			err := tx.Bucket(BUC_WEBAUTHN).Delete([]byte(wid))
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -2166,4 +2189,212 @@ func isChangePassword(user *base.Resource) bool {
 
 func (sl *Silo) Csn() base.Csn {
 	return sl.cg.NewCsn()
+}
+
+func (sl *Silo) GenWebauthnIdFor(userId string) (*base.Resource, error) {
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		detail := fmt.Sprintf("Could not begin a transaction for generating webauthn ID for the resource %s %#v", userId, err.Error())
+		log.Criticalf(detail)
+		err = base.NewInternalserverError(detail)
+		return nil, err
+	}
+
+	generated := false
+	// locking mutex is not needed for this operation
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			log.Debugf("failed to update user with ID %s %#v", userId, err)
+			tx.Rollback()
+		} else {
+			if generated {
+				tx.Commit()
+			} else {
+				tx.Rollback()
+			}
+		}
+	}()
+
+	wid := ""
+	user, err := sl.getUsingTx(userId, sl.resTypes["User"], tx)
+	if err == nil {
+		wid = user.AuthData.WebauthnId
+		if wid == "" {
+			wid = base64.RawURLEncoding.EncodeToString(utils.Rand32())
+			user.AuthData.WebauthnId = wid
+			user.UpdateLastModTime(sl.cg.NewCsn())
+			sl.storeResource(tx, user)
+			tx.Bucket(BUC_WEBAUTHN).Put([]byte(wid), []byte(userId))
+			generated = true
+			log.Debugf("Successfully generated webauthn ID for user with ID %s", userId)
+		} else {
+			return nil, base.NewConflictError("webauthn ID already exists for the user")
+		}
+	}
+
+	return user, err
+}
+
+func (sl *Silo) GetUserByWebauthnId(webauthnId string) (user *base.Resource, err error) {
+	tx, err := sl.db.Begin(false)
+	if err != nil {
+		return nil, err
+	}
+
+	rt := sl.resTypes["User"]
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			log.Debugf("Error while fetching the user with webauthn ID %s %#v", webauthnId, err)
+		}
+
+		tx.Rollback()
+	}()
+
+	rid := tx.Bucket(BUC_WEBAUTHN).Get([]byte(webauthnId))
+
+	if len(rid) == 0 {
+		return nil, fmt.Errorf("User with webauthn ID %s not found", webauthnId)
+	}
+
+	user, err = sl.getUsingTx(string(rid), rt, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (sl *Silo) DeleteSecurityKey(userId string, credentialId string) (*base.Resource, error) {
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		log.Warningf("Failed to begin transaction for deleting securitykey %#v", err)
+		return nil, err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			tx.Rollback()
+			log.Debugf("Error while deleting security key %#v", err)
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	rt := sl.resTypes["User"]
+	user, err := sl.getUsingTx(userId, rt, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	keys := user.AuthData.Skeys
+	if keys == nil {
+		// debug a slightly different message than what is advertised
+		log.Debugf("there are no securitykeys configured for the user %s", userId)
+		msg := fmt.Sprintf("no securitykey exists with the credential ID %s", credentialId)
+		return nil, base.NewNotFoundError(msg)
+	} else if _, ok := keys[credentialId]; !ok {
+		msg := fmt.Sprintf("no securitykey exists with the credential ID %s", credentialId)
+		log.Debugf(msg)
+		return nil, base.NewNotFoundError(msg)
+	}
+
+	delete(user.AuthData.Skeys, credentialId)
+	user.UpdateLastModTime(sl.cg.NewCsn())
+	sl.storeResource(tx, user)
+	log.Debugf("deleted security key %s of user %s", credentialId, userId)
+	return user, nil
+}
+
+func (sl *Silo) StoreSecurityKey(rid string, secKey *base.SecurityKey) (*base.Resource, error) {
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		log.Warningf("Failed to begin transaction for storing securitykey %#v", err)
+		return nil, err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			tx.Rollback()
+			log.Debugf("Error while storing security key %#v", err)
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	rt := sl.resTypes["User"]
+	user, err := sl.getUsingTx(rid, rt, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	if user.AuthData.Skeys == nil {
+		user.AuthData.Skeys = make(map[string]*base.SecurityKey)
+	}
+
+	user.AuthData.Skeys[secKey.CredentialId] = secKey
+	user.UpdateLastModTime(sl.cg.NewCsn())
+	sl.storeResource(tx, user)
+
+	return user, nil
+}
+
+func (sl *Silo) UpdateAuthData(rid string, version string, ad base.AuthData) error {
+	tx, err := sl.db.Begin(true)
+	if err != nil {
+		log.Warningf("Failed to begin transaction for updating AuthData %#v", err)
+		return err
+	}
+
+	defer func() {
+		e := recover()
+		if e != nil {
+			err = e.(error)
+		}
+
+		if err != nil {
+			tx.Rollback()
+			log.Debugf("Error while updating AuthData key %#v", err)
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	rt := sl.resTypes["User"]
+	user, err := sl.getUsingTx(rid, rt, tx)
+	if err != nil {
+		return err
+	}
+
+	curVersion := user.GetVersion()
+	if strings.Compare(curVersion, version) > 0 {
+		return fmt.Errorf("replication event is older than the current version %s of the target resource %s, aborting authdata update", curVersion, rid)
+	}
+	user.AuthData = &ad
+	// update the version with the given value
+	meta := user.GetMeta().GetFirstSubAt()
+	meta["version"].Values[0] = version
+	sl.storeResource(tx, user)
+
+	return nil
 }

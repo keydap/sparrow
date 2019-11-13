@@ -16,9 +16,11 @@ writeHtml() {
   writeConst "totp_register_html" "templates/totp-register.html" $targetFile
   writeConst "totp_send_html" "templates/totp-send.html" $targetFile
   writeConst "changepassword_html" "templates/changepassword.html" $targetFile
+  writeConst "webauthn_html" "templates/webauthn.html" $targetFile
 
   # default CSS
   writeConst "login_style" "templates/login-style.css" $targetFile
+  writeConst "base64_js" "templates/base64.js" $targetFile
 }
 
 writeSchemas() {

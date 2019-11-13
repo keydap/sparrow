@@ -148,22 +148,27 @@ func TestInsert(t *testing.T) {
 	err := sl.Insert(crCtx)
 	if err != nil {
 		t.Error("Failed to insert the resource")
+		t.Fail()
+		t.FailNow()
 	}
 
 	rs := crCtx.InRes
 	if rs == nil {
 		t.Error("Failed to insert the resource")
+		t.FailNow()
 		return
 	}
 	rid := rs.GetId()
 
 	if len(rid) == 0 {
 		t.Error("Invalid insert operation, no generated ID found for the inserted resource")
+		t.FailNow()
 	}
 
 	// just testing the Equals() operation
 	if !rs.Equals(rs) {
 		t.Error("equality of resources failed")
+		t.FailNow()
 	}
 	idx := sl.getIndex(userResName, "username")
 	tx, _ := sl.db.Begin(true)
@@ -171,6 +176,7 @@ func TestInsert(t *testing.T) {
 	//fmt.Printf("Total username count %d\n", cnt)
 	if cnt != 1 {
 		t.Errorf("Incorrect key count %d in the username index", cnt)
+		t.FailNow()
 	}
 
 	unameVal := rs.GetAttr("username").GetSimpleAt().Values[0]
@@ -179,6 +185,7 @@ func TestInsert(t *testing.T) {
 	//fmt.Printf("Total username count %d\n", cnt)
 	if cnt != 1 {
 		t.Errorf("Key count should not increment after inserting the same key in the index expected %d found %d", 1, cnt)
+		t.FailNow()
 	}
 
 	cnt = 0
@@ -189,6 +196,7 @@ func TestInsert(t *testing.T) {
 
 	if cnt != 1 {
 		t.Errorf("Wrong number of entries %d fetched after navigating using a cursor", cnt)
+		t.FailNow()
 	}
 
 	idx.remove(unameVal, rid, tx)
@@ -197,6 +205,7 @@ func TestInsert(t *testing.T) {
 	cnt = idx.getCount(tx)
 	if cnt != 0 {
 		t.Errorf("Invalid key count after deleting the username from index, expected %d found %d", 0, cnt)
+		t.FailNow()
 	}
 
 	idx.remove(unameVal, rid, tx)
@@ -205,6 +214,7 @@ func TestInsert(t *testing.T) {
 	cnt = idx.getCount(tx)
 	if cnt != 0 {
 		t.Errorf("Invalid key count after attempting to delete the same username again from index, expected %d found %d", 0, cnt)
+		t.FailNow()
 	}
 
 	// now, put back the username in index to let the rest of the test pass
@@ -215,26 +225,31 @@ func TestInsert(t *testing.T) {
 	rsMeta := rs.GetMeta()
 	if uMeta.GetValue("created") == rsMeta.GetValue("created") {
 		t.Error("created time should not match")
+		t.FailNow()
 	}
 
 	if uMeta.GetValue("lastmodified") == rsMeta.GetValue("lastmodified") {
 		t.Error("lastmodified time should not match")
+		t.FailNow()
 	}
 
 	loaded, err := sl.Get(rid, rs.GetType())
 
 	if err != nil {
 		t.Error("Failed to get the saved resource")
+		t.FailNow()
 	}
 
 	if rid != loaded.GetId() {
 		t.Errorf("Invalid resource was retrieved, inserted resource's ID %s is not matching with the retrieved resource's ID", rid)
+		t.FailNow()
 	}
 
 	// add the same user, should return an error
 	err = sl.Insert(crCtx)
 	if err == nil {
 		t.Error("Failed to detect uniqueness violation of username attribute in the resource")
+		t.FailNow()
 	}
 }
 
@@ -260,10 +275,12 @@ func TestIndexOps(t *testing.T) {
 
 	if emailExists || (emailCount != 0) {
 		t.Errorf("email %s should not exist", email)
+		t.FailNow()
 	}
 
 	if nameExists || (nameCount != 0) {
 		t.Errorf("givenname %s should not exist", givenName)
+		t.FailNow()
 	}
 
 	// first user
@@ -276,16 +293,19 @@ func TestIndexOps(t *testing.T) {
 	emailCount = emailIdx.keyCount(email, readTx)
 	if emailCount != 1 {
 		t.Errorf("Email %s count mismatch", email)
+		t.FailNow()
 	}
 
 	nameCount = givenNameIdx.keyCount(givenName, readTx)
 	if nameCount != 1 {
 		t.Errorf("givenname %s count mismatch", givenName)
+		t.FailNow()
 	}
 
 	assertPrCount(rs, readTx, 1, t)
 	if !sl.getSysIndex(userResName, "presence").HasVal("emails.value", readTx) {
 		t.Error("emails.value should exist in presence index")
+		t.FailNow()
 	}
 
 	readTx.Rollback()
@@ -304,6 +324,7 @@ func TestIndexOps(t *testing.T) {
 	nameCount = givenNameIdx.keyCount(givenName, readTx)
 	if nameCount != 2 {
 		t.Errorf("givenname %s count mismatch expected 2 found %d", givenName, nameCount)
+		t.FailNow()
 	}
 
 	readTx.Rollback()
@@ -333,6 +354,7 @@ func TestIndexOps(t *testing.T) {
 
 	if len(rids) != 0 {
 		t.Error("Expecting an empty resource ID slice")
+		t.FailNow()
 	}
 
 	readTx, _ = sl.db.Begin(false)
@@ -340,6 +362,7 @@ func TestIndexOps(t *testing.T) {
 	bucket = bucket.Bucket([]byte(email))
 	if bucket != nil {
 		t.Error("Bucket associated with indexed attribute emails.value still exists though no values are indexed")
+		t.FailNow()
 	}
 	readTx.Rollback()
 
@@ -353,6 +376,7 @@ func TestIndexOps(t *testing.T) {
 
 	if (len(rs.GetId()) != 0) || (rs.GetMeta() != nil) {
 		t.Error("RemoveReadOnlyAt() didn't remove readonly attributes")
+		t.FailNow()
 	}
 }
 
@@ -370,6 +394,7 @@ func assertPrCount(rs *base.Resource, readTx *bolt.Tx, expected int64, t *testin
 		actual := prIdx.keyCount(atName, readTx)
 		if actual != expected {
 			t.Errorf("attribute %s count mismatch in presence index actual %d expected %d", atName, actual, expected)
+			t.FailNow()
 		}
 	}
 }
@@ -397,6 +422,7 @@ func TestSearch(t *testing.T) {
 
 	if len(results) != 1 {
 		t.Errorf("Expected %d but received %d", 1, len(results))
+		t.FailNow()
 	}
 
 	// search using presence filter
@@ -408,6 +434,7 @@ func TestSearch(t *testing.T) {
 
 	if len(results) != 2 {
 		t.Errorf("Expected %d but received %d", 2, len(results))
+		t.FailNow()
 	}
 
 	// search using AND filter
@@ -424,6 +451,60 @@ func TestSearch(t *testing.T) {
 
 	if len(results) != 1 {
 		t.Errorf("Expected %d but received %d", 1, len(results))
+		t.FailNow()
+	}
+}
+
+func TestWebauthnInsert(t *testing.T) {
+	initSilo()
+	user := loadTestUser() //createTestUser()
+	crCtx := &base.CreateContext{}
+	crCtx.InRes = user
+	sl.Insert(crCtx)
+	rs := crCtx.InRes
+	rid := rs.GetId()
+
+	// test generating webauthn id
+	userWithWebauthnKey, _ := sl.GenWebauthnIdFor(rid)
+	wid := userWithWebauthnKey.AuthData.WebauthnId
+	if len(wid) == 0 {
+		t.Error("Invalid webauthn id")
+		t.FailNow()
+	}
+
+	tx, _ := sl.db.Begin(false)
+	userIdByWebauthnId := tx.Bucket(BUC_WEBAUTHN).Get([]byte(wid))
+	tx.Rollback()
+	if len(userIdByWebauthnId) == 0 {
+		t.Error("webauthn id was not stored in the index")
+		t.FailNow()
+	}
+
+	// try generating again for the same user, it should return the old one
+	_, err := sl.GenWebauthnIdFor(rid)
+	if err == nil {
+		t.Error("webauthn ID should not be re-generated")
+		t.FailNow()
+	}
+
+	wres, _ := sl.GetUserByWebauthnId(wid)
+	if wres.GetId() != rid {
+		t.Error("failed to find the user by webauthn ID")
+		t.FailNow()
+	}
+
+	delCtx := &base.DeleteContext{}
+	delCtx.Rid = rid
+	delCtx.Rt = restypes["User"]
+	err = sl.Delete(delCtx)
+	if err != nil {
+		t.FailNow()
+	}
+
+	_, err = sl.GetUserByWebauthnId(wid)
+	if err == nil {
+		t.Errorf("the user should not be found by webauthn ID after deleting the user")
+		t.FailNow()
 	}
 }
 

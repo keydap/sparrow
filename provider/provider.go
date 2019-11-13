@@ -369,7 +369,7 @@ func (prv *Provider) CreateResource(crCtx *base.CreateContext) (err error) {
 	isAuditRes := (crCtx.InRes.GetType() == prv.Al.rt)
 
 	if isAuditRes || !crCtx.AllowOp() {
-		return base.NewForbiddenError("insufficent privileges to create a resource")
+		return base.NewForbiddenError("insufficient privileges to create a resource")
 	}
 
 	err = prv.firePreInterceptors(crCtx)
@@ -399,7 +399,7 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {
 
 	od := delCtx.GetDecision()
 	if od.Deny {
-		err = base.NewForbiddenError("insufficent privileges to delete the resource")
+		err = base.NewForbiddenError("insufficient privileges to delete the resource")
 		return err
 	}
 
@@ -407,7 +407,7 @@ func (prv *Provider) DeleteResource(delCtx *base.DeleteContext) (err error) {
 		res, err := prv.sl.Get(delCtx.Rid, delCtx.Rt)
 		if res != nil {
 			if !delCtx.EvalDelete(res) {
-				err = base.NewForbiddenError("insufficent privileges to delete the resource")
+				err = base.NewForbiddenError("insufficient privileges to delete the resource")
 				return err
 			}
 		} else {
@@ -450,7 +450,7 @@ func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, e
 
 	od := getCtx.GetDecision()
 	if od.Deny {
-		return nil, base.NewForbiddenError("insufficent privileges to read the resource")
+		return nil, base.NewForbiddenError("insufficient privileges to read the resource")
 	} else if od.EvalFilter {
 		res, err = sl.Get(getCtx.Rid, getCtx.Rt)
 		if err != nil {
@@ -461,7 +461,7 @@ func (prv *Provider) GetResource(getCtx *base.GetContext) (res *base.Resource, e
 		if allow {
 			return res, nil
 		} else {
-			return nil, base.NewForbiddenError("insufficent privileges to read the resource")
+			return nil, base.NewForbiddenError("insufficient privileges to read the resource")
 		}
 	}
 
@@ -481,7 +481,7 @@ func (prv *Provider) Search(sc *base.SearchContext, outPipe chan *base.Resource)
 
 	deny, fn := sc.CanDenyOp()
 	if deny {
-		err = base.NewForbiddenError("insufficent privileges to search resources")
+		err = base.NewForbiddenError("insufficient privileges to search resources")
 		return err
 	}
 
@@ -510,7 +510,7 @@ func (prv *Provider) Replace(replaceCtx *base.ReplaceContext) (err error) {
 	}()
 
 	if !replaceCtx.AllowOp() {
-		return base.NewForbiddenError("insufficent privileges to replace the resource")
+		return base.NewForbiddenError("insufficient privileges to replace the resource")
 	}
 
 	err = prv.sl.Replace(replaceCtx)
@@ -534,7 +534,7 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (err error) {
 
 	od := patchCtx.GetDecision()
 	if od.Deny {
-		return base.NewForbiddenError("insufficent privileges to update the resource")
+		return base.NewForbiddenError("insufficient privileges to update the resource")
 	}
 
 	if od.EvalFilter {
@@ -544,11 +544,11 @@ func (prv *Provider) Patch(patchCtx *base.PatchContext) (err error) {
 		}
 
 		if !patchCtx.EvalPatch(res) {
-			return base.NewForbiddenError("insufficent privileges to update the resource")
+			return base.NewForbiddenError("insufficient privileges to update the resource")
 		}
 	} else if od.EvalWithoutFetch {
 		if !patchCtx.EvalPatch(nil) {
-			return base.NewForbiddenError("insufficent privileges to update the resource")
+			return base.NewForbiddenError("insufficient privileges to update the resource")
 		}
 	}
 
@@ -677,7 +677,7 @@ func (prv *Provider) ModifyGroupsOfUser(autg base.ModifyGroupsOfUserRequest) (us
 	}
 
 	if !autg.AllowOp(res) {
-		return nil, base.NewForbiddenError("insufficent privileges to add groups to user")
+		return nil, base.NewForbiddenError("insufficient privileges to add groups to user")
 	}
 
 	return prv.sl.ModifyGroupsOfUser(autg)
@@ -815,6 +815,57 @@ func (prv *Provider) GetResourceInternal(rid string, rt *schema.ResourceType) (*
 
 func (prv *Provider) ReadAllInternal(rt *schema.ResourceType, outPipe chan *base.Resource) error {
 	return prv.sl.ReadAllOfType(rt, outPipe)
+}
+
+func (prv *Provider) GenWebauthnIdFor(userId string) (string, error) {
+	user, err := prv.sl.GenWebauthnIdFor(userId)
+	wid := ""
+	if err == nil {
+		wid = user.AuthData.WebauthnId
+		prv.replInterceptor.PostAuthDataUpdate(user)
+	}
+	return wid, err
+}
+
+func (prv *Provider) GetUserByWebauthnId(webauthnId string) (*base.Resource, error) {
+	return prv.sl.GetUserByWebauthnId(webauthnId)
+}
+
+func (prv *Provider) StoreSecurityKey(rid string, secKey *base.SecurityKey) error {
+	user, err := prv.sl.StoreSecurityKey(rid, secKey)
+	if err == nil {
+		prv.replInterceptor.PostAuthDataUpdate(user)
+	}
+	return err
+}
+
+func (prv *Provider) DeleteSecurityKey(userId string, credentialId string) error {
+	user, err := prv.sl.DeleteSecurityKey(userId, credentialId)
+	if err == nil {
+		prv.replInterceptor.PostAuthDataUpdate(user)
+	}
+	return err
+}
+
+// Note: this method MUST be used only for replication purpose
+func (prv *Provider) UpdateAuthData(rid string, version string, ad base.AuthData) error {
+	return prv.sl.UpdateAuthData(rid, version, ad)
+}
+
+func (prv *Provider) SendCreateDomainEvent(name string, ctx *base.OpContext) error {
+	defer func() {
+		event := base.AuditEvent{}
+		event.StatusCode = 201
+		event.ActorId = ctx.Session.Sub
+		event.ActorName = ctx.Session.Username
+		event.Desc = "created new domain"
+		event.IpAddress = ctx.ClientIP
+		event.Payload = name
+		event.Uri = ctx.Endpoint
+		event.Operation = "createDomain"
+		prv.Al.LogEvent(event)
+	}()
+	return prv.replInterceptor.PostCreateDomain(name, prv.sl.Csn().String())
 }
 
 func genDomainCode(name string) string {

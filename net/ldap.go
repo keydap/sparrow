@@ -28,8 +28,7 @@ type LdapSession struct {
 }
 
 func (sp *Sparrow) startLdap() error {
-	hostAddr := sp.srvConf.IpAddress + ":" + strconv.Itoa(sp.srvConf.LdapPort)
-
+	hostAddr := "0.0.0.0:" + strconv.Itoa(sp.srvConf.LdapPort)
 	log.Infof("Starting ldap server...")
 	laddr, err := net.ResolveTCPAddr("tcp", hostAddr)
 	if err != nil {

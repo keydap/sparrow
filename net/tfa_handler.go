@@ -68,5 +68,10 @@ func (sp *Sparrow) registerTotp(w http.ResponseWriter, r *http.Request) {
 	setAuthFlow(sp, af, w)
 
 	tmpl := sp.templates["totp-send.html"]
-	tmpl.Execute(w, copyParams(r))
+	params := copyParams(r)
+	if _, ok := params[PARAM_REDIRECT_TO]; !ok {
+		params[PARAM_REDIRECT_TO] = "/ui"
+	}
+
+	tmpl.Execute(w, params)
 }

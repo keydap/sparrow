@@ -91,12 +91,7 @@ func (sp *Sparrow) verifyPassword(w http.ResponseWriter, r *http.Request) {
 
 	username := r.Form.Get("username")
 	if !af.VerifiedPassword() {
-		pos := strings.LastIndexByte(username, '@')
-		unameLen := len(username) - 1
-		if pos > 0 && pos != unameLen {
-			domain = strings.ToLower(username[pos+1:])
-			username = username[:pos]
-		}
+		username, domain = sp.splitUsernameAndDomain(username)
 		prv = sp.providers[domain]
 	} else {
 		prv = sp.dcPrvMap[af.DomainCode]
@@ -366,8 +361,7 @@ func sendFinalResponse(sp *Sparrow, w http.ResponseWriter, r *http.Request, sess
 	// delete the authflow cookie
 	setAuthFlow(sp, nil, w)
 	headers := w.Header()
-	headers.Add("Cache-Control", "no-store")
-	headers.Add("Pragma", "no-cache")
+	headers.Add("Cache-Control", "no-cache")
 	http.Redirect(w, r, tmpUri, http.StatusFound)
 
 	// ignore the received redirect URI
@@ -550,6 +544,25 @@ func (sp *Sparrow) handleChangePasswordReq(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, path, http.StatusFound)
 }
 
+func unsetSsoCookie(w http.ResponseWriter) {
+	cookie := &http.Cookie{}
+	cookie.Path = "/"
+	cookie.MaxAge = -1
+	cookie.HttpOnly = true
+	cookie.SameSite = http.SameSiteStrictMode
+	cookie.Name = SSO_COOKIE
+	cookie.Value = ""
+	http.SetCookie(w, cookie)
+
+	prCookie := &http.Cookie{}
+	prCookie.Path = "/"
+	cookie.MaxAge = -1
+	prCookie.HttpOnly = true
+	prCookie.SameSite = http.SameSiteStrictMode
+	prCookie.Name = TENANT_COOKIE
+	prCookie.Value = ""
+	http.SetCookie(w, prCookie)
+}
 func setSsoCookie(pr *provider.Provider, session *base.RbacSession, w http.ResponseWriter) {
 	cookie := &http.Cookie{}
 	cookie.Path = "/"
@@ -561,4 +574,51 @@ func setSsoCookie(pr *provider.Provider, session *base.RbacSession, w http.Respo
 	cookie.Value = session.Jti
 	//cookie.Secure
 	http.SetCookie(w, cookie)
+
+	prCookie := &http.Cookie{}
+	prCookie.Path = "/"
+	prCookie.MaxAge = cookie.MaxAge
+	prCookie.Expires = cookie.Expires
+	prCookie.HttpOnly = true
+	prCookie.SameSite = http.SameSiteStrictMode
+	prCookie.Name = TENANT_COOKIE
+	prCookie.Value = pr.Name
+	//cookie.Secure
+	http.SetCookie(w, prCookie)
+
+}
+
+func (sp *Sparrow) splitUsernameAndDomain(username string) (string, string) {
+	pos := strings.LastIndexByte(username, '@')
+	unameLen := len(username) - 1
+	domain := sp.srvConf.DefaultDomain
+	if pos > 0 && pos != unameLen {
+		domain = strings.ToLower(username[pos+1:])
+		username = username[:pos]
+	}
+
+	return username, domain
+}
+
+func (sp *Sparrow) redirectAfterAuth(w http.ResponseWriter, r *http.Request) {
+	session := getSessionUsingCookie(r, sp)
+	if session == nil {
+		sp.showLogin(w, r)
+		return
+	}
+
+	r.ParseForm()
+	samlReq := r.Form.Get("SAMLRequest")
+
+	if samlReq != "" {
+		log.Debugf("resuming SAML flow after authentication")
+		sp.handleSamlReq(w, r)
+	} else {
+		setAuthFlow(sp, nil, w)
+		http.Redirect(w, r, "/ui", http.StatusFound)
+	}
+}
+
+func redirectToLogin(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/login?redirectTo=/ui", http.StatusFound)
 }

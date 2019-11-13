@@ -2,10 +2,12 @@ package provider
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"net/http"
 	"sparrow/base"
 	"sparrow/repl"
+	"sparrow/utils"
 )
 
 type ReplInterceptor struct {
@@ -15,6 +17,9 @@ type ReplInterceptor struct {
 	transport    *http.Transport
 	serverId     uint16
 	webhookToken string
+	// do not reuse the encoder
+	//buf          *bytes.Buffer
+	//enc          *gob.Encoder
 }
 
 func (ri *ReplInterceptor) PreCreate(crCtx *base.CreateContext) error {
@@ -164,6 +169,45 @@ func (ri *ReplInterceptor) PostDeleteSession(jti string, ssoSession bool, versio
 	} else {
 		log.Debugf("failed to store the generated new session replication event [%#v]", err)
 	}
+}
+
+func (ri *ReplInterceptor) PostAuthDataUpdate(user *base.Resource) {
+	event := repl.ReplicationEvent{}
+	event.Version = user.GetVersion()
+	event.DomainCode = ri.domainCode
+	event.Type = repl.REPLACE_AUTHDATA
+	var buf bytes.Buffer
+	// a new decoder must be created, without which the Skeys field is not properly getting
+	// encoded, even tried registering the type map[int]interface{} but didn't work
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(user.AuthData)
+	event.Data = buf.Bytes()
+	fmt.Println(utils.B64Encode(event.Data))
+	event.RtName = user.GetType().Name
+	event.Rid = user.GetId()
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the authdata event [%#v]", err)
+	}
+}
+
+func (ri *ReplInterceptor) PostCreateDomain(name string, version string) error {
+	event := repl.ReplicationEvent{}
+	event.Version = version
+	event.NewDomainName = name
+	event.Type = repl.NEW_DOMAIN
+	dataBuf, err := ri.replSilo.StoreEvent(event)
+	// send to the peers
+	if err == nil {
+		go ri.sendToPeers(dataBuf, event, ri.peers)
+	} else {
+		log.Debugf("failed to store the new domain replication event [%#v]", err)
+	}
+
+	return err
 }
 
 func (ri *ReplInterceptor) sendToPeers(dataBuf *bytes.Buffer, event repl.ReplicationEvent, peers map[uint16]*repl.ReplicationPeer) {

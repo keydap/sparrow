@@ -10,6 +10,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/mholt/caddy"
@@ -28,7 +29,6 @@ import (
 	"sparrow/repl"
 	"sparrow/schema"
 	"sparrow/utils"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -172,45 +172,30 @@ func initHome(srvHome string, overrideConf string) *conf.ServerConf {
 			strConf = overrideConf
 		}
 
-		addr := ""
-		addrFlag := flag.Lookup("a")
-		if addrFlag != nil {
-			addr = addrFlag.Value.(flag.Getter).Get().(string)
-		}
-
-		enableTls := false
-		enableTlsFlag := flag.Lookup("tls")
-		if enableTlsFlag != nil {
-			enableTls = enableTlsFlag.Value.(flag.Getter).Get().(bool)
-		}
-		addr = strings.TrimSpace(addr)
-
 		var tmp conf.ServerConf
 		err = json.Unmarshal([]byte(strConf), &tmp)
 		if err != nil {
 			panic(err)
 		}
 
-		if addr != "" || enableTls {
-			parts := strings.Split(addr, ":")
-			if len(parts) > 0 {
-				tmp.IpAddress = parts[0]
-			}
-			if len(parts) == 2 {
-				port, err := strconv.Atoi(parts[1])
-				if err != nil {
-					panic(err)
-				}
-				tmp.HttpPort = port
-				if port == 443 {
-					tmp.Https = true
-				}
-			}
+		hostFlag := flag.Lookup("h")
+		if hostFlag != nil {
+			tmp.IpAddress = hostFlag.Value.(flag.Getter).Get().(string)
+		}
 
-			if enableTls {
-				tmp.Https = true
-			}
+		enableTlsFlag := flag.Lookup("tls")
+		if enableTlsFlag != nil {
+			tmp.Https = enableTlsFlag.Value.(flag.Getter).Get().(bool)
+		}
 
+		httpPortFlag := flag.Lookup("hp")
+		if httpPortFlag != nil {
+			tmp.HttpPort = httpPortFlag.Value.(flag.Getter).Get().(int)
+		}
+
+		ldapPortFlag := flag.Lookup("lp")
+		if ldapPortFlag != nil {
+			tmp.LdapPort = ldapPortFlag.Value.(flag.Getter).Get().(int)
 		}
 
 		// override the server ID only if it is set to <=0
@@ -377,8 +362,14 @@ func (sp *Sparrow) createDomain(domainName string) error {
 	log.Infof("Creating domain %s", domainName)
 	sc := sp.srvConf
 
-	defaultDomain := filepath.Join(sc.DomainsDir, domainName)
-	layout, err := provider.NewLayout(defaultDomain, true)
+	domainDir := filepath.Join(sc.DomainsDir, domainName)
+	fi, _ := os.Stat(domainDir)
+	if fi != nil {
+		msg := fmt.Sprintf("domain %s already exists", domainName)
+		log.Debugf(msg)
+		return errors.New(msg)
+	}
+	layout, err := provider.NewLayout(domainDir, true)
 	if err != nil {
 		return err
 	}
@@ -484,6 +475,10 @@ func writeDefaultUiStyle(uiDir string) {
 	// login-style.css
 	loginStyle := filepath.Join(uiDir, "login-style.css")
 	writeFile(loginStyle, login_style)
+
+	// base64.js
+	base64Js := filepath.Join(uiDir, "base64.js")
+	writeFile(base64Js, base64_js)
 }
 
 func writeDefaultHtmlTemplates(tmplDir string) {
@@ -510,6 +505,10 @@ func writeDefaultHtmlTemplates(tmplDir string) {
 	// changepassword.html
 	cpTmpl := filepath.Join(tmplDir, "changepassword.html")
 	writeFile(cpTmpl, changepassword_html)
+
+	// webauthn.html
+	webauthnTmpl := filepath.Join(tmplDir, "webauthn.html")
+	writeFile(webauthnTmpl, webauthn_html)
 }
 
 func writeFile(name string, content string) {

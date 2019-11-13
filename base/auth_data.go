@@ -28,6 +28,18 @@ type AuthData struct {
 	LastSLogin  time.Time
 	LastFLogin  time.Time
 	FLoginCount int
+	Skeys       map[string]*SecurityKey
+	WebauthnId  string // a special unique identifier that links user on the authenticator
+}
+
+type SecurityKey struct {
+	DeviceId       string              `json:"deviceId"`     // AAGUID
+	CredentialId   string              `json:"credentialId"` // the unique ID of this credential
+	Fmt            string              `json:"fmt"`
+	SignCount      uint32              `json:"-"`
+	PubKeyCOSE     map[int]interface{} `json:"-"`
+	RegisteredDate int64               `json:"registeredDate"`
+	LastUsedDate   int64               `json:"lastUsedDate"`
 }
 
 type LoginResult struct {

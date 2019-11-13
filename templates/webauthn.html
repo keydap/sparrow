@@ -1,0 +1,82 @@
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache">
+<title>Sparrow - Login Using Security Key</title>
+<link rel="stylesheet" href="/ui/login-style.css">
+<script src="/ui/base64.js" type="application/javascript"></script>
+</head>
+<body>
+    <div class="wrapper">
+        <form action="/redirect" method="post">
+        <!-- DO NOT remove the below part -->
+        <table style="display: none;">
+            {{range $k, $v := .params}}
+                <tr>
+                    <td><input type="hidden" name="{{$k}}" value="{{$v}}" /></td>
+                </tr>
+            {{end}}
+        </table>
+        </form>
+    </div>
+<script type="application/javascript">
+    if (!window.PublicKeyCredential) {
+        console.log("useragent does not support Webauthn")
+        alert("useragent does not support Webauthn")
+    }
+    else {
+        var webauthnTransports = ["usb", "nfc", "ble", "internal"]
+        var credIds = {{.authReq.CredIds}}
+        var creds = new Array()
+        for (var i = 0; i < credIds.length; i++) {
+            var c = {
+                id: decodeUrlBase64(credIds[i]),
+                type: "public-key",
+                transports: webauthnTransports
+            }
+            creds.push(c)
+        }
+        var publicKey = {
+            allowCredentials: creds,
+            challenge: decodeUrlBase64("{{.authReq.Challenge}}"),
+            rpId : "{{.authReq.RpId}}",
+            timeout: {{.authReq.Timeout}},
+            userVerification: {{.authReq.UserVerification}}
+        }
+
+        navigator.credentials.get({publicKey})
+            .then(function (authResp) {
+                console.log(authResp)
+                var resp = authResp.response
+                var a = new Int8Array(resp.authenticatorData)
+                var c = new Int8Array(resp.clientDataJSON)
+                var s = new Int8Array(resp.signature)
+                var keyArr = new Int8Array(a.length + c.length + s.length);
+                keyArr.set(a, 0)
+                keyArr.set(c, a.length)
+                keyArr.set(s, a.length + c.length)
+
+                var xhr = new XMLHttpRequest()
+                xhr.onreadystatechange = function () {
+                    if(xhr.readyState == XMLHttpRequest.DONE &&
+                        xhr.status == 200) {
+                        console.log(xhr.responseText)
+                        document.forms[0].submit()
+                    }
+                    else {
+                        console.log("non 200 response received")
+                    }
+                };
+                xhr.onerror = function() {
+                    console.log("error response received")
+                };
+                xhr.open('POST', '/webauthnVerifyCred?a=' + a.length + '&c=' + c.length + '&s=' + s.length + '&id=' + authResp.id);
+                xhr.setRequestHeader('Content-Type', 'application/octetstream');
+                xhr.send(keyArr);
+            }).catch(function (err) {
+            console.log(err)
+        });
+    }
+</script>
+</body>
+</html>

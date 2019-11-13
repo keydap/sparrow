@@ -63,7 +63,7 @@ func (mh muxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, err
 
 func (sp *Sparrow) startHttp() {
 	srvConf := sp.srvConf
-	hostAddr := srvConf.IpAddress + ":" + strconv.Itoa(srvConf.HttpPort)
+	hostAddr := "0.0.0.0:" + strconv.Itoa(srvConf.HttpPort)
 	log.Infof("Starting http server(%d) %s", srvConf.ServerId, hostAddr)
 	caddy.AppName = "Sparrow Identity Server"
 	caddy.AppVersion = SparrowVersion
@@ -141,6 +141,9 @@ func (sp *Sparrow) setup(c *caddy.Controller) error {
 	scimRouter.HandleFunc("/directLogin", sp.directLogin).Methods("POST")
 	//scimRouter.HandleFunc("/revoke", handleRevoke).Methods("DELETE")
 	scimRouter.HandleFunc("/Me", sp.selfServe).Methods("GET")
+	scimRouter.HandleFunc("/pubkeyOptions", sp.pubKeyOptions).Methods("GET")
+	scimRouter.HandleFunc("/registerPubkey", sp.registerPubKey).Methods("POST")
+	scimRouter.HandleFunc("/deletePubkey/{id}", sp.deletePubKey).Methods("DELETE")
 	scimRouter.HandleFunc("/logout", sp.handleLogout).Methods("POST")
 
 	// generic service provider methods
@@ -202,8 +205,14 @@ func (sp *Sparrow) setup(c *caddy.Controller) error {
 	router.HandleFunc("/verifyPassword", sp.verifyPassword).Methods("POST")
 	router.HandleFunc("/changePassword", sp.handleChangePasswordReq).Methods("GET")
 	router.HandleFunc("/registerTotp", sp.registerTotp).Methods("POST")
+	router.HandleFunc("/webauthn", sp.sendWebauthnAuthReq).Methods("POST")
+	router.HandleFunc("/webauthnVerifyCred", sp.webauthnVerifyCred).Methods("POST")
+	router.HandleFunc("/redirect", sp.redirectAfterAuth).Methods("GET", "POST")
 
 	router.PathPrefix("/repl/").HandlerFunc(sp.replHandler)
+
+	domainsRouter := router.PathPrefix("/domains").Subrouter()
+	domainsRouter.HandleFunc("/dlc", sp.handleDomainLifecycle).Methods("POST")
 
 	httpserver.GetConfig(c).AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
 		return muxHandler{router: router, next: next}
@@ -716,7 +725,11 @@ func getPrFromParam(r *http.Request, sp *Sparrow) (pr *provider.Provider, err er
 	// NO NEED TO parse Form cause the domain ID will be either in the
 	// Header or in a Cookie
 	//r.ParseForm()
-	domain := r.Header.Get(TENANT_COOKIE)
+	domain := ""
+	domainCookie, _ := r.Cookie(TENANT_COOKIE)
+	if domainCookie != nil {
+		domain = domainCookie.Value
+	}
 
 	if len(domain) == 0 {
 		domain = r.Header.Get(TENANT_HEADER)
@@ -826,6 +839,7 @@ func (sp *Sparrow) handleLogout(w http.ResponseWriter, r *http.Request) {
 		if opCtx.Sso {
 			_logoutSessionApps(pr, opCtx)
 		}
+		unsetSsoCookie(w)
 	}
 	w.WriteHeader(code)
 }
@@ -846,21 +860,30 @@ func (sp *Sparrow) selfServe(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		getCtx := &base.GetContext{}
-		getCtx.OpContext = opCtx
 		ses := opCtx.Session
-		getCtx.Rid = ses.Sub
-		getCtx.Rt = pr.RsTypes["User"]
-		user, err := pr.GetResource(getCtx)
+		user, err := pr.GetUserById(opCtx.Session.Sub)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
 
-		attrs := parseAttrParam("*", getCtx.Rt)
+		rt := pr.RsTypes["User"]
+		attrs := parseAttrParam("*", rt)
 		jsonMap := user.ToJsonObject(attrs)
 		jsonMap["perms"] = ses.EffPerms
 		jsonMap["domain"] = ses.Domain
+
+		var keys []*base.SecurityKey
+		keysMap := user.AuthData.Skeys
+		if keysMap != nil {
+			keys = make([]*base.SecurityKey, 0)
+			for _, v := range keysMap {
+				keys = append(keys, v)
+			}
+		} else {
+			keys = make([]*base.SecurityKey, 0)
+		}
+		jsonMap["securitykeys"] = keys
 
 		apps := make([]map[string]string, 0) // an array of allowed apps for this user, each map holds application name, home page URL and icon
 
@@ -893,7 +916,7 @@ func serveVersionInfo(w http.ResponseWriter, r *http.Request) {
 
 func (sp *Sparrow) serveUI(w http.ResponseWriter, r *http.Request) {
 	//static assets
-	if strings.HasSuffix(r.URL.Path, ".css") {
+	if strings.HasSuffix(r.URL.Path, ".css") || strings.HasSuffix(r.URL.Path, ".js") {
 		sp.uiHandler.ServeHTTP(w, r)
 		return
 	}
