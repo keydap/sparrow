@@ -6,6 +6,7 @@ package base
 import (
 	"bytes"
 	"fmt"
+	"github.com/juju/loggo"
 	"sparrow/schema"
 	"testing"
 )
@@ -260,6 +261,20 @@ func TestEquals(t *testing.T) {
 	checkEquals("installedDate", rs1, rs2, true, t)
 	checkEquals("repairDates", rs1, rs2, true, t)
 }
+
+func BenchmarkResourceParsing(t *testing.B) {
+	resJson := `{"addresses":[{"formatted":"Aaren Atp$60317 Spring Street$Lincoln, HI  91784","locality":"Lincoln","postalCode":"91784","region":"HI","streetAddress":"60317 Spring Street","type":"work"}],"displayName":"Aaren Atp","emails":[{"type":"work","value":"user.2@null"}],"name":{"familyName":"Atp","formatted":"Aaren Atp","givenName":"Aaren","honorificPrefix":"AA"},"password":"password","phoneNumbers":[{"value":"773-199-6362"}],"userName":"user.2","urn:ietf:params:scim:schemas:extension:enterprise:2.0:User":{"employeeNumber":"2"},"schemas":["urn:ietf:params:scim:schemas:core:2.0:User","urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"]}`
+	data := []byte(resJson)
+	log.SetLogLevel(loggo.WARNING)
+	for i := 0; i < t.N; i++ {
+		reader := bytes.NewReader(data)
+		_, err := ParseResource(rTypesMap, schemas, reader)
+		if err != nil {
+			t.FailNow()
+		}
+	}
+}
+
 
 func checkEquals(attrName string, rs1 *Resource, rs2 *Resource, expected bool, t *testing.T) {
 	sa1 := rs1.GetAttr(attrName).GetSimpleAt()

@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const baseUrl string = "https://localhost:7090/v2"
+const baseUrl string = "https://localhost:7090"
 
 var scl *SparrowClient
 
@@ -26,6 +26,7 @@ func TestMain(m *testing.M) {
 	scl = NewSparrowClient(baseUrl)
 	err := scl.DirectLogin("admin", "secret", "example.com")
 	if err != nil {
+		fmt.Println(err.Error())
 		panic(err)
 	}
 	// now run the tests
@@ -33,10 +34,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestCreateResourcesPerf(t *testing.T) {
-	if true {
-		fmt.Println("Not running insert perf test")
-		return
-	}
+	//if true {
+	//	fmt.Println("Not running insert perf test")
+	//	return
+	//}
 
 	bufReader, err := os.Open("/Users/dbugger/ldif-templates/100k-users.json")
 	if err != nil {
@@ -47,8 +48,9 @@ func TestCreateResourcesPerf(t *testing.T) {
 	lineReader := bufio.NewReader(bufReader)
 	count := 0
 
-	reqUrl, _ := url.Parse(baseUrl + "/Users")
-	req := &http.Request{Method: "POST", URL: reqUrl}
+
+	reqUrl := baseUrl + "/v2/Users"
+	req, _ := http.NewRequest(http.MethodPost, reqUrl, nil)
 	req.Header.Add("Authorization", "Bearer "+scl.token)
 	req.Header.Add("Content-Type", scimContentType)
 
