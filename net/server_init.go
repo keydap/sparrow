@@ -13,7 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/mholt/caddy"
+	"github.com/caddyserver/caddy"
 	"html/template"
 	"io"
 	"io/ioutil"
