@@ -13,7 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/caddyserver/caddy"
+	"github.com/mholt/caddy"
 	"html/template"
 	"io"
 	"io/ioutil"
@@ -41,8 +41,8 @@ var DEFAULT_SRV_CONF string = `{
 	"ldapEnabled" : true,
     "ldapOverTlsOnly" : true,
     "ipAddress" : "0.0.0.0",
-    "certificateFile": "default.cer",
-    "privatekeyFile": "default.key",
+    "certificateFile": "default-cert.pem",
+    "privatekeyFile": "default-key.pem",
 	"defaultDomain": "example.com",
 	"controllerDomain": "example.com",
 	"skipPeerCertCheck": true

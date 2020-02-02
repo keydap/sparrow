@@ -58,14 +58,14 @@ func TestGenCert(t *testing.T) {
 		t.Error("Failed to generate a certificate")
 	}
 
-	certName := dirName + string(os.PathSeparator) + suffix + ".cer"
+	certName := dirName + string(os.PathSeparator) + suffix + "-cert.pem"
 	_, err = os.Stat(certName)
 	if err != nil {
 		t.Error("Could not find the generated certificate file")
 	}
 	os.Remove(certName)
 
-	keyName := dirName + string(os.PathSeparator) + suffix + ".key"
+	keyName := dirName + string(os.PathSeparator) + suffix + "-key.pem"
 	_, err = os.Stat(keyName)
 	if err != nil {
 		t.Error("Could not find the generated private key file")

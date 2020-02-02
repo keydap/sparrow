@@ -57,7 +57,7 @@ func CreateCert(dirName string, suffix string) error {
 		return err
 	}
 
-	cerFile, err := os.Create(dirName + string(os.PathSeparator) + suffix + ".cer")
+	cerFile, err := os.Create(dirName + string(os.PathSeparator) + suffix + "-cert.pem")
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func CreateCert(dirName string, suffix string) error {
 		return err
 	}
 
-	keyFile, err := os.Create(dirName + string(os.PathSeparator) + suffix + ".key")
+	keyFile, err := os.Create(dirName + string(os.PathSeparator) + suffix + "-key.pem")
 	if err != nil {
 		return err
 	}

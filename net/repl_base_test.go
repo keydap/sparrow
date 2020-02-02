@@ -23,8 +23,8 @@ const masterConf string = `{
 	"ldapEnabled" : true,
     "ldapOverTlsOnly" : true,
     "ipAddress" : "0.0.0.0",
-    "certificateFile": "default.cer",
-    "privatekeyFile": "default.key",
+    "certificateFile": "default-cert.pem",
+    "privatekeyFile": "default-key.pem",
 	"defaultDomain": "example.com",
 	"controllerDomain": "example.com",
 	"skipPeerCertCheck": true
@@ -37,8 +37,8 @@ const slaveConf string = `{
 	"ldapEnabled" : true,
     "ldapOverTlsOnly" : true,
     "ipAddress" : "0.0.0.0",
-    "certificateFile": "default.cer",
-    "privatekeyFile": "default.key",
+    "certificateFile": "default-cert.pem",
+    "privatekeyFile": "default-key.pem",
 	"controllerDomain": "example.com",
 	"defaultDomain": "example.com",
 	"skipPeerCertCheck": true
@@ -52,8 +52,8 @@ const secondSlaveConf string = `{
 	"ldapEnabled" : true,
     "ldapOverTlsOnly" : true,
     "ipAddress" : "0.0.0.0",
-    "certificateFile": "default.cer",
-    "privatekeyFile": "default.key",
+    "certificateFile": "default-cert.pem",
+    "privatekeyFile": "default-key.pem",
 	"controllerDomain": "example.com",
 	"defaultDomain": "example.com",
 	"skipPeerCertCheck": true
