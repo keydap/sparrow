@@ -508,6 +508,19 @@ func TestWebauthnInsert(t *testing.T) {
 	}
 }
 
+func BenchmarkResourceInsertion(t *testing.B) {
+	initSilo()
+	user := loadTestUser() //createTestUser()
+	crCtx := &base.CreateContext{}
+	crCtx.InRes = user
+	usernameAt := user.GetAttr("username").GetSimpleAt()
+	username := usernameAt.GetStringVal()
+	for i := 0; i < t.N; i++ {
+		usernameAt.Values[0] = fmt.Sprintf("%s-%d", username, i)
+		sl.Insert(crCtx)
+	}
+}
+
 func readResults(outPipe chan *base.Resource) map[string]*base.Resource {
 	//fmt.Println("reading from pipe")
 	results := make(map[string]*base.Resource)

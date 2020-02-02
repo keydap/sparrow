@@ -357,7 +357,7 @@ func (idx *Index) convert(val interface{}) []byte {
 		vData = utils.Ftob(val.(float64))
 
 	default:
-		panic(fmt.Errorf("Invalid index datat type %s given for index %s", idx.ValType, idx.Name))
+		panic(fmt.Errorf("invalid index data type %s given for index %s", idx.ValType, idx.Name))
 	}
 
 	return vData
