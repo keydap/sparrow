@@ -19,7 +19,7 @@ func init() {
 }
 
 //var profile = flag.String("profile", "", "write cpu profile to file")
-var host = flag.String("h", "0.0.0.0", "IP address or DNS name of the server (can optionally have the listening port as well prefixed with the : char)")
+var host = flag.String("h", "localhost", "IP address or DNS name of the server (can optionally have the listening port as well prefixed with the : char)")
 var enableTls = flag.Bool("tls", true, "Flag to enable or disable TLS")
 var dir = flag.String("d", "/tmp/sparrow", "the directory to be used for storing data")
 var port = flag.Int("hp", 7090, "the port at which the server accepts new connections over HTTP")

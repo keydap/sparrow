@@ -40,7 +40,7 @@ var DEFAULT_SRV_CONF string = `{
     "ldapPort" : 7092,
 	"ldapEnabled" : true,
     "ldapOverTlsOnly" : true,
-    "ipAddress" : "0.0.0.0",
+    "ipAddress" : "localhost",
     "certificateFile": "default-cert.pem",
     "privatekeyFile": "default-key.pem",
 	"defaultDomain": "example.com",
