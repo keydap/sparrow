@@ -8,7 +8,7 @@
     <name>Sparrow Integration Tests</name>
 
     <properties>
-        <log4j>2.5</log4j>
+        <log4j>2.16.0</log4j>
     </properties>
 
     <dependencies>
